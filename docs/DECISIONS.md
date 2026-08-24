@@ -41,3 +41,26 @@ handoffs, no side channels. **Why:** durable, auditable, resumable by any harnes
 it forces each stage to write for a reader — which is also what makes the pipeline
 debuggable when a stage goes wrong. Large binaries (videos) live in S3 and are linked,
 keeping git fast.
+
+## D5 — 2026-08-24 — Brain/harness split: Claude Code (Foundry) is the default harness; GPT runs in its own harness
+
+An agent = brain (LLM) + harness (tool loop). Claude Code is a harness that accepts
+only Claude brains; "GPT brain inside Claude Code" does not exist. Therefore:
+**default all pipeline stages to Claude brain + Claude Code harness via Foundry**
+(zero harness code, native subagents/MCP/CLAUDE.md, same Azure credit pool), and run
+GPT deployments (`sol`/`terra`) through the OpenAI Agents SDK in `tools/azure-runner`
+only where a high-volume second brain earns its keep (bulk QA execution, batch
+checks). Both harnesses consume the same MCP tool layer (`.mcp.json`), so tools are
+written once. **Consequence:** build order is Foundry fleet first; azure-runner is
+deferred until a GPT-driven stage is actually scheduled. Full explanation:
+`docs/AGENT-TOOLING.md` §1.
+
+## D6 — 2026-08-24 — Agents act on GitHub as `lantern-bot`, never as humans
+
+One machine identity (machine user now, GitHub App if audit needs grow) with Write on
+product repos; fine-grained PAT in SSM. Branch protection enforces the contract:
+`main`/`staging` are PR-only with human review; agents push only `feat/*`, `fix/*`,
+`proto/*`. Commits carry the run-ID prefix plus a `Lantern-Agent: <role>` trailer;
+agent PRs are labeled `agent:<role>`. **Why:** clean audit trail (git shows which
+agent did what), instant revocability, and no agent ever inherits a human's broader
+permissions. Details: `docs/AGENT-TOOLING.md` §3.

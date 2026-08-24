@@ -48,6 +48,8 @@ they cannot power Claude Code (see `docs/DECISIONS.md` D2).
 ```
 /lantern/foundry/api-key
 /lantern/azure-openai/api-key
+/lantern/github/bot-token          → GITHUB_LANTERN_BOT_TOKEN (gh + github MCP)
+/lantern/posthog/personal-api-key  → POSTHOG_PERSONAL_API_KEY (posthog MCP)
 /lantern/qa/dev/{base-url,user,pass}
 /lantern/qa/staging/{base-url,user,pass}
 ```

@@ -16,7 +16,9 @@ This repo holds three things:
 ```
 agents/<role>/          charter.md + skills.md + memory.md per role (harness-agnostic)
 .claude/agents/         Claude Code subagent wrappers — thin; they load agents/<role>/*
+.mcp.json               shared MCP servers (playwright, github, posthog) — see docs/AGENT-TOOLING.md
 workflow/PIPELINE.md    the fixed lifecycle: stages, inputs/outputs, gates
+workflow/RUNBOARD.md    live index of runs — orientation step 1, updated every session
 workflow/DEBUG-LIFECYCLE.md   bug intake → repro → fix → regression
 workflow/briefs/        feature briefs from Justin (start from _TEMPLATE.md)
 workflow/runs/          one folder per feature/bug run; all stage artifacts live here
@@ -24,6 +26,7 @@ workflow/templates/     stage report + handoff templates
 tools/qa-recorder/      Playwright-based QA with built-in video recording
 tools/azure-runner/     how Azure OpenAI-powered agent stages are executed
 infra/ec2/              EC2 provisioning and operations
+docs/AGENT-TOOLING.md   brain vs. harness, per-agent tools/MCP matrix, GitHub identity, orientation protocol
 docs/DECISIONS.md       architecture decisions (read before changing the design)
 ```
 
@@ -34,7 +37,10 @@ Every agent session, **before doing anything else**, reads in this order:
 1. `agents/<role>/charter.md` — what the role is (and is not) responsible for
 2. `agents/<role>/skills.md` — how this role does its work
 3. `agents/<role>/memory.md` — judgement accumulated from past runs
-4. The active run folder `workflow/runs/<run-id>/` — the brief and all upstream stage reports
+4. `workflow/RUNBOARD.md` — what's in flight, then the active run folder
+   `workflow/runs/<run-id>/` — the brief and all upstream stage reports
+5. The product repo's git state and its own CLAUDE.md — full orientation protocol in
+   `docs/AGENT-TOOLING.md` §5 (branches, prior commits for this run, open agent PRs)
 
 And **before ending**, it must:
 
@@ -42,6 +48,7 @@ And **before ending**, it must:
    (copy `workflow/templates/stage-report.md`)
 2. Append durable learnings to its own `agents/<role>/memory.md` (dated, append-only —
    never rewrite history; consolidation happens separately, see Memory protocol)
+3. Update the run's row in `workflow/RUNBOARD.md`
 
 An agent that skips either step breaks the pipeline for everyone downstream.
 
@@ -92,6 +99,9 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 - All credentials come from environment variables (locally via `.env`, on EC2 via SSM
   Parameter Store). **Never commit keys.** See `tools/azure-runner/README.md` for the
   env-var contract. See `docs/DECISIONS.md` D2 for the full provider matrix.
+- Agents act on GitHub as the `lantern-bot` collaborator (never a human identity),
+  restricted to `feat/*`/`fix/*`/`proto/*` branches — identity, branch rules, and the
+  per-agent tool matrix live in `docs/AGENT-TOOLING.md`.
 
 ## Human-in-the-loop gates (never automate past these)
 
