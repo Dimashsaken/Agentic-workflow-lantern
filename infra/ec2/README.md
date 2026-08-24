@@ -14,39 +14,33 @@ hurts.
 ## Base setup
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git unzip
+sudo apt-get update && sudo apt-get install -y git unzip python3.12 python3.12-venv
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs
-git clone <this-repo> && cd Agentic-workflow-lantern/tools/qa-recorder
-npm install && sudo npx playwright install --with-deps chromium webkit firefox
-npm install -g @anthropic-ai/claude-code
+git clone <this-repo> && cd Agentic-workflow-lantern
+cd tools/qa-recorder && npm install && sudo npx playwright install --with-deps chromium webkit firefox
+cd ../azure-runner && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+npm install -g @openai/codex   # Codex CLI for headless repo tasks (codex exec)
 ```
 
-## Claude Code on Azure credits (Microsoft Foundry)
+## Azure OpenAI — the fleet's only model provider (D7)
 
-Claude models on Microsoft Foundry are GA and bill as Claude Consumption Units on the
-Azure invoice, decrementing MACC like other Azure Marketplace consumption — this is how
-the fleet's Claude Code sessions burn the org's Azure credits. Docs:
-<https://code.claude.com/docs/en/microsoft-foundry>
+Every agent brain is one of the org's Azure OpenAI deployments; the startup credits
+cover it. Session env (values from SSM):
 
 ```bash
-export CLAUDE_CODE_USE_FOUNDRY=1
-export ANTHROPIC_FOUNDRY_RESOURCE=<resource-name>     # or ANTHROPIC_FOUNDRY_BASE_URL
-export ANTHROPIC_FOUNDRY_API_KEY=<from SSM>           # or Entra ID via az login
-
-# Pin models explicitly — alias defaults can lag what's enabled on the resource,
-# and an unpinned fleet fails unpredictably:
-export ANTHROPIC_DEFAULT_OPUS_MODEL='<exact model id enabled in Foundry>'
-export ANTHROPIC_DEFAULT_SONNET_MODEL='<exact model id>'
-export ANTHROPIC_DEFAULT_HAIKU_MODEL='<exact model id>'
+export AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
+export AZURE_OPENAI_API_KEY=<from SSM>
+export AZURE_OPENAI_API_VERSION=<current GA version>
+export LANTERN_MODEL_REASONING=sol    # stronger deployment: pre-coding, security, debug…
+export LANTERN_MODEL_FAST=terra       # volume deployment: QA charter execution
 ```
 
-Azure OpenAI (GPT) deployments are configured separately for `tools/azure-runner` —
-they cannot power Claude Code (see `docs/DECISIONS.md` D2).
+Codex CLI on EC2 uses the same key via `tools/azure-runner/codex-config.example.toml`
+copied to `~/.codex/config.toml`.
 
 ## Secrets — SSM Parameter Store, nothing on disk
 
 ```
-/lantern/foundry/api-key
 /lantern/azure-openai/api-key
 /lantern/github/bot-token          → GITHUB_LANTERN_BOT_TOKEN (gh + github MCP)
 /lantern/posthog/personal-api-key  → POSTHOG_PERSONAL_API_KEY (posthog MCP)
@@ -71,12 +65,18 @@ copied to `/lantern/permanent/` first.
 
 ## Running a stage headless
 
-Interactive (SSH + tmux) is fine early. For unattended runs:
+Interactive (SSH + tmux) is fine early. For unattended runs, the orchestrator runs
+exactly one stage per invocation and verifies the AGENTS.md postconditions itself:
 
 ```bash
-cd ~/Agentic-workflow-lantern
-claude -p "Use the qa-dev agent for run feat-20260824-bulk-export. Dev URL is in QA_BASE_URL." \
-  --permission-mode acceptEdits
+cd ~/Agentic-workflow-lantern/tools/azure-runner
+.venv/bin/python orchestrator.py feat-20260824-bulk-export 04-qa-dev
+```
+
+For repo-editing tasks outside the pipeline (maintenance, one-offs), Codex headless:
+
+```bash
+codex exec "Consolidate agents/qa-dev/memory.md per the memory protocol in AGENTS.md"
 ```
 
 Wrap in a systemd oneshot or a small queue script per stage as volume grows. Logs to

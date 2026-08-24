@@ -12,7 +12,7 @@ duplicating role knowledge per harness would drift immediately. **Consequence:**
 wrappers must stay thin — role content added to a wrapper instead of the role folder
 is a bug.
 
-## D2 — 2026-08-24 — Provider matrix: Foundry for Claude Code, Azure OpenAI for the runner
+## D2 — 2026-08-24 — Provider matrix: Foundry for Claude Code, Azure OpenAI for the runner *(amended by D7)*
 
 Verified against official docs (claude-code third-party integrations, 2026-08):
 
@@ -42,7 +42,7 @@ it forces each stage to write for a reader — which is also what makes the pipe
 debuggable when a stage goes wrong. Large binaries (videos) live in S3 and are linked,
 keeping git fast.
 
-## D5 — 2026-08-24 — Brain/harness split: Claude Code (Foundry) is the default harness; GPT runs in its own harness
+## D5 — 2026-08-24 — Brain/harness split: Claude Code (Foundry) is the default harness; GPT runs in its own harness *(superseded by D7)*
 
 An agent = brain (LLM) + harness (tool loop). Claude Code is a harness that accepts
 only Claude brains; "GPT brain inside Claude Code" does not exist. Therefore:
@@ -64,3 +64,24 @@ product repos; fine-grained PAT in SSM. Branch protection enforces the contract:
 agent PRs are labeled `agent:<role>`. **Why:** clean audit trail (git shows which
 agent did what), instant revocability, and no agent ever inherits a human's broader
 permissions. Details: `docs/AGENT-TOOLING.md` §3.
+
+## D7 — 2026-08-24 — Azure OpenAI is the only model provider; OpenAI-native harnesses
+
+Justin's call: the org's ~$25k Azure OpenAI startup credits make GPT deployments
+(`sol`, `terra`) effectively free, so **every agent brain is an Azure OpenAI
+deployment** — no Claude models, no Foundry. This supersedes D5's Claude-Code-default
+and amends D2 (whose factual matrix still holds: an Azure OpenAI key cannot power
+Claude Code — which is exactly why the harness changes too). The runtime becomes:
+
+- **OpenAI Agents SDK** (`tools/azure-runner/orchestrator.py`) runs pipeline stages
+  on EC2 — one stage per invocation, postconditions enforced in code.
+- **Codex CLI** (Azure provider config) is the developer's stage-3 session and the
+  headless repo-task tool; it reads `AGENTS.md` natively.
+- **`AGENTS.md` is the canonical contract file** (OpenAI-ecosystem convention);
+  `CLAUDE.md` is a pointer. `.claude/agents/` wrappers stay in-tree but dormant —
+  free insurance if the provider decision ever reverses.
+- Deployment routing: `LANTERN_MODEL_REASONING` / `LANTERN_MODEL_FAST` env vars map
+  roles to deployments; swapping is a one-var change.
+
+**Consequence:** D1 (harness-agnostic knowledge) is what made this pivot a one-day
+change — that invariant is now load-bearing and must be preserved as roles scale.

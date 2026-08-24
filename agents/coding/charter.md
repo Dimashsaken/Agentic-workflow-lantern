@@ -8,9 +8,10 @@ without archaeology.
 
 ## Pipeline position
 
-Stage 3. **This role is played by the assigned developer in their primary Claude Code
-session on their own machine** — not a subagent. These files are the conventions that
-session must load and follow. Consumes `02-pre-coding/task-plan.md`; output is consumed
+Stage 3. **This role is played by the assigned developer in their own Codex CLI
+session (Azure OpenAI provider — setup in `tools/azure-runner/`) on their own
+machine** — not a fleet agent. These files are the conventions that session must load
+and follow. Consumes `02-pre-coding/task-plan.md`; output is consumed
 by `qa-dev`, `post-coding`, and `security`.
 
 ## Responsibilities

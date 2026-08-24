@@ -1,8 +1,9 @@
 # Agent Roles
 
 Each role is a folder with exactly three files. These files are **harness-agnostic**:
-the same knowledge powers a Claude Code subagent, a headless EC2 session, or an Azure
-OpenAI-driven runner — the harness wrapper just loads them.
+the same knowledge powers an Agents SDK orchestrator stage on EC2, a Codex CLI
+session, or any future harness — the harness just loads them (decision D1; this
+invariant is what made the D7 provider pivot cheap).
 
 | File         | What it is                              | Who edits it                          |
 |--------------|------------------------------------------|---------------------------------------|
@@ -24,10 +25,13 @@ OpenAI-driven runner — the harness wrapper just loads them.
 ## Adding a role (the roster is designed to scale to ~20)
 
 1. Copy `agents/_template/` to `agents/<new-role>/` and fill in all three files.
-2. Add a wrapper at `.claude/agents/<new-role>.md` (copy an existing one; change only
-   the frontmatter and the role folder path).
-3. Update the roster above, the pipeline table in `CLAUDE.md`, and
+2. Register the role in the orchestrator's stage map
+   (`tools/azure-runner/orchestrator.py`: `ROLE_FOR_STAGE`, plus `BROWSER_ROLES` /
+   `FAST_ROLES` if applicable).
+3. Update the roster above, the pipeline table in `AGENTS.md`, and
    `workflow/PIPELINE.md` if the role is a pipeline stage — same commit.
+   (`.claude/agents/` wrappers are dormant — only touch them if reviving the Claude
+   Code harness, see DECISIONS D7.)
 
 Candidate future roles: performance, accessibility, data/analytics, docs, i18n,
 cost-optimization, incident-response, release-notes.

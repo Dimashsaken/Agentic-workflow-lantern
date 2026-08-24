@@ -1,0 +1,17 @@
+# Codex CLI on Azure OpenAI — copy into ~/.codex/config.toml and fill in.
+# Verify the current api-version value against Codex + Azure OpenAI docs at setup time.
+
+model = "sol"                      # your Azure *deployment* name (sol / terra / ...)
+model_provider = "azure"
+
+[model_providers.azure]
+name = "Azure OpenAI"
+base_url = "https://YOUR-RESOURCE.openai.azure.com/openai"
+env_key = "AZURE_OPENAI_API_KEY"   # Codex reads the key from this env var
+query_params = { api-version = "FILL-ME-IN" }
+wire_api = "responses"             # fall back to "chat" if the deployment lacks Responses API
+
+# Mirror the shared MCP servers from .mcp.json (repo root) that the coding stage needs:
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@playwright/mcp@latest"]

@@ -35,7 +35,7 @@ the developer).
 **Gate:** schema plan and task plan approved by the developer; schema changes always
 `HITL: required`.
 
-## Stage 3 — Coding (assigned developer, primary Claude Code session) → `03-coding/`
+## Stage 3 — Coding (assigned developer, own Codex CLI session) → `03-coding/`
 
 **In:** approved task plan.
 **Do:** implement on branch `feat/<slug>`, following `agents/coding/skills.md`

@@ -20,7 +20,7 @@ output.
 
 ## Inputs
 
-- Files/reports this role reads at session start (beyond the standard four in CLAUDE.md).
+- Files/reports this role reads at session start (beyond the standard reads in AGENTS.md).
 
 ## Outputs
 

@@ -1,48 +1,64 @@
-# azure-runner — running stages on Azure OpenAI (GPT) deployments
+# azure-runner — the fleet runtime (Azure OpenAI only)
 
-**The constraint this exists for:** Claude Code runs Claude models only — an Azure
-OpenAI key cannot power it. But the org's Azure credits can still fund the fleet two
-ways:
+Single model provider by decision (D7): **Azure OpenAI** — the org's startup credits.
+Two harnesses, both OpenAI-native, both loading the same `agents/<role>/` knowledge
+and `AGENTS.md` contract:
 
-1. **Claude Code via Microsoft Foundry** (Claude models on Azure, bills against Azure
-   credits/MACC) — preferred for the reasoning-heavy stages. Setup:
-   `infra/ec2/README.md`.
-2. **GPT deployments via this runner** — for stages where an Azure OpenAI model drives
-   tools directly (browser QA execution, batch checks, video walkthrough sessions).
-
-Full decision record: `docs/DECISIONS.md` (D2).
+| Harness | Runs | Where |
+|---------|------|-------|
+| **OpenAI Agents SDK** (`orchestrator.py`) | pipeline stages 1–2, 4–7 + debug lifecycle | EC2 (workstation for Paper-dependent ui-ux work) |
+| **Codex CLI** (`codex-config.example.toml`) | stage 3 coding | developer laptops; `codex exec` on EC2 for headless repo tasks |
 
 ## Env-var contract (never commit values — see `.env.example`)
 
 ```
 AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
 AZURE_OPENAI_API_KEY=<from SSM>
-AZURE_OPENAI_API_VERSION=<current preview/GA version>
-AZURE_OPENAI_DEPLOYMENT=<deployment name, e.g. sol or terra>
+AZURE_OPENAI_API_VERSION=<current GA version>
+
+# Deployment routing — set to whichever of the org's deployments fits each slot:
+LANTERN_MODEL_REASONING=sol    # pre-coding, post-coding, security, debug, ui-ux options
+LANTERN_MODEL_FAST=terra       # QA charter execution, batch checks
 ```
 
-Deployment names (`sol`, `terra`, …) are org-internal Azure *deployment* labels — the
-runner treats them as opaque. Any deployment with solid tool/function calling works.
+Deployment names (`sol`, `terra`, …) are org-internal Azure deployment labels — the
+runner treats them as opaque strings. If one is clearly the stronger model, it goes in
+`REASONING`; measure and swap freely, it's one env var.
 
-## How a runner session works
+## The orchestrator
 
-The knowledge layer is harness-agnostic, so a runner session is just:
+`orchestrator.py` runs **one stage of one run** per invocation — deterministic
+pipeline control stays in code/humans, the model only gets autonomy *inside* a stage:
 
-1. Load `agents/<role>/charter.md` + `skills.md` + `memory.md` into the system prompt,
-   plus `CLAUDE.md`'s "one rule that matters" section.
-2. Give the model tools: browser control (Playwright), file read/write scoped to the
-   run folder + its own `memory.md`, shell if the role needs it.
-3. Loop until the stage report is written; enforce the report + memory-append
-   postconditions in the harness (don't trust the model to remember).
+```bash
+python orchestrator.py feat-20260824-bulk-export 04-qa-dev
+```
 
-## Harness options (pick one when the first GPT-driven stage is built)
+What it does:
 
-- **OpenAI Agents SDK** (JS or Python) — first-party agent loop; wrap Playwright
-  actions as tools; supports Azure OpenAI clients. Best default.
-- **Playwright MCP + any MCP-capable client** — reuses the same browser tooling the
-  Claude Code agents use.
-- **browser-use** (Python) — highest-level "agent clicks around the app" library,
-  works with Azure OpenAI via its LangChain client. Fastest to demo, least control.
+1. Builds the system prompt: `AGENTS.md` core rules + the role's `charter.md` +
+   `skills.md` + `memory.md` + the run/stage assignment.
+2. Creates an Agents SDK `Agent` on the role's routed deployment, with tools:
+   file read/write scoped to the repo, the Playwright MCP server for browser roles,
+   and shell access only where the role's charter needs it.
+3. Runs the loop, then **enforces the three postconditions** (stage report exists,
+   memory appended, runboard row updated) — failing loudly if the model skipped one.
 
-Whichever harness: video recording is a property of the **browser context**
-(`tools/qa-recorder`), not of the model — every option above records the same way.
+Status: **scaffold** — reviewed but not yet exercised on EC2; expect to tune tool
+scoping and the api-version pin on first real run. `pip install -r requirements.txt`.
+
+## Codex CLI for developers (stage 3)
+
+Copy `codex-config.example.toml` into `~/.codex/config.toml`, fill in the resource
+name, and export `AZURE_OPENAI_API_KEY`. Codex reads the product repo's `AGENTS.md`
+natively; Lantern's coding conventions (`agents/coding/skills.md`) apply as before.
+Check Codex's docs for the current `api-version` value when setting up.
+
+## MCP wiring
+
+The shared server list lives in `.mcp.json` (repo root) as the single reference.
+- Agents SDK: servers are attached in `orchestrator.py` (stdio/HTTP per server).
+- Codex CLI: mirror the needed servers into `~/.codex/config.toml` (`[mcp_servers]`).
+
+Video recording stays harness-independent: it's a property of the Playwright browser
+context (`tools/qa-recorder`), so QA videos work identically under every option above.

@@ -1,6 +1,6 @@
 # Skills — coding
 
-These are Lantern's cross-project coding conventions. The product repo's own CLAUDE.md
+These are Lantern's cross-project coding conventions. The product repo's own AGENTS.md
 adds project specifics; where they conflict, the product repo wins.
 
 ## 1. Session start

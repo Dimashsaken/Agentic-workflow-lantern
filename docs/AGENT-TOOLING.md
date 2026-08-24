@@ -6,45 +6,39 @@ itself** (branches, prior sessions, project state) at the start of every session
 
 ---
 
-## 1. Brain vs. harness — untangling "GPT brain with Claude agentics"
+## 1. The runtime stack — Azure OpenAI only (D7)
 
-An agent is two separable things:
+An agent is two separable things: the **brain** (the LLM — one of the org's Azure
+OpenAI deployments, `sol`/`terra`) and the **harness** (the loop that gives the brain
+tools, MCP connections, file access, and enforces our conventions).
 
-- **Brain** — the LLM making decisions (Claude Opus/Sonnet, or a GPT deployment like
-  `sol`/`terra`).
-- **Harness** — the software that runs the loop around the brain: gives it tools,
-  MCP connections, file access, subagents, permissions, and enforces our conventions.
-  Claude Code is a harness. The OpenAI Agents SDK is a harness.
+By decision D7 the brain side is fixed: **every agent runs on Azure OpenAI** (the
+startup credits). That rules out Claude Code as a harness (it runs Claude models
+only), so the fleet uses the OpenAI-native harnesses:
 
-The pairing rules are hard constraints, not preferences:
+| Harness | Role in Lantern | Notes |
+|---------|-----------------|-------|
+| **OpenAI Agents SDK** — `tools/azure-runner/orchestrator.py` | All pipeline stages except coding; the debug lifecycle | One stage per invocation; postconditions enforced in code; MCP + function tools |
+| **Codex CLI** (Azure provider config) | Stage 3 coding on developer laptops; `codex exec` for headless repo tasks on EC2 | Reads `AGENTS.md` natively — same contract file as the SDK stages load |
 
-| Brain | Harness | Works? | Azure credits? |
-|-------|---------|--------|----------------|
-| Claude | Claude Code (backend = Microsoft Foundry) | ✅ everything in this repo works natively | ✅ bills CCUs against MACC |
-| GPT (`sol`/`terra`) | OpenAI Agents SDK (`tools/azure-runner`) | ✅ but we build/maintain the loop ourselves | ✅ Azure OpenAI |
-| GPT (`sol`/`terra`) | Claude Code | ❌ **does not exist** — Claude Code runs Claude models only | — |
+Deployment routing lives in the orchestrator: `LANTERN_MODEL_REASONING` (the stronger
+deployment) for judgement-heavy roles, `LANTERN_MODEL_FAST` for volume QA execution.
+Swapping which of `sol`/`terra` fills which slot is a one-env-var change.
 
-**The recommended shape (recorded as D5 in DECISIONS.md):**
-
-- **Default: Claude brain + Claude Code harness via Foundry** for all pipeline stages.
-  Subagents, `.mcp.json`, CLAUDE.md conventions, skills, permissions — all free. Same
-  Azure credit pool.
-- **GPT (`sol`/`terra`) via the azure-runner** where a second, cheaper, high-volume
-  brain earns its keep: executing large QA charters, batch checks, repetitive browser
-  runs. Both harnesses speak MCP, so the tool layer below is shared.
-- Developers' laptops run Claude Code as themselves for stage 3, exactly as before.
-
-Practical consequence: **stand up the fleet on Foundry first** (one env-var block,
-zero harness code — see `infra/ec2/README.md`), and build the azure-runner only when
-the first GPT-driven stage is actually scheduled.
+`AGENTS.md` at the repo root is the canonical contract (the OpenAI-ecosystem
+convention); `CLAUDE.md` is just a pointer to it. The `.claude/agents/` wrappers are
+**dormant** — kept only because they cost nothing and regenerate the fleet on a
+Claude Code harness in minutes if the provider decision ever changes; they are not
+part of the running system.
 
 ---
 
-## 2. Shared tool layer — MCP servers (`.mcp.json` at repo root)
+## 2. Shared tool layer — MCP servers
 
-Project-scoped MCP config lives in `.mcp.json` so every Claude Code session in this
-repo gets the same connections; the azure-runner points its MCP client at the same
-servers. Secrets are `${ENV_VAR}` references resolved from SSM — never literal values.
+`.mcp.json` at the repo root is the **single reference list** of shared servers; each
+harness wires them its own way — the Agents SDK attaches them in `orchestrator.py`,
+Codex CLI mirrors the needed ones into `~/.codex/config.toml` (`[mcp_servers]`).
+Secrets are `${ENV_VAR}` references resolved from SSM — never literal values.
 
 | Server | Used by | Purpose |
 |--------|---------|---------|
@@ -55,9 +49,9 @@ servers. Secrets are `${ENV_VAR}` references resolved from SSM — never literal
 
 **Paper caveat (plan-ahead item):** Paper's MCP server attaches to the **desktop
 app**, so it is not available on a headless EC2 box. Two workable setups:
-(a) run the ui-ux agent's Paper work in a Claude Code session on a workstation where
-Paper is installed (the `paper-desktop` plugin also provides `code-to-design` /
-`design-to-code` skills there), or (b) skip Paper on EC2 and let ui-ux produce
+(a) run the ui-ux agent's Paper work on a workstation where Paper is installed, from
+any MCP-capable session pointed at the Paper server (e.g. Codex CLI with a `paper`
+entry in its config), or (b) skip Paper on EC2 and let ui-ux produce
 HTML/mermaid options. Either way the **handoff contract is Paper-independent**: ui-ux
 exports chosen frames as PNGs into `01-ui-ux/` and links the Paper file URL in
 `options.md`, so no downstream agent ever needs Paper access.
@@ -96,7 +90,7 @@ protections → create the label set → store the PAT in SSM.
 Lantern is the **control plane** — product code stays in its own repos. On EC2,
 product repos are cloned under `~/work/<repo>`. Every feature brief names the product
 repo and base branch; the run folder's reports always state repo + branch so any
-session can resume. Each product repo keeps its **own CLAUDE.md**, which is
+session can resume. Each product repo keeps its **own AGENTS.md**, which is
 authoritative for that codebase's conventions — Lantern's `agents/coding/skills.md`
 explicitly yields to it.
 
@@ -115,11 +109,11 @@ orients in this order. This is cheap (a minute) and non-negotiable:
    `git fetch --all --prune`, `git branch -r`, `git log --oneline -20` on the base
    branch, and `git log --all --grep=<run-id>` to find every commit already made for
    this run (including by other agents or the developer).
-4. **The product repo's CLAUDE.md** — its conventions, commands, test invocations.
+4. **The product repo's AGENTS.md** — its conventions, commands, test invocations.
 5. **Role-relevant externals** — open agent PRs (`gh pr list --label agent:<role>`),
    and for qa-staging/debug: current PostHog error state.
 
-And the session-end postconditions grow by one (now three, see CLAUDE.md): stage
+And the session-end postconditions grow by one (now three, see AGENTS.md): stage
 report, memory append, **runboard row update**.
 
 ---
