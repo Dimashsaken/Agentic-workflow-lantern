@@ -1,0 +1,24 @@
+# Secrets — never commit credentials
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+.venv/
+
+# QA artifacts — videos/traces go to the artifact bucket, not git
+tools/qa-recorder/videos/
+tools/qa-recorder/traces/
+tools/qa-recorder/test-results/
+workflow/runs/**/*.webm
+workflow/runs/**/*.mp4
+workflow/runs/**/*.zip
+
+# OS noise
+.DS_Store
+Thumbs.db

@@ -1,0 +1,110 @@
+# Lantern — Agentic Feature-Development Pipeline
+
+Lantern is the control plane for a **fixed, multi-agent software-delivery pipeline**.
+Justin writes a feature brief, assigns a developer, and the feature flows through the
+same sequence of role agents every time: UI/UX → pre-coding → coding → QA (dev) →
+post-coding → security → QA (staging). Bugs flow through a parallel debug lifecycle.
+
+This repo holds three things:
+
+1. **Agent knowledge** — each role's charter, skills, and persistent memory (`agents/`)
+2. **The pipeline contract** — stages, gates, handoffs, artifact formats (`workflow/`)
+3. **Runtime tooling** — EC2 setup, QA video recording, Azure OpenAI runner (`infra/`, `tools/`)
+
+## Repo map
+
+```
+agents/<role>/          charter.md + skills.md + memory.md per role (harness-agnostic)
+.claude/agents/         Claude Code subagent wrappers — thin; they load agents/<role>/*
+workflow/PIPELINE.md    the fixed lifecycle: stages, inputs/outputs, gates
+workflow/DEBUG-LIFECYCLE.md   bug intake → repro → fix → regression
+workflow/briefs/        feature briefs from Justin (start from _TEMPLATE.md)
+workflow/runs/          one folder per feature/bug run; all stage artifacts live here
+workflow/templates/     stage report + handoff templates
+tools/qa-recorder/      Playwright-based QA with built-in video recording
+tools/azure-runner/     how Azure OpenAI-powered agent stages are executed
+infra/ec2/              EC2 provisioning and operations
+docs/DECISIONS.md       architecture decisions (read before changing the design)
+```
+
+## The one rule that matters
+
+Every agent session, **before doing anything else**, reads in this order:
+
+1. `agents/<role>/charter.md` — what the role is (and is not) responsible for
+2. `agents/<role>/skills.md` — how this role does its work
+3. `agents/<role>/memory.md` — judgement accumulated from past runs
+4. The active run folder `workflow/runs/<run-id>/` — the brief and all upstream stage reports
+
+And **before ending**, it must:
+
+1. Write its stage report to `workflow/runs/<run-id>/<stage-dir>/report.md`
+   (copy `workflow/templates/stage-report.md`)
+2. Append durable learnings to its own `agents/<role>/memory.md` (dated, append-only —
+   never rewrite history; consolidation happens separately, see Memory protocol)
+
+An agent that skips either step breaks the pipeline for everyone downstream.
+
+## The pipeline (fixed — do not reorder)
+
+| # | Stage dir        | Agent        | Key output                                   | Gate to advance                    |
+|---|------------------|--------------|----------------------------------------------|------------------------------------|
+| 1 | `01-ui-ux`       | `ui-ux`      | 2–3 flow options → coded prototype + video   | Justin/developer picks an option   |
+| 2 | `02-pre-coding`  | `pre-coding` | Blast-radius report, schema plan, task plan  | Schema + plan approved             |
+| 3 | `03-coding`      | developer    | Implementation on a feature branch           | Code complete, self-review done    |
+| 4 | `04-qa-dev`      | `qa-dev`     | Test design + executed runs + **videos**     | No open sev-1/sev-2 bugs           |
+| 5 | `05-post-coding` | `post-coding`| Cleanliness / tech-debt / backward-compat    | Findings resolved or waived        |
+| 6 | `06-security`    | `security`   | Deploy-risk + vulnerability report           | No unmitigated high-risk findings  |
+| — | *deploy to staging (human)* |   |                                              |                                    |
+| 7 | `07-qa-staging`  | `qa-staging` | Staging QA runs + **videos**                 | Justin signs off for production    |
+
+Stage 3 (coding) is done by the assigned developer in their own Claude Code session on
+their laptop — it is the primary session, not a subagent. All other stages run as
+subagents locally or as headless sessions on EC2. Details, per-stage contracts, and the
+list of human-in-the-loop gates: `workflow/PIPELINE.md`.
+
+Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
+`workflow/DEBUG-LIFECYCLE.md`, owned by the `debug` agent.
+
+## Runs and artifacts
+
+- Run ID: `feat-YYYYMMDD-<slug>` or `bug-YYYYMMDD-<slug>` (e.g. `feat-20260824-bulk-export`).
+- Everything a stage produces goes in `workflow/runs/<run-id>/<stage-dir>/`:
+  `report.md` (required), plus plans, diffs, screenshots.
+- **Videos and large binaries never go in git.** Upload to the artifact bucket
+  (see `infra/ec2/README.md`) and link the URL from the report.
+
+## Memory protocol
+
+- `memory.md` is each agent's long-term judgement. Entries are dated, concrete, and
+  say *why* — "2026-08-24: Modal flows on mobile Safari need X because Y", not "be careful with modals".
+- Append-only during runs. Roughly monthly, a human (or a dedicated session) consolidates:
+  merge duplicates, delete entries proven wrong, keep the file under ~200 lines.
+- Never store secrets, customer data, or anything derivable from this repo's code in memory files.
+
+## Models and providers
+
+- **Claude Code sessions/subagents run Claude models only.** An Azure OpenAI key cannot
+  power Claude Code. Supported backends: Anthropic API, AWS Bedrock, Google Vertex AI,
+  Microsoft Foundry (Claude models on Azure — this is the route that burns Azure credits).
+- **Azure OpenAI (GPT) deployments** power the non-Claude-Code stages via
+  `tools/azure-runner/` (Playwright-driving QA agents, batch evaluation, etc.).
+- All credentials come from environment variables (locally via `.env`, on EC2 via SSM
+  Parameter Store). **Never commit keys.** See `tools/azure-runner/README.md` for the
+  env-var contract. See `docs/DECISIONS.md` D2 for the full provider matrix.
+
+## Human-in-the-loop gates (never automate past these)
+
+1. Choosing the UX option (stage 1 → 2)
+2. Approving schema/migration changes (stage 2 → 3)
+3. Deploying to staging (stage 6 → 7) and to production (after stage 7)
+4. Anything the pre-coding agent flags as `HITL: required` in its report
+
+## Conventions
+
+- New agent roles: copy `agents/_template/`, fill in the three files, add a wrapper in
+  `.claude/agents/`. The pipeline table above and `workflow/PIPELINE.md` must be updated
+  in the same commit. Designed to scale to ~20 roles.
+- Commits from agent sessions reference the run ID: `feat-20260824-bulk-export: <message>`.
+- When a stage is blocked, the report says `Status: BLOCKED` with a single unambiguous
+  question — downstream agents do not guess.
