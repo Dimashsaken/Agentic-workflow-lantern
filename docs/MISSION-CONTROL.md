@@ -35,10 +35,15 @@ access or SSO: put CloudFront/ALB + OIDC in front; the app doesn't change.
 
 ## Gate integrity in the UI
 
-Approve/Reject buttons only render for authenticated users in the approver list
-(`LANTERN_WEB_USERS`); the decision writes the `approvals` row with actor +
-timestamp + note (`channel='web'`) — the same fail-closed contract as the CLI
-(D8). No users configured → the app is read-only. Agents have no route here.
+**Nothing is served unauthenticated** — every page redirects to a login screen;
+sessions are HMAC-signed cookies (7-day TTL, key from `LANTERN_WEB_SECRET`, falling
+back to a hash of `LANTERN_WEB_USERS`). Decisions write the `approvals` row with
+actor + timestamp + note (`channel='web'`) — the same fail-closed contract as the
+CLI (D8). No users configured → nobody can log in at all. Agents have no route here.
+
+The UI explains itself: stage columns carry human names and one-line descriptions
+(`STAGE_META`), each gate states what is being decided and how (`GATE_META`), and a
+status legend defines every color — a developer's first visit needs no walkthrough.
 
 ## Roadmap
 

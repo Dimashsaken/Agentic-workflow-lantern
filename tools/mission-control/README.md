@@ -13,7 +13,9 @@ cd tools/mission-control
 # EC2: systemd unit infra/ec2/lantern-mission-control.service (port 8080)
 ```
 
-Auth: HTTP Basic, users from `LANTERN_WEB_USERS="justin:pw,dev:pw"` in the
-azure-runner `.env` (or SSM on EC2). **No users configured → read-only**; only
-listed users can approve, and every decision records actor + note + timestamp.
-Never expose the port publicly — Tailscale or an IP-allowlisted security group.
+Auth: login page + signed session cookie. Users from
+`LANTERN_WEB_USERS="justin:pw,dev:pw"` in the azure-runner `.env` (or SSM on EC2);
+optional `LANTERN_WEB_SECRET` for the cookie key. **No page is served without
+login**, and with no users configured nobody can log in. Every gate decision
+records actor + note + timestamp. Never expose the port publicly — Tailscale or an
+IP-allowlisted security group.
