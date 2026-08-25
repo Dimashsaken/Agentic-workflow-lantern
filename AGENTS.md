@@ -29,7 +29,8 @@ workflow/runs/          one folder per feature/bug run; all stage artifacts live
 workflow/templates/     stage report + handoff templates
 tools/azure-runner/     the fleet runtime: pipeline.py (one-call loop) + orchestrator.py (single stage) + schema.sql
 tools/qa-recorder/      Playwright-based QA with built-in video recording
-infra/ec2/              EC2 provisioning and operations
+tools/mission-control/  web UI: gate inbox, run board, verification timeline (docs/MISSION-CONTROL.md)
+infra/ec2/              EC2 provisioning: bootstrap.sh + systemd units + operations
 docs/ORCHESTRATION.md   the one-call concept→live loop: Postgres state machine, gates, failure modes
 docs/AGENT-TOOLING.md   runtime stack, per-agent tools/MCP matrix, GitHub identity, orientation protocol
 docs/DECISIONS.md       architecture decisions (read before changing the design)

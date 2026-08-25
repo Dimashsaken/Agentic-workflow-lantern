@@ -13,6 +13,8 @@ the OpenAI Agents SDK on EC2 plus Codex CLI for developers (decision D7).
 - [workflow/PIPELINE.md](workflow/PIPELINE.md) — the feature lifecycle, stage by stage
 - [workflow/DEBUG-LIFECYCLE.md](workflow/DEBUG-LIFECYCLE.md) — the bug lifecycle
 - [agents/README.md](agents/README.md) — how agent roles are defined and how to add one
+- [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) — the one-call concept→live loop
+- [docs/MISSION-CONTROL.md](docs/MISSION-CONTROL.md) — the web UI for gates, runs, and verification
 - [docs/AGENT-TOOLING.md](docs/AGENT-TOOLING.md) — runtime stack, tools, GitHub identity
 - [infra/ec2/README.md](infra/ec2/README.md) — running the fleet on EC2
 - [tools/azure-runner/README.md](tools/azure-runner/README.md) — the orchestrator + Codex setup

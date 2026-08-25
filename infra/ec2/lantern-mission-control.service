@@ -1,0 +1,13 @@
+[Unit]
+Description=Lantern Mission Control web UI
+After=network.target postgresql.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/mission-control
+ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

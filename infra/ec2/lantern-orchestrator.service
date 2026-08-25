@@ -1,0 +1,13 @@
+[Unit]
+Description=Lantern pipeline orchestrator
+After=network.target postgresql.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner
+ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/python pipeline.py daemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

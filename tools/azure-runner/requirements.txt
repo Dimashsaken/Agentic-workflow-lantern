@@ -3,3 +3,6 @@ openai>=1.60
 python-dotenv>=1.0
 asyncpg>=0.29
 SQLAlchemy>=2.0
+fastapi>=0.115
+uvicorn>=0.30
+markdown>=3.6

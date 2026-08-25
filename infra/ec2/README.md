@@ -11,16 +11,19 @@ hurts.
 - IAM instance profile with: read on the SSM parameters below, read/write on the
   artifact bucket. No long-lived AWS keys on disk.
 
-## Base setup
+## Base setup — one script
+
+Everything the box needs is `bootstrap.sh` (idempotent — node, Codex CLI, Python
+venv, Playwright browsers, Postgres 16, systemd units). Paste it as instance
+**user-data** at launch, or on a running box:
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git unzip python3.12 python3.12-venv
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs
-git clone <this-repo> && cd Agentic-workflow-lantern
-cd tools/qa-recorder && npm install && sudo npx playwright install --with-deps chromium webkit firefox
-cd ../azure-runner && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-npm install -g @openai/codex   # Codex CLI for headless repo tasks (codex exec)
+sudo bash infra/ec2/bootstrap.sh
 ```
+
+Then the three manual steps it prints: real DB password + `.env` (from SSM),
+`pipeline.py init-db`, `systemctl enable --now lantern-orchestrator
+lantern-mission-control`.
 
 ## Azure OpenAI — the fleet's only model provider (D7)
 
