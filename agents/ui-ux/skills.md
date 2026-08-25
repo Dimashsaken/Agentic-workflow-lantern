@@ -18,11 +18,13 @@ brief lacks a success metric or target user, mark BLOCKED with that one question
 - 2–3 options that differ in *structure* (e.g. wizard vs. single-page vs. inline edit),
   not in colour. For each: a mermaid flow diagram or ASCII wireframe, step count for
   the primary task, pros/cons, and which existing product patterns it reuses.
-- **With Paper (workstation sessions only — see `docs/AGENT-TOOLING.md` §2):** first
-  browse the existing Paper designs for the product's current patterns, then create
-  the options as frames in a Paper file. Export every option frame as PNG into
-  `01-ui-ux/` and put the Paper file URL in `options.md` — downstream agents and
-  headless EC2 sessions must never need Paper access to see the design.
+- **With Paper (workstation sessions only — see `docs/AGENT-TOOLING.md` §2):** follow
+  the loop in `docs/plans/ui-ux-agent-paper.md` — divergence as cheap HTML skeletons
+  first, then converge only the best 2–3 into Paper artboards (grounded in
+  `design/design-system.md`), screenshot-critique ≤3 rounds, export the full handoff
+  artifact set (2x PNGs, per-frame JSX, flow-spec, Paper URL, `[rejected]` options)
+  into `01-ui-ux/` — downstream agents and headless EC2 sessions must never need
+  Paper access to see the design.
 - On EC2 (no Paper): produce the options as HTML mocks/mermaid instead; same export
   contract (images in the run folder).
 - End `options.md` with a recommendation and the single strongest argument against it.
