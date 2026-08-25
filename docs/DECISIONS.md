@@ -85,3 +85,20 @@ Claude Code — which is exactly why the harness changes too). The runtime becom
 
 **Consequence:** D1 (harness-agnostic knowledge) is what made this pivot a one-day
 change — that invariant is now load-bearing and must be preserved as roles scale.
+
+## D8 — 2026-08-25 — One-call durable loop: Postgres state machine + Agents SDK sessions
+
+Justin's ask: "idea from concept to live with one call," Karpathy-style agentic
+loop, Postgres managing all sessions. Design (full doc: `docs/ORCHESTRATION.md`;
+research: `docs/research/`): **two-layer durability with no workflow engine** —
+an explicit Postgres state machine (runs / stage_executions / approvals /
+artifacts / events, claimed by one systemd daemon with `FOR UPDATE SKIP LOCKED`)
+around Agents SDK `SQLAlchemySession` per `{run_id}:{stage}` for conversation
+persistence in the same Postgres. Human gates are `approvals` rows (fail-closed;
+agents have no write path to them); CLI front-end first, Slack buttons + GitHub
+PR webhooks later. Temporal and LangGraph rejected for one-box scale; upgrade
+path is DBOS Transact, then Temporal's official Agents SDK plugin. Karpathy
+grounding: gates are the autonomy slider's detents — one call *starts*
+concept→live but never skips the human at choose/approve/ship
+("LLMs automate what you can verify"). Tracing to the OpenAI dashboard is
+disabled (Azure-only credentials); self-hosted Langfuse is the future option.

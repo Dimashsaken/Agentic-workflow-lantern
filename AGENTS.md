@@ -27,9 +27,10 @@ workflow/DEBUG-LIFECYCLE.md   bug intake → repro → fix → regression
 workflow/briefs/        feature briefs from Justin (start from _TEMPLATE.md)
 workflow/runs/          one folder per feature/bug run; all stage artifacts live here
 workflow/templates/     stage report + handoff templates
-tools/azure-runner/     the fleet runtime: Agents SDK orchestrator + Codex CLI config
+tools/azure-runner/     the fleet runtime: pipeline.py (one-call loop) + orchestrator.py (single stage) + schema.sql
 tools/qa-recorder/      Playwright-based QA with built-in video recording
 infra/ec2/              EC2 provisioning and operations
+docs/ORCHESTRATION.md   the one-call concept→live loop: Postgres state machine, gates, failure modes
 docs/AGENT-TOOLING.md   runtime stack, per-agent tools/MCP matrix, GitHub identity, orientation protocol
 docs/DECISIONS.md       architecture decisions (read before changing the design)
 .mcp.json               reference list of shared MCP servers (wired per-harness, see AGENT-TOOLING §2)

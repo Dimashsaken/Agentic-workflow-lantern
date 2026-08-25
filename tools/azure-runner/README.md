@@ -25,10 +25,26 @@ Deployment names (`sol`, `terra`, …) are org-internal Azure deployment labels 
 runner treats them as opaque strings. If one is clearly the stronger model, it goes in
 `REASONING`; measure and swap freely, it's one env var.
 
-## The orchestrator
+## The pipeline runner (the "one call")
 
-`orchestrator.py` runs **one stage of one run** per invocation — deterministic
-pipeline control stays in code/humans, the model only gets autonomy *inside* a stage:
+`pipeline.py` is the durable concept→live loop (design: `docs/ORCHESTRATION.md`):
+a Postgres state machine drives all stages in order, pauses at human gates
+(`approvals` rows) for as long as needed, and survives restarts. Conversations
+persist per `{run_id}:{stage}` via the Agents SDK's `SQLAlchemySession` in the same
+Postgres (`LANTERN_DATABASE_URL`).
+
+```bash
+python pipeline.py init-db                      # once
+python pipeline.py run workflow/briefs/x.md     # the one call
+python pipeline.py daemon                       # service loop (systemd on EC2)
+python pipeline.py status | approve | reject | retry
+```
+
+## The stage orchestrator
+
+`orchestrator.py` runs **one stage of one run** per invocation (used directly for
+manual/debug work; `pipeline.py` reuses its internals) — deterministic pipeline
+control stays in code/humans, the model only gets autonomy *inside* a stage:
 
 ```bash
 python orchestrator.py feat-20260824-bulk-export 04-qa-dev

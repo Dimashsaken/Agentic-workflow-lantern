@@ -14,11 +14,22 @@ import os
 import sys
 from pathlib import Path
 
-from openai import AsyncAzureOpenAI
-from agents import Agent, Runner, function_tool, set_default_openai_api, set_default_openai_client
+from dotenv import load_dotenv
+from openai import AsyncOpenAI
+from agents import (Agent, Runner, function_tool, set_default_openai_api,
+                    set_default_openai_client, set_tracing_disabled)
 from agents.mcp import MCPServerStdio
 
 REPO = Path(__file__).resolve().parents[2]
+load_dotenv(Path(__file__).parent / ".env")
+
+
+def azure_v1_client() -> AsyncOpenAI:
+    """Client for Azure OpenAI's v1 API surface (endpoint ends in /openai/v1)."""
+    endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].rstrip("/")
+    if not endpoint.endswith("/openai/v1"):
+        endpoint += "/openai/v1"
+    return AsyncOpenAI(base_url=endpoint, api_key=os.environ["AZURE_OPENAI_API_KEY"])
 
 ROLE_FOR_STAGE = {
     "01-ui-ux": "ui-ux",
@@ -118,13 +129,10 @@ async def main() -> None:
 
     role = ROLE_FOR_STAGE.get(args.stage) or sys.exit(f"unknown stage: {args.stage}")
 
-    set_default_openai_client(AsyncAzureOpenAI(
-        azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-        api_key=os.environ["AZURE_OPENAI_API_KEY"],
-        api_version=os.environ["AZURE_OPENAI_API_VERSION"],
-    ))
-    # Flip to the Responses API once the resource's api-version supports it for these deployments.
+    set_default_openai_client(azure_v1_client())
+    # The v1 surface supports the Responses API; flip here if a deployment lacks it.
     set_default_openai_api("chat_completions")
+    set_tracing_disabled(True)  # no OpenAI-platform key on the Azure credential set
 
     memory_before = (REPO / "agents" / role / "memory.md").read_text(encoding="utf-8")
 

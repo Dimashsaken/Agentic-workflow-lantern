@@ -1,0 +1,70 @@
+-- Lantern orchestration schema (design: docs/ORCHESTRATION.md).
+-- The Agents SDK creates its own agent_sessions/agent_messages tables separately.
+
+CREATE TABLE IF NOT EXISTS runs (
+    id               text PRIMARY KEY,          -- 'feat-20260825-bulk-export'
+    brief            text NOT NULL,
+    pipeline_version text NOT NULL,
+    status           text NOT NULL DEFAULT 'running',  -- running|waiting_gate|failed|done|cancelled
+    current_stage    text NOT NULL,
+    created_by       text NOT NULL,
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    updated_at       timestamptz NOT NULL DEFAULT now(),
+    completed_at     timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS stage_executions (
+    id                bigserial PRIMARY KEY,
+    run_id            text NOT NULL REFERENCES runs(id),
+    stage             text NOT NULL,
+    attempt           int  NOT NULL DEFAULT 1,
+    status            text NOT NULL DEFAULT 'running', -- pending|running|waiting_gate|succeeded|failed|skipped
+    input             jsonb,
+    output            jsonb,                            -- inter-stage artifact contract
+    run_state         jsonb,                            -- serialized Agents SDK RunState (v2)
+    run_state_version text,
+    error             text,
+    error_class       text,                             -- retryable | terminal
+    idempotency_key   text UNIQUE,
+    heartbeat_at      timestamptz,
+    started_at        timestamptz NOT NULL DEFAULT now(),
+    finished_at       timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_stage_exec_run ON stage_executions(run_id, stage);
+
+CREATE TABLE IF NOT EXISTS approvals (
+    id                 bigserial PRIMARY KEY,
+    run_id             text NOT NULL REFERENCES runs(id),
+    stage_execution_id bigint REFERENCES stage_executions(id),
+    gate               text NOT NULL,   -- ux_signoff|plan_signoff|code_complete|staging_deploy|prod_signoff
+    status             text NOT NULL DEFAULT 'pending', -- pending|approved|rejected|expired
+    payload            jsonb,                            -- what the human is approving (links, videos)
+    channel            text,                             -- cli|slack|github
+    external_ref       text,                             -- slack ts / PR URL
+    requested_at       timestamptz NOT NULL DEFAULT now(),
+    decided_at         timestamptz,
+    decided_by         text,
+    decision_note      text
+);
+CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approvals(run_id) WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    id         bigserial PRIMARY KEY,
+    run_id     text NOT NULL REFERENCES runs(id),
+    stage      text NOT NULL,
+    kind       text NOT NULL,   -- report|plan|prototype|diff|qa_video|checklist
+    uri        text NOT NULL,   -- repo-relative path or S3 URL
+    sha256     text,
+    metadata   jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS events (           -- append-only audit log
+    id     bigserial PRIMARY KEY,
+    run_id text,
+    actor  text NOT NULL,                     -- 'orchestrator'|'agent:<role>'|'human:<name>'
+    type   text NOT NULL,                     -- run_created|stage_started|stage_succeeded|...
+    data   jsonb,
+    at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_events_run ON events(run_id, at);

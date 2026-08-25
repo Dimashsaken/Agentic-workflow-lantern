@@ -63,6 +63,34 @@ Reports link the S3 URL (or a presigned/CloudFront URL if reviewers lack AWS acc
 Lifecycle rule: expire run artifacts after 90 days; postmortem-linked videos are
 copied to `/lantern/permanent/` first.
 
+## Postgres + the pipeline daemon (docs/ORCHESTRATION.md)
+
+```bash
+sudo apt-get install -y postgresql-16
+sudo -u postgres psql -c "CREATE USER lantern WITH PASSWORD '<from SSM>';"
+sudo -u postgres psql -c "CREATE DATABASE lantern OWNER lantern;"
+export LANTERN_DATABASE_URL=postgresql+asyncpg://lantern:<pw>@localhost:5432/lantern
+cd ~/Agentic-workflow-lantern/tools/azure-runner && .venv/bin/python pipeline.py init-db
+```
+
+systemd unit (`/etc/systemd/system/lantern-orchestrator.service`):
+
+```ini
+[Unit]
+Description=Lantern pipeline orchestrator
+After=network.target postgresql.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner
+ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/python pipeline.py daemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ## Running a stage headless
 
 Interactive (SSH + tmux) is fine early. For unattended runs, the orchestrator runs
