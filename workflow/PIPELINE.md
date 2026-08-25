@@ -17,12 +17,25 @@ brief ──▶ 01 ui-ux ──▶ 02 pre-coding ──▶ 03 coding ──▶ 0
 
 ## Stage 1 — UI/UX (`ui-ux` agent) → `01-ui-ux/`
 
-**In:** the feature brief.
-**Do:** map the user flow; produce 2–3 distinct "paper" options (described + wireframed
-in markdown/ASCII/mermaid, or HTML mock); once an option is picked, build a clickable
-prototype and record a **walkthrough video** with `tools/qa-recorder`.
-**Out:** `options.md`, `prototype/` (code), video link in the report.
-**Gate:** Justin or the assigned developer picks an option. `HITL: required`.
+Runs as **two executions with different runners** (D9, `docs/plans/ui-ux-agent-paper.md`):
+
+- `01-ui-ux.diverge` (EC2, fast model): map the user flow, generate 5–10 low-fi HTML
+  skeletons on named structural axes into `divergence/`, judge-score them against the
+  brief, keep the best 2–3.
+- `01-ui-ux.design` (design workstation, Paper MCP): converge the survivors into Paper
+  artboards grounded in `design/design-system.md`, run the screenshot-critique loop
+  (≤3 iterations per option, layout pass separate from style pass per
+  `design/critique-checklist.md`), export 2x PNGs, write `handoff.json`.
+
+**In:** the feature brief + the design constraint layer (`design/`).
+**Out:** `options.md`, `divergence/`, per-option 2x PNGs, `handoff.json` (feeds the
+gate payload), and — for the recommended/chosen option — the full handoff package:
+`flow-spec.md`, `jsx/` per frame, Paper file URL, walkthrough video (Paper MP4 export,
+or a `prototype/` recording via `tools/qa-recorder` when interaction matters).
+**Gate:** Justin or the assigned developer picks an option in Mission Control, which
+shows the Paper URL + option PNGs side by side. Picking a non-recommended option =
+reject with a note naming it; `retry` re-enters the stage (same session memory) to
+package that option and mark the rest `[rejected]`. `HITL: required`.
 
 ## Stage 2 — Pre-coding (`pre-coding` agent) → `02-pre-coding/`
 

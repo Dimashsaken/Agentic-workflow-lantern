@@ -10,6 +10,7 @@ signing key from LANTERN_WEB_SECRET (falls back to a hash of LANTERN_WEB_USERS).
 import hashlib
 import hmac
 import html
+import json
 import os
 import secrets
 import sys
@@ -20,13 +21,16 @@ import asyncpg
 import markdown as md
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 AZURE_RUNNER = Path(__file__).resolve().parents[1] / "azure-runner"
 sys.path.insert(0, str(AZURE_RUNNER))
 load_dotenv(AZURE_RUNNER / ".env")
 
-from pipeline import FEATURE_STAGES, advance, db_urls, log_event  # noqa: E402
+from pipeline import FEATURE_STAGES, STAGE_DIR, STAGE_RUNNER, advance, db_urls, log_event  # noqa: E402
+
+# Board columns = run-folder dirs; split stage-1 executions share one column.
+BOARD_DIRS = list(dict.fromkeys(d for _, d, *_ in FEATURE_STAGES))
 
 REPO = Path(__file__).resolve().parents[2]
 app = FastAPI(title="Lantern Mission Control")
@@ -84,6 +88,11 @@ input{background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6p
 .login{max-width:340px;margin:14vh auto;text-align:center}
 .login input{width:100%;margin:.35rem 0;box-sizing:border-box}
 .err{color:#f85149;font-size:.85rem}
+.options{display:flex;gap:.6rem;overflow-x:auto;margin:.5rem 0}
+.option{min-width:200px;max-width:280px}
+.option img{width:100%;border:1px solid #30363d;border-radius:6px;background:#fff}
+.optname{font-size:.8rem;margin:.2rem 0}
+.warn{color:#d29922;border-color:#d29922}
 """
 
 
@@ -159,13 +168,70 @@ def legend() -> str:
     return f"<div class='legend'>{items}</div>"
 
 
+def _payload(a) -> dict:
+    p = a["payload"] if "payload" in dict(a) else None
+    if isinstance(p, str):
+        try:
+            return json.loads(p)
+        except ValueError:
+            return {}
+    return p or {}
+
+
+def handoff_html(payload: dict) -> str:
+    """Render a ui-ux handoff.json gate payload: Paper link + option PNGs side by side."""
+    h = payload.get("handoff") or {}
+    if not h:
+        return ""
+    bits = []
+    if h.get("paper_url"):
+        bits.append(f"<p><a href='{html.escape(h['paper_url'])}' target='_blank'>🎨 open the Paper canvas</a></p>")
+    cards = []
+    for o in h.get("options", []):
+        name = o.get("name", "?")
+        star = " ★ recommended" if name == h.get("recommended") else ""
+        imgs = "".join(
+            f"<a href='/file/{html.escape(png)}'><img src='/file/{html.escape(png)}' alt='{html.escape(name)}'></a>"
+            for png in o.get("pngs", []))
+        cards.append(f"<div class='option'><div class='optname'><b>{html.escape(name)}</b>{star}</div>{imgs}</div>")
+    if cards:
+        bits.append(f"<div class='options'>{''.join(cards)}</div>")
+    if h.get("video"):
+        bits.append(f"<p><a href='{html.escape(str(h['video']))}'>🎬 walkthrough video</a></p>")
+    return "".join(bits)
+
+
 def gate_form(a) -> str:
     title, desc = GATE_META.get(a["gate"], (a["gate"], ""))
     return (f"<b>{html.escape(title)}</b><div class='sub'>{html.escape(desc)}</div>"
+            f"{handoff_html(_payload(a))}"
             f"<form method='post' action='/gate/{a['id']}/approve' style='display:inline'>"
             f"<input name='note' placeholder='optional note'> <button>Approve</button></form> "
             f"<form method='post' action='/gate/{a['id']}/reject' style='display:inline'>"
             f"<button class='reject'>Reject</button></form>")
+
+
+KIND_ICON = {"qa_video": "🎬 ", "design_png": "🖼 ", "paper_file": "🎨 ", "flow_spec": "🗺 ", "design_handoff": "📦 "}
+
+
+def art_href(uri: str) -> str:
+    return uri if uri.startswith(("http://", "https://", "s3://")) else f"/file/{uri}"
+
+
+async def runners_online(p) -> dict[str, bool]:
+    try:
+        rows = await p.fetch("SELECT name, now() - last_seen < interval '90 seconds' AS online FROM runners")
+    except asyncpg.PostgresError:   # table not created yet (pre-v2 database)
+        return {}
+    return {r["name"]: r["online"] for r in rows}
+
+
+def needs_workstation_note(run_status: str, current_stage: str, online: dict[str, bool]) -> str:
+    if (run_status == "running" and STAGE_RUNNER.get(current_stage) == "workstation"
+            and not online.get("workstation")):
+        return ("<div class='chip warn'>⏸ needs the design workstation — open Paper Desktop on the "
+                "Lantern file and start <code>pipeline.py daemon --runner workstation</code></div>")
+    return ""
 
 
 # ── routes ───────────────────────────────────────────────────────────────────
@@ -212,11 +278,12 @@ async def dashboard(request: Request):
         return RedirectResponse("/login", status_code=303)
     p = await get_pool()
     pend = await p.fetch(
-        "SELECT id, run_id, gate, requested_at FROM approvals WHERE status='pending' ORDER BY requested_at")
+        "SELECT id, run_id, gate, payload, requested_at FROM approvals WHERE status='pending' ORDER BY requested_at")
     runs = await p.fetch(
         "SELECT id, status, current_stage, created_by, updated_at FROM runs WHERE status != 'done' ORDER BY updated_at DESC")
     done = await p.fetch(
         "SELECT id, completed_at FROM runs WHERE status='done' ORDER BY completed_at DESC LIMIT 5")
+    online = await runners_online(p)
 
     inbox = "".join(
         f"<div class='card'><a href='/run/{html.escape(a['run_id'])}'>{html.escape(a['run_id'])}</a>"
@@ -224,12 +291,13 @@ async def dashboard(request: Request):
         for a in pend) or "<div class='card'>Nothing is waiting on a human right now 🎉</div>"
 
     cols = []
-    for stage, _, _ in FEATURE_STAGES:
-        name, actor, _ = STAGE_META[stage]
+    for dir_ in BOARD_DIRS:
+        name, actor, _ = STAGE_META[dir_]
         cards = "".join(
             f"<div class='card'><a href='/run/{html.escape(r['id'])}'>{html.escape(r['id'])}</a><br>"
-            f"{badge(r['status'])}<div class='sub'>by {html.escape(r['created_by'])} · {r['updated_at']:%b %d}</div></div>"
-            for r in runs if r["current_stage"] == stage)
+            f"{badge(r['status'])}<div class='sub'>by {html.escape(r['created_by'])} · {r['updated_at']:%b %d}</div>"
+            f"{needs_workstation_note(r['status'], r['current_stage'], online)}</div>"
+            for r in runs if STAGE_DIR.get(r["current_stage"], r["current_stage"]) == dir_)
         cols.append(f"<div class='col'><h3>{html.escape(name)}</h3>"
                     f"<div class='desc'>{html.escape(actor)}</div>{cards}</div>")
 
@@ -256,39 +324,50 @@ async def run_page(run_id: str, request: Request):
     if not run:
         raise HTTPException(404, "run not found")
     execs = await p.fetch(
-        """SELECT DISTINCT ON (stage) stage, status, attempt, error, finished_at
+        """SELECT DISTINCT ON (stage) stage, status, attempt, error, started_at, finished_at
            FROM stage_executions WHERE run_id = $1 ORDER BY stage, attempt DESC""", run_id)
-    by_stage = {e["stage"]: e for e in execs}
+    by_dir: dict[str, asyncpg.Record] = {}   # latest execution per run-folder dir
+    for e in execs:
+        d = STAGE_DIR.get(e["stage"], e["stage"])
+        if d not in by_dir or e["started_at"] > by_dir[d]["started_at"]:
+            by_dir[d] = e
     arts = await p.fetch("SELECT stage, kind, uri FROM artifacts WHERE run_id = $1", run_id)
     events = await p.fetch(
         "SELECT actor, type, at FROM events WHERE run_id = $1 ORDER BY at DESC LIMIT 30", run_id)
     pend = await p.fetch(
-        "SELECT id, gate, requested_at FROM approvals WHERE run_id = $1 AND status='pending'", run_id)
+        "SELECT id, gate, payload, requested_at FROM approvals WHERE run_id = $1 AND status='pending'", run_id)
+    online = await runners_online(p)
 
     _, sdesc = STATUS_META.get(run["status"], ("", ""))
     parts = [f"<h2>{html.escape(run_id)} {badge(run['status'])}</h2>"
              f"<p class='sub'>{html.escape(sdesc)} · started by {html.escape(run['created_by'])} · "
              f"brief: <code>{html.escape(run['brief'])}</code></p>"]
+    ws_note = needs_workstation_note(run["status"], run["current_stage"], online)
+    if ws_note:
+        parts.append(f"<div class='card'>{ws_note}</div>")
     for a in pend:
         parts.append(f"<div class='card'>⏳ {gate_form(a)}</div>")
 
-    for stage, _, _ in FEATURE_STAGES:
-        name, actor, desc = STAGE_META[stage]
-        e = by_stage.get(stage)
-        cur = " ← current" if stage == run["current_stage"] and run["status"] != "done" else ""
+    cur_dir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
+    for dir_ in BOARD_DIRS:
+        name, actor, desc = STAGE_META[dir_]
+        e = by_dir.get(dir_)
+        cur = " ← current" if dir_ == cur_dir and run["status"] != "done" else ""
         state = badge(e["status"]) if e else "<span class='chip'>not started</span>"
+        phase = (f" <span class='chip'>phase: {html.escape(e['stage'].split('.', 1)[1])}</span>"
+                 if e and "." in e["stage"] else "")
         parts.append(f"<div class='card'><b>{html.escape(name)}</b> <span class='chip'>{html.escape(actor)}</span> "
-                     f"{state}<b>{cur}</b><div class='sub'>{html.escape(desc)}</div>")
+                     f"{state}{phase}<b>{cur}</b><div class='sub'>{html.escape(desc)}</div>")
         if e and e["error"]:
             parts.append(f"<p class='evt'>error: {html.escape(e['error'][:500])}</p>")
-        report = REPO / "workflow" / "runs" / run_id / stage / "report.md"
+        report = REPO / "workflow" / "runs" / run_id / dir_ / "report.md"
         if report.exists():
             parts.append(f"<details><summary>📄 stage report</summary><div class='report'>"
                          f"{md.markdown(report.read_text(encoding='utf-8'))}</div></details>")
-        stage_arts = [a for a in arts if a["stage"] == stage]
+        stage_arts = [a for a in arts if a["stage"] == dir_]
         if stage_arts:
             links = " · ".join(
-                f"<a href='{html.escape(a['uri'])}'>{'🎬 ' if a['kind'] == 'qa_video' else ''}{html.escape(a['kind'])}</a>"
+                f"<a href='{html.escape(art_href(a['uri']))}'>{KIND_ICON.get(a['kind'], '')}{html.escape(a['kind'])}</a>"
                 for a in stage_arts)
             parts.append(f"<p>artifacts: {links}</p>")
         parts.append("</div>")
@@ -297,6 +376,18 @@ async def run_page(run_id: str, request: Request):
                   f"{html.escape(e['type'].replace('_', ' '))}</div>" for e in events)
     parts.append(f"<h2>📜 Audit log</h2><p class='sub'>Every action on this run, newest first.</p>{evt}")
     return page(run_id, "".join(parts), user=user)
+
+
+@app.get("/file/{rel:path}")
+async def serve_file(rel: str, request: Request):
+    """Serve run-folder artifacts (option PNGs, reports) to signed-in users only."""
+    if not current_user(request):
+        raise HTTPException(401, "sign in required")     # fail closed, like gates
+    p = (REPO / rel).resolve()
+    runs_root = (REPO / "workflow" / "runs").resolve()
+    if not p.is_relative_to(runs_root) or not p.is_file():
+        raise HTTPException(404, "not found")
+    return FileResponse(p)
 
 
 @app.post("/gate/{approval_id}/{decision}")

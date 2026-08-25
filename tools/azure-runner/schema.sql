@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS stage_executions (
     id                bigserial PRIMARY KEY,
     run_id            text NOT NULL REFERENCES runs(id),
     stage             text NOT NULL,
+    runner            text NOT NULL DEFAULT 'ec2',     -- which daemon executed it: ec2|workstation
     attempt           int  NOT NULL DEFAULT 1,
     status            text NOT NULL DEFAULT 'running', -- pending|running|waiting_gate|succeeded|failed|skipped
     input             jsonb,
@@ -52,7 +53,7 @@ CREATE TABLE IF NOT EXISTS artifacts (
     id         bigserial PRIMARY KEY,
     run_id     text NOT NULL REFERENCES runs(id),
     stage      text NOT NULL,
-    kind       text NOT NULL,   -- report|plan|prototype|diff|qa_video|checklist
+    kind       text NOT NULL,   -- report|plan|prototype|diff|qa_video|checklist|design_png|design_handoff|paper_file|flow_spec
     uri        text NOT NULL,   -- repo-relative path or S3 URL
     sha256     text,
     metadata   jsonb,
@@ -68,3 +69,12 @@ CREATE TABLE IF NOT EXISTS events (           -- append-only audit log
     at     timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_events_run ON events(run_id, at);
+
+CREATE TABLE IF NOT EXISTS runners (          -- daemon heartbeats (runner affinity)
+    name      text PRIMARY KEY,               -- 'ec2' | 'workstation'
+    last_seen timestamptz NOT NULL DEFAULT now(),
+    details   jsonb
+);
+
+-- idempotent upgrades for databases created before these columns existed
+ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS runner text NOT NULL DEFAULT 'ec2';

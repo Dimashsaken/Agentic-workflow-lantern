@@ -2,7 +2,7 @@
 
     python pipeline.py init-db
     python pipeline.py run workflow/briefs/<slug>.md [--run-id feat-YYYYMMDD-<slug>] [--by justin] [--follow]
-    python pipeline.py daemon                      # claim-execute-advance loop (systemd on EC2)
+    python pipeline.py daemon [--runner ec2|workstation]   # claim-execute-advance loop
     python pipeline.py status
     python pipeline.py approve <run-id> <gate> --by <name> [--note "..."]
     python pipeline.py reject  <run-id> <gate> --by <name> [--note "..."]
@@ -28,27 +28,32 @@ from agents.extensions.memory import SQLAlchemySession
 from agents.mcp import MCPServerStdio
 
 from orchestrator import (
-    BROWSER_ROLES, REPO, ROLE_FOR_STAGE, append_file, azure_v1_client,
-    build_instructions, check_postconditions, list_dir, model_for, read_file,
-    write_file,
+    BROWSER_ROLES, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
+    append_file, azure_v1_client, build_instructions, check_postconditions,
+    list_dir, model_for, paper_mcp_server, paper_reachable, read_file, write_file,
 )
 
 load_dotenv(Path(__file__).parent / ".env")
 
-PIPELINE_VERSION = "1"
+PIPELINE_VERSION = "2"  # v2: stage 1 split into diverge/design executions (runner affinity)
 POLL_SECONDS = 5
 
-# (stage, type, gate-after). Human stages produce an approval immediately and wait.
+# (stage key, run-folder dir, type, gate-after, runner). Human stages produce an
+# approval immediately and wait. Stage 1 is split by runner affinity: cheap divergence
+# on EC2, Paper convergence on the design workstation (docs/plans/ui-ux-agent-paper.md).
 FEATURE_STAGES = [
-    ("01-ui-ux",       "agent", "ux_signoff"),
-    ("02-pre-coding",  "agent", "plan_signoff"),
-    ("03-coding",      "human", "code_complete"),
-    ("04-qa-dev",      "agent", None),
-    ("05-post-coding", "agent", None),
-    ("06-security",    "agent", "staging_deploy"),
-    ("07-qa-staging",  "agent", "prod_signoff"),
+    ("01-ui-ux.diverge", "01-ui-ux",       "agent", None,             "ec2"),
+    ("01-ui-ux.design",  "01-ui-ux",       "agent", "ux_signoff",     "workstation"),
+    ("02-pre-coding",    "02-pre-coding",  "agent", "plan_signoff",   "ec2"),
+    ("03-coding",        "03-coding",      "human", "code_complete",  "ec2"),
+    ("04-qa-dev",        "04-qa-dev",      "agent", None,             "ec2"),
+    ("05-post-coding",   "05-post-coding", "agent", None,             "ec2"),
+    ("06-security",      "06-security",    "agent", "staging_deploy", "ec2"),
+    ("07-qa-staging",    "07-qa-staging",  "agent", "prod_signoff",   "ec2"),
 ]
-STAGE_INDEX = {s: i for i, (s, _, _) in enumerate(FEATURE_STAGES)}
+STAGE_INDEX = {s[0]: i for i, s in enumerate(FEATURE_STAGES)}
+STAGE_DIR = {s[0]: s[1] for s in FEATURE_STAGES}
+STAGE_RUNNER = {s[0]: s[4] for s in FEATURE_STAGES}
 
 
 def db_urls() -> tuple[str, str]:
@@ -73,18 +78,20 @@ async def log_event(conn, run_id: str | None, actor: str, type_: str, data: dict
 
 # ── stage execution ──────────────────────────────────────────────────────────
 
-async def run_agent_stage(conn, run_id: str, stage: str) -> None:
+async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     role = ROLE_FOR_STAGE[stage]
+    sdir = STAGE_DIR[stage]
     attempt = await conn.fetchval(
         "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
         run_id, stage,
     )
     exec_id = await conn.fetchval(
-        """INSERT INTO stage_executions (run_id, stage, attempt, status, idempotency_key, heartbeat_at)
-           VALUES ($1, $2, $3, 'running', $4, now()) RETURNING id""",
-        run_id, stage, attempt, f"{run_id}:{stage}:{attempt}",
+        """INSERT INTO stage_executions (run_id, stage, runner, attempt, status, idempotency_key, heartbeat_at)
+           VALUES ($1, $2, $3, $4, 'running', $5, now()) RETURNING id""",
+        run_id, stage, runner, attempt, f"{run_id}:{stage}:{attempt}",
     )
-    await log_event(conn, run_id, "orchestrator", "stage_started", {"stage": stage, "attempt": attempt})
+    await log_event(conn, run_id, "orchestrator", "stage_started",
+                    {"stage": stage, "attempt": attempt, "runner": runner})
 
     memory_before = (REPO / "agents" / role / "memory.md").read_text(encoding="utf-8")
     session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
@@ -93,12 +100,16 @@ async def run_agent_stage(conn, run_id: str, stage: str) -> None:
     if role in BROWSER_ROLES:
         mcp_servers.append(MCPServerStdio(
             params={"command": "npx", "args": ["-y", "@playwright/mcp@latest"]}, name="playwright"))
+    if stage in PAPER_STAGES:
+        if not await paper_reachable():
+            raise RuntimeError(PAPER_PREFLIGHT_HINT)
+        mcp_servers.append(paper_mcp_server())
     for s in mcp_servers:
         await s.connect()
     try:
         agent = Agent(
             name=role,
-            model=model_for(role),
+            model=model_for(role, stage),
             instructions=build_instructions(role, run_id, stage),
             tools=[read_file, write_file, append_file, list_dir],
             mcp_servers=mcp_servers,
@@ -119,11 +130,13 @@ async def run_agent_stage(conn, run_id: str, stage: str) -> None:
     if missing:
         raise RuntimeError("postconditions failed: " + "; ".join(missing))
 
-    report = f"workflow/runs/{run_id}/{stage}/report.md"
+    report = f"workflow/runs/{run_id}/{sdir}/report.md"
     await conn.execute(
         "INSERT INTO artifacts (run_id, stage, kind, uri) VALUES ($1, $2, 'report', $3)",
-        run_id, stage, report,
+        run_id, sdir, report,
     )
+    if stage == "01-ui-ux.design":
+        await register_design_artifacts(conn, run_id, sdir)
     await conn.execute(
         "UPDATE stage_executions SET status = 'succeeded', output = $1, finished_at = now() WHERE id = $2",
         json.dumps({"final_output": final[-4000:], "report": report}), exec_id,
@@ -131,10 +144,44 @@ async def run_agent_stage(conn, run_id: str, stage: str) -> None:
     await log_event(conn, run_id, f"agent:{role}", "stage_succeeded", {"stage": stage})
 
 
+def _read_handoff(run_id: str, sdir: str) -> dict | None:
+    handoff = REPO / "workflow" / "runs" / run_id / sdir / "handoff.json"
+    if not handoff.exists():
+        return None
+    try:
+        return json.loads(handoff.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+
+
+async def register_design_artifacts(conn, run_id: str, sdir: str) -> None:
+    """Auto-register the ui-ux handoff set (PNGs, Paper URL, flow-spec) as artifacts."""
+    data = _read_handoff(run_id, sdir)
+    if data is None:
+        return
+    rel = f"workflow/runs/{run_id}/{sdir}"
+    rows: list[tuple[str, str, dict | None]] = [(f"{rel}/handoff.json", "design_handoff", None)]
+    if data.get("paper_url"):
+        rows.append((data["paper_url"], "paper_file", None))
+    if (REPO / rel / "flow-spec.md").exists():
+        rows.append((f"{rel}/flow-spec.md", "flow_spec", None))
+    for opt in data.get("options", []):
+        for png in opt.get("pngs", []):
+            rows.append((png, "design_png", {"option": opt.get("name"), "status": opt.get("status")}))
+    for uri, kind, meta in rows:
+        await conn.execute(
+            "INSERT INTO artifacts (run_id, stage, kind, uri, metadata) VALUES ($1, $2, $3, $4, $5)",
+            run_id, sdir, kind, uri, json.dumps(meta) if meta else None)
+
+
 async def open_gate(conn, run_id: str, stage: str, gate: str) -> None:
+    payload: dict = {"stage": stage, "run_folder": f"workflow/runs/{run_id}/"}
+    handoff = _read_handoff(run_id, STAGE_DIR[stage])
+    if handoff is not None:
+        payload["handoff"] = handoff   # Mission Control renders paper_url + PNGs from this
     await conn.execute(
         """INSERT INTO approvals (run_id, gate, channel, payload) VALUES ($1, $2, 'cli', $3)""",
-        run_id, gate, json.dumps({"stage": stage, "run_folder": f"workflow/runs/{run_id}/"}),
+        run_id, gate, json.dumps(payload),
     )
     await conn.execute(
         "UPDATE runs SET status = 'waiting_gate', updated_at = now() WHERE id = $1", run_id)
@@ -155,14 +202,14 @@ async def advance(conn, run_id: str, stage: str) -> None:
         FEATURE_STAGES[nxt][0], run_id)
 
 
-async def step_run(conn, run_id: str) -> None:
+async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
     """Execute the current stage of one claimed run, then gate or advance."""
     row = await conn.fetchrow("SELECT current_stage FROM runs WHERE id = $1", run_id)
     stage = row["current_stage"]
-    _, stype, gate = FEATURE_STAGES[STAGE_INDEX[stage]]
+    _, _, stype, gate, _ = FEATURE_STAGES[STAGE_INDEX[stage]]
     try:
         if stype == "agent":
-            await run_agent_stage(conn, run_id, stage)
+            await run_agent_stage(conn, run_id, stage, runner)
         else:  # human stage: nothing to execute — the gate IS the stage
             print(f"[{run_id}] {stage} is a human stage (developer + Codex CLI).")
         if gate:
@@ -180,16 +227,24 @@ async def step_run(conn, run_id: str) -> None:
         print(f"[{run_id}] {stage} FAILED: {e}\n  rework, then: python pipeline.py retry {run_id}", file=sys.stderr)
 
 
-async def claim_and_step(conn) -> bool:
-    """One tick: claim a runnable run (skip-locked) and execute its current stage."""
+async def heartbeat(conn, runner: str) -> None:
+    await conn.execute(
+        """INSERT INTO runners (name, last_seen) VALUES ($1, now())
+           ON CONFLICT (name) DO UPDATE SET last_seen = now()""", runner)
+
+
+async def claim_and_step(conn, runner: str) -> bool:
+    """One tick: claim a runnable run whose current stage belongs to this runner."""
+    stages = [s for s, r in STAGE_RUNNER.items() if r == runner]
     async with conn.transaction():
         row = await conn.fetchrow(
-            "SELECT id FROM runs WHERE status = 'running' ORDER BY updated_at FOR UPDATE SKIP LOCKED LIMIT 1")
+            """SELECT id FROM runs WHERE status = 'running' AND current_stage = ANY($1::text[])
+               ORDER BY updated_at FOR UPDATE SKIP LOCKED LIMIT 1""", stages)
         if not row:
             return False
         run_id = row["id"]
         await conn.execute("UPDATE runs SET updated_at = now() WHERE id = $1", run_id)
-    await step_run(conn, run_id)
+    await step_run(conn, run_id, runner)
     return True
 
 
@@ -220,22 +275,55 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool) ->
     await log_event(conn, run_id, f"human:{by}", "run_created", {"brief": str(brief)})
     print(f"run {run_id} created — the pipeline takes it from here.")
     if follow:
+        local = os.environ.get("LANTERN_RUNNER", "ec2")
+        waiting_on = None
         while True:
-            status = await conn.fetchval("SELECT status FROM runs WHERE id = $1", run_id)
-            if status != "running":
-                print(f"[{run_id}] status: {status}")
+            row = await conn.fetchrow("SELECT status, current_stage FROM runs WHERE id = $1", run_id)
+            if row["status"] != "running":
+                print(f"[{run_id}] status: {row['status']}")
                 break
-            await step_run(conn, run_id)
+            needed = STAGE_RUNNER[row["current_stage"]]
+            if needed != local:
+                if waiting_on != row["current_stage"]:
+                    print(f"[{run_id}] {row['current_stage']} needs the '{needed}' runner — waiting for its daemon.")
+                    waiting_on = row["current_stage"]
+                await asyncio.sleep(POLL_SECONDS)
+                continue
+            await step_run(conn, run_id, local)
     await conn.close()
 
 
-async def cmd_daemon() -> None:
+async def cmd_daemon(runner: str) -> None:
     conn = await connect()
-    print(f"lantern orchestrator daemon — polling every {POLL_SECONDS}s")
-    while True:
-        worked = await claim_and_step(conn)
-        if not worked:
+    if runner == "workstation" and not await paper_reachable():
+        sys.exit(PAPER_PREFLIGHT_HINT)  # fail fast at startup, never mid-run
+    print(f"lantern orchestrator daemon [{runner}] — polling every {POLL_SECONDS}s")
+
+    async def heartbeat_loop() -> None:
+        # Own connection: keeps beating while the main connection runs a long stage,
+        # so Mission Control never shows a busy runner as offline.
+        hb_conn = await connect()
+        while True:
+            await heartbeat(hb_conn, runner)
             await asyncio.sleep(POLL_SECONDS)
+
+    hb_task = asyncio.create_task(heartbeat_loop())
+    paper_ok = True
+    try:
+        while True:
+            if runner == "workstation":
+                ok = await paper_reachable()
+                if not ok and paper_ok:
+                    print(PAPER_PREFLIGHT_HINT, file=sys.stderr)
+                paper_ok = ok
+                if not ok:           # hold claims until Paper is back — no mid-run failures
+                    await asyncio.sleep(POLL_SECONDS)
+                    continue
+            worked = await claim_and_step(conn, runner)
+            if not worked:
+                await asyncio.sleep(POLL_SECONDS)
+    finally:
+        hb_task.cancel()
 
 
 async def cmd_decide(run_id: str, gate: str, by: str, note: str, approved: bool) -> None:
@@ -275,7 +363,7 @@ async def cmd_status() -> None:
     if not runs:
         print("no active runs")
     for r in runs:
-        print(f"{r['id']:<40} {r['status']:<13} {r['current_stage']:<16} updated {r['updated_at']:%Y-%m-%d %H:%M}")
+        print(f"{r['id']:<40} {r['status']:<13} {r['current_stage']:<18} updated {r['updated_at']:%Y-%m-%d %H:%M}")
     pend = await conn.fetch("SELECT run_id, gate, requested_at FROM approvals WHERE status = 'pending'")
     for p in pend:
         print(f"  ⏳ pending gate: {p['run_id']} → {p['gate']} (since {p['requested_at']:%Y-%m-%d %H:%M})")
@@ -293,7 +381,9 @@ def main() -> None:
     p = sub.add_parser("run"); p.add_argument("brief"); p.add_argument("--run-id")
     p.add_argument("--by", default=os.environ.get("USERNAME") or os.environ.get("USER", "unknown"))
     p.add_argument("--follow", action="store_true")
-    sub.add_parser("daemon")
+    p = sub.add_parser("daemon")
+    p.add_argument("--runner", choices=["ec2", "workstation"],
+                   default=os.environ.get("LANTERN_RUNNER", "ec2"))
     for name in ("approve", "reject"):
         p = sub.add_parser(name); p.add_argument("run_id"); p.add_argument("gate")
         p.add_argument("--by", required=True); p.add_argument("--note", default="")
@@ -304,7 +394,7 @@ def main() -> None:
     match a.cmd:
         case "init-db": asyncio.run(cmd_init_db())
         case "run":     asyncio.run(cmd_run(a.brief, a.run_id, a.by, a.follow))
-        case "daemon":  asyncio.run(cmd_daemon())
+        case "daemon":  asyncio.run(cmd_daemon(a.runner))
         case "approve": asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, True))
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))
         case "retry":   asyncio.run(cmd_retry(a.run_id))

@@ -21,6 +21,7 @@ This repo holds three things:
 
 ```
 agents/<role>/          charter.md + skills.md + memory.md per role (harness-agnostic)
+design/                 the design constraint layer ui-ux grounds in: design-system.md + critique-checklist.md
 workflow/PIPELINE.md    the fixed lifecycle: stages, inputs/outputs, gates
 workflow/RUNBOARD.md    live index of runs — orientation step 1, updated every session
 workflow/DEBUG-LIFECYCLE.md   bug intake → repro → fix → regression
@@ -65,7 +66,7 @@ orchestrator (`tools/azure-runner`) verifies all three after every stage run.
 
 | # | Stage dir        | Agent        | Key output                                   | Gate to advance                    |
 |---|------------------|--------------|----------------------------------------------|------------------------------------|
-| 1 | `01-ui-ux`       | `ui-ux`      | 2–3 flow options → coded prototype + video   | Justin/developer picks an option   |
+| 1 | `01-ui-ux`       | `ui-ux`      | 2–3 flow options on Paper → PNGs + handoff package + video | Justin/developer picks an option   |
 | 2 | `02-pre-coding`  | `pre-coding` | Blast-radius report, schema plan, task plan  | Schema + plan approved             |
 | 3 | `03-coding`      | developer    | Implementation on a feature branch           | Code complete, self-review done    |
 | 4 | `04-qa-dev`      | `qa-dev`     | Test design + executed runs + **videos**     | No open sev-1/sev-2 bugs           |

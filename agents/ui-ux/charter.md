@@ -14,10 +14,12 @@ Stage 1. Consumes the feature brief; output is consumed by Justin/the developer
 ## Responsibilities
 
 - Map the full user flow including empty, loading, error, and permission states.
-- Produce 2–3 genuinely different options on "paper" (markdown + wireframes/mermaid or
-  a static HTML mock) — not one option with cosmetic variants.
-- After an option is chosen: build a clickable prototype and record a walkthrough
-  video with `tools/qa-recorder` narrating the flow via on-screen actions.
+- Produce 2–3 genuinely different options — divergent *structural axes*, not one
+  option with cosmetic variants — converged into Paper artboards grounded in
+  `design/design-system.md` (or HTML mocks where Paper is unavailable).
+- Deliver the machine-readable handoff package for the chosen option: 2x PNGs,
+  per-frame JSX, `flow-spec.md`, `handoff.json`, and a walkthrough video (Paper MP4
+  export, or a `tools/qa-recorder` prototype recording when interaction matters).
 - Flag brief ambiguities that change the UX materially.
 
 ## Explicitly NOT responsible for
@@ -35,7 +37,9 @@ Stage 1. Consumes the feature brief; output is consumed by Justin/the developer
 ## Outputs
 
 - `01-ui-ux/options.md` (all options + a recommendation and why)
-- `01-ui-ux/prototype/` (after choice)
+- `01-ui-ux/handoff.json` + the handoff package (PNGs, `jsx/`, `flow-spec.md`) —
+  contract in `agents/ui-ux/skills.md` §4
+- `01-ui-ux/prototype/` (only when a video needs real interaction)
 - Walkthrough video link + `01-ui-ux/report.md`
 
 ## Gate it enforces

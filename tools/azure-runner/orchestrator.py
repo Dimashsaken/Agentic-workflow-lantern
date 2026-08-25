@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from agents import (Agent, Runner, function_tool, set_default_openai_api,
                     set_default_openai_client, set_tracing_disabled)
-from agents.mcp import MCPServerStdio
+from agents.mcp import MCPServerStdio, MCPServerStreamableHttp
 
 REPO = Path(__file__).resolve().parents[2]
 load_dotenv(Path(__file__).parent / ".env")
@@ -32,7 +32,9 @@ def azure_v1_client() -> AsyncOpenAI:
     return AsyncOpenAI(base_url=endpoint, api_key=os.environ["AZURE_OPENAI_API_KEY"])
 
 ROLE_FOR_STAGE = {
-    "01-ui-ux": "ui-ux",
+    "01-ui-ux": "ui-ux",            # manual whole-stage run (Phase-1 workstation sessions)
+    "01-ui-ux.diverge": "ui-ux",    # pipeline: divergence phase (EC2, fast model)
+    "01-ui-ux.design": "ui-ux",     # pipeline: Paper convergence phase (workstation)
     "02-pre-coding": "pre-coding",
     "04-qa-dev": "qa-dev",
     "05-post-coding": "post-coding",
@@ -46,27 +48,78 @@ ROLE_FOR_STAGE = {
 # Roles that drive a browser get the Playwright MCP server.
 BROWSER_ROLES = {"ui-ux", "qa-dev", "qa-staging", "debug"}
 
+# Stage executions that get the Paper MCP server (desktop-bound — workstation only).
+PAPER_STAGES = {"01-ui-ux", "01-ui-ux.design"}
+
 # Deployment routing: strong model for judgement-heavy roles, fast one for execution.
 FAST_ROLES = {"qa-dev", "qa-staging"}
+FAST_STAGES = {"01-ui-ux.diverge"}  # divergence is volume work, not judgement
 
 
-def model_for(role: str) -> str:
-    var = "LANTERN_MODEL_FAST" if role in FAST_ROLES else "LANTERN_MODEL_REASONING"
+def stage_dir(stage: str) -> str:
+    """Run-folder directory for a stage key ('01-ui-ux.diverge' → '01-ui-ux')."""
+    return stage.split(".", 1)[0]
+
+
+def model_for(role: str, stage: str | None = None) -> str:
+    fast = role in FAST_ROLES or stage in FAST_STAGES
+    var = "LANTERN_MODEL_FAST" if fast else "LANTERN_MODEL_REASONING"
     deployment = os.environ.get(var)
     if not deployment:
         sys.exit(f"Missing env var {var} (Azure deployment name, e.g. sol/terra)")
     return deployment
 
 
+def paper_mcp_url() -> str:
+    return os.environ.get("LANTERN_PAPER_MCP_URL", "http://127.0.0.1:29979/mcp")
+
+
+async def paper_reachable(timeout: float = 2.0) -> bool:
+    """Preflight: is Paper Desktop's MCP port answering on this machine?"""
+    from urllib.parse import urlparse
+    u = urlparse(paper_mcp_url())
+    try:
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(u.hostname, u.port or 80), timeout=timeout)
+        writer.close()
+        await writer.wait_closed()
+        return True
+    except (OSError, asyncio.TimeoutError):
+        return False
+
+
+def paper_mcp_server() -> MCPServerStreamableHttp:
+    return MCPServerStreamableHttp(params={"url": paper_mcp_url()}, name="paper")
+
+
+PAPER_PREFLIGHT_HINT = ("Paper MCP is not reachable — open Paper Desktop on the design "
+                        "workstation with the Lantern team file, then retry.")
+
+# Phase-specific assignment notes for the split stage-1 executions.
+PHASE_NOTES = {
+    "01-ui-ux.diverge": (
+        "\n\n# Phase note\nThis execution is ONLY the divergence phase (skills §3A): "
+        "generate the low-fi skeletons in the stage directory's divergence/ folder, run "
+        "the judge pass, record scores and survivors in report.md. You have NO Paper "
+        "access here — do not attempt Paper work; the design workstation picks up next."),
+    "01-ui-ux.design": (
+        "\n\n# Phase note\nThis execution is the Paper convergence phase (skills §3B–3D): "
+        "divergence output and scores already exist in the stage directory — read them, "
+        "do not redo them. You have the `paper` MCP server. Finish by writing "
+        "handoff.json (skills §3D) — the gate payload is built from it."),
+}
+
+
 def build_instructions(role: str, run_id: str, stage: str) -> str:
     parts = [
         (REPO / "AGENTS.md").read_text(encoding="utf-8"),
         f"\n\n# Your assignment\nYou are the **{role}** agent. Run ID: `{run_id}`. "
-        f"Stage directory: `workflow/runs/{run_id}/{stage}/`.\n"
+        f"Stage directory: `workflow/runs/{run_id}/{stage_dir(stage)}/`.\n"
         "Follow your charter and skills exactly. Before finishing you MUST: "
         "(1) write the stage report, (2) append learnings to your memory.md, "
         "(3) update workflow/RUNBOARD.md. These are verified mechanically.",
     ]
+    parts.append(PHASE_NOTES.get(stage, ""))
     for name in ("charter.md", "skills.md", "memory.md"):
         f = REPO / "agents" / role / name
         parts.append(f"\n\n# {role}/{name}\n" + f.read_text(encoding="utf-8"))
@@ -111,8 +164,9 @@ def list_dir(path: str) -> str:
 
 def check_postconditions(role: str, run_id: str, stage: str, memory_before: str) -> list[str]:
     missing = []
-    if not (REPO / "workflow/runs" / run_id / stage / "report.md").exists():
-        missing.append(f"stage report workflow/runs/{run_id}/{stage}/report.md not written")
+    sdir = stage_dir(stage)
+    if not (REPO / "workflow/runs" / run_id / sdir / "report.md").exists():
+        missing.append(f"stage report workflow/runs/{run_id}/{sdir}/report.md not written")
     memory_now = (REPO / "agents" / role / "memory.md").read_text(encoding="utf-8")
     if memory_now == memory_before:
         missing.append(f"agents/{role}/memory.md not appended (an explicit 'nothing learned' note also counts)")
@@ -142,13 +196,17 @@ async def main() -> None:
             params={"command": "npx", "args": ["-y", "@playwright/mcp@latest"]},
             name="playwright",
         ))
+    if args.stage in PAPER_STAGES:
+        if not await paper_reachable():
+            sys.exit(PAPER_PREFLIGHT_HINT)
+        mcp_servers.append(paper_mcp_server())
 
     for s in mcp_servers:
         await s.connect()
     try:
         agent = Agent(
             name=role,
-            model=model_for(role),
+            model=model_for(role, args.stage),
             instructions=build_instructions(role, args.run_id, args.stage),
             tools=[read_file, write_file, append_file, list_dir],
             mcp_servers=mcp_servers,

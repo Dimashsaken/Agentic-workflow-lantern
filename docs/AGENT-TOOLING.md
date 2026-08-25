@@ -47,14 +47,16 @@ Secrets are `${ENV_VAR}` references resolved from SSM — never literal values.
 | `posthog` | qa-staging, debug | Event verification, error trends, session replays |
 | `paper` | ui-ux only | Design files: browse existing designs, create options, export frames |
 
-**Paper caveat (plan-ahead item):** Paper's MCP server attaches to the **desktop
-app**, so it is not available on a headless EC2 box. Two workable setups:
-(a) run the ui-ux agent's Paper work on a workstation where Paper is installed, from
-any MCP-capable session pointed at the Paper server (e.g. Codex CLI with a `paper`
-entry in its config), or (b) skip Paper on EC2 and let ui-ux produce
-HTML/mermaid options. Either way the **handoff contract is Paper-independent**: ui-ux
-exports chosen frames as PNGs into `01-ui-ux/` and links the Paper file URL in
-`options.md`, so no downstream agent ever needs Paper access.
+**Paper caveat (implemented as runner affinity, D9):** Paper's MCP server attaches to
+the **desktop app** (`http://127.0.0.1:29979/mcp`, `LANTERN_PAPER_MCP_URL`), so it is
+not available on a headless EC2 box. Stage 1 is therefore split: divergence runs on
+EC2; the Paper convergence execution (`01-ui-ux.design`) is claimed only by
+`pipeline.py daemon --runner workstation` on the design machine, which preflights the
+Paper port before claiming (`tools/azure-runner/README.md`). The agent discovers the
+live tool list via `tools/list` at session start — tool names drift and are never
+hardcoded. The **handoff contract stays Paper-independent**: ui-ux exports chosen
+frames as PNGs + `handoff.json` into `01-ui-ux/` and links the Paper file URL, so no
+downstream agent ever needs Paper access.
 
 **Endpoint hygiene:** remote MCP URLs (GitHub, PostHog) drift — when first wiring a
 box, verify against the providers' current MCP docs rather than trusting the values

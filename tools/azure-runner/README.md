@@ -17,8 +17,12 @@ AZURE_OPENAI_API_KEY=<from SSM>
 AZURE_OPENAI_API_VERSION=<current GA version>
 
 # Deployment routing — set to whichever of the org's deployments fits each slot:
-LANTERN_MODEL_REASONING=sol    # pre-coding, post-coding, security, debug, ui-ux options
-LANTERN_MODEL_FAST=terra       # QA charter execution, batch checks
+LANTERN_MODEL_REASONING=sol    # pre-coding, post-coding, security, debug, ui-ux design
+LANTERN_MODEL_FAST=terra       # QA charter execution, batch checks, ui-ux divergence
+
+# Runner affinity (docs/plans/ui-ux-agent-paper.md):
+LANTERN_RUNNER=ec2                               # 'workstation' on the design machine
+LANTERN_PAPER_MCP_URL=http://127.0.0.1:29979/mcp # Paper Desktop's local MCP endpoint
 ```
 
 Deployment names (`sol`, `terra`, …) are org-internal Azure deployment labels — the
@@ -39,6 +43,25 @@ python pipeline.py run workflow/briefs/x.md     # the one call
 python pipeline.py daemon                       # service loop (systemd on EC2)
 python pipeline.py status | approve | reject | retry
 ```
+
+### Runner affinity — the design workstation daemon
+
+Paper's MCP server is desktop-bound, so stage 1 is split (D9): `01-ui-ux.diverge`
+runs on EC2 with `LANTERN_MODEL_FAST`; `01-ui-ux.design` (Paper convergence) is
+claimed only by a daemon started with `--runner workstation`. Setup on the design
+machine (once):
+
+1. Install Paper Desktop, sign in, open the team file `Lantern` (its MCP server
+   listens on `http://127.0.0.1:29979/mcp` while the file is open).
+2. `pip install -r requirements.txt`; copy `.env.example` → `.env` with
+   `LANTERN_RUNNER=workstation` and a `LANTERN_DATABASE_URL` that reaches the EC2
+   Postgres (Tailscale recommended) plus the Azure OpenAI vars.
+3. Run `python pipeline.py daemon --runner workstation`.
+
+The daemon preflights Paper at startup (exits with instructions if the Desktop app
+isn't up) and re-checks every tick — it never claims a stage it would fail mid-run.
+Daemons heartbeat into the `runners` table; Mission Control uses that to show
+"needs the design workstation" instead of a silent stall when the daemon is offline.
 
 ## The stage orchestrator
 

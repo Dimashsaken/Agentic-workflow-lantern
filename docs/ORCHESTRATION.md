@@ -60,7 +60,8 @@ when we outgrow one machine.
 
 | Stage | Type | Verified by | Gate after |
 |-------|------|-------------|-----------|
-| 01-ui-ux | agent | postconditions + human watches video | `ux_signoff` |
+| 01-ui-ux.diverge (EC2) | agent | postconditions + judge scores in report | — |
+| 01-ui-ux.design (workstation) | agent | postconditions + human reviews PNGs/video | `ux_signoff` |
 | 02-pre-coding | agent | postconditions + typed plan artifacts | `plan_signoff` (schema = always human) |
 | 03-coding | **human** (developer + Codex CLI) | tests green, self-review | `code_complete` |
 | 04-qa-dev | agent | executed, video-recorded charter | — (loops back on sev-1/2) |
@@ -71,6 +72,19 @@ when we outgrow one machine.
 A rejected gate marks the run `failed` with the decision note; `lantern retry` after
 rework re-enters at the same stage (fresh attempt row, same session ID — the agent
 keeps its conversation memory).
+
+## Runner affinity (D9)
+
+Every stage carries a `runner` (`ec2` | `workstation`); one daemon per runner claims
+only its own stages (`current_stage = ANY(...)` in the claim query), so runners never
+contend. The design workstation runs `pipeline.py daemon --runner workstation` for the
+Paper-bound `01-ui-ux.design` execution; it preflights Paper Desktop's MCP port at
+startup (fails fast with instructions) and every tick (holds claims while Paper is
+closed — no mid-run failures). Daemons heartbeat into the `runners` table; Mission
+Control renders "needs the design workstation" on runs waiting for an offline runner —
+the silent-stall failure mode made visible. Stage keys with a phase suffix
+(`01-ui-ux.diverge`/`.design`) share one run-folder dir, so the D4 handoff contract is
+unchanged.
 
 ## Gate integrity rules (fail closed)
 

@@ -86,13 +86,18 @@ After=network.target postgresql.service
 [Service]
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner
-ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/python pipeline.py daemon
+ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/python pipeline.py daemon --runner ec2
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+The EC2 daemon claims only `ec2`-affinity stages. The Paper-bound `01-ui-ux.design`
+execution needs a second daemon on the design workstation — setup in
+`tools/azure-runner/README.md` ("Runner affinity"); it is a plain terminal process
+there, not a systemd unit.
 
 ## Running a stage headless
 

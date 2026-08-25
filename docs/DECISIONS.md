@@ -102,3 +102,22 @@ grounding: gates are the autonomy slider's detents — one call *starts*
 concept→live but never skips the human at choose/approve/ship
 ("LLMs automate what you can verify"). Tracing to the OpenAI dashboard is
 disabled (Azure-only credentials); self-hosted Langfuse is the future option.
+
+## D9 — 2026-08-25 — Stage 1 splits by runner affinity: divergence on EC2, Paper convergence on a design workstation
+
+Paper's MCP is desktop-bound (no headless mode — `docs/research/design-agents.md`),
+and divergence is cheap volume work that shouldn't spend Paper's call budget. So the
+pipeline's stage 1 becomes two executions sharing one run-folder dir: `01-ui-ux.diverge`
+(EC2, `LANTERN_MODEL_FAST`, 5–10 low-fi skeletons + judge pass) and `01-ui-ux.design`
+(design workstation, Paper MCP, convergence + critique loop). Mechanism: stage tuples
+carry a `runner`; one daemon per runner (`pipeline.py daemon --runner workstation`)
+claims only its stages; the workstation daemon preflights Paper's port at startup and
+every tick, and daemons heartbeat into a `runners` table so Mission Control shows
+"needs the design workstation" instead of a silent stall. The ui-ux agent writes
+`01-ui-ux/handoff.json`; the orchestrator builds the `ux_signoff` payload from it and
+Mission Control renders Paper URL + option PNGs side by side. Quality is constrained
+by the checked-in design layer (`design/design-system.md` + `design/critique-checklist.md`)
+because Paper ships no token/component system yet and unconstrained agents produce
+generic output. Full plan + phases: `docs/plans/ui-ux-agent-paper.md`. **Consequence:**
+stage keys in the DB are no longer always run-folder dirs — anything joining stages to
+folders must go through `STAGE_DIR`/`stage_dir()`.

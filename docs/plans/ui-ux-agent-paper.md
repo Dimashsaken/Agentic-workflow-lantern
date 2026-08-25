@@ -1,5 +1,15 @@
 # Plan — the UI/UX agent on Paper (paper.design) MCP
 
+> **Status (2026-08-25):** the repo side of Phases 1–3 is implemented (decision D9) —
+> the loop is encoded in `agents/ui-ux/skills.md`, the constraint layer is scaffolded
+> in `design/` (design-system.md is a marked template until extracted from the product
+> repo), and runner affinity is live in `tools/azure-runner` (`01-ui-ux.diverge` on
+> EC2 / `01-ui-ux.design` behind `daemon --runner workstation`, Paper preflight,
+> `handoff.json` → the ux_signoff payload rendered as side-by-side PNGs in Mission
+> Control). Still outstanding: Phase 0 (Justin's workstation + Paper Pro setup),
+> populating `design/design-system.md`, the first real run through `ux_signoff`
+> (Phase 1/2 done-when criteria), and reviewing Phase 4 metrics once runs exist.
+
 How Lantern's `ui-ux` agent (pipeline stage 1) becomes a real design agent working
 inside the team's Paper workspace. Grounded in `docs/research/design-agents.md` —
 every design choice below traces to a verified finding or a reported failure mode.

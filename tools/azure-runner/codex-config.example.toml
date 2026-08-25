@@ -15,3 +15,8 @@ wire_api = "responses"             # fall back to "chat" if the deployment lacks
 [mcp_servers.playwright]
 command = "npx"
 args = ["-y", "@playwright/mcp@latest"]
+
+# Design workstation only (Phase-1 interactive ui-ux sessions): Paper Desktop must be
+# running with the Lantern file open, or Codex will report the server as unreachable.
+# [mcp_servers.paper]
+# url = "http://127.0.0.1:29979/mcp"
