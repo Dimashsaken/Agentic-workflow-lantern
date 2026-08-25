@@ -12,7 +12,13 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # --- system packages -------------------------------------------------------
 apt-get update
-apt-get install -y git unzip curl python3.12 python3.12-venv postgresql-16 awscli
+apt-get install -y git unzip curl python3.12 python3.12-venv postgresql-16
+# awscli is not in noble's apt repos — use the official installer
+if ! command -v aws >/dev/null 2>&1; then
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  unzip -q -o /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install --update
+fi
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 apt-get install -y nodejs
 npm install -g @openai/codex
