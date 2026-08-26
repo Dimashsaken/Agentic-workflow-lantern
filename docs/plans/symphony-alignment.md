@@ -97,7 +97,7 @@ Phase 0 and Phase 2 were doubled from v1 after review, and Phase 3 is trigger-ba
 The system has never completed a brief→prod_signoff run. Nothing below matters until it
 has. No new scope beyond what's listed.
 
-- [ ] **P0.1** QA sandbox image: bake `tools/qa-recorder` node_modules (stage 4+ was
+- [x] **P0.1 DONE (2026-08-26)** QA sandbox image: bake `tools/qa-recorder` node_modules (stage 4+ was
   explicitly out of image v1). **[v2]** Credential/network design is part of this task,
   not an afterthought: dev-env URL + test credentials enter via the per-stage env
   allowlist (D12 pattern — `/lantern/qa/dev/*` SSM params), the dev environment must be
@@ -105,6 +105,15 @@ has. No new scope beyond what's listed.
   video lands in the host-mounted run folder and the **dispatcher uploads to S3 after
   postconditions pass**. Acceptance: stage 4 runs in a sandbox; its video reaches S3 via
   the host path.
+  *Verified on the box 2026-08-26: image v2 rebuilt, `prove_video.sh` (new) records a
+  real .webm from an MCP-driven session, `prove_isolation.sh` green, and the upload
+  path exercised against the live bucket (PIPELINE.md naming under `attempt-<k>/`,
+  artifacts rows, DB-rendered manifest, local delete). Two deployment-only defects
+  fixed en route: the MCP's `saveVideo` key is INERT (recording needs the
+  `browser.contextOptions.recordVideo` passthrough), and unpinned npm had drifted the
+  MCP off the baked browser distribution — both now pinned and covered by the new
+  battery. **Open: no QA target exists yet** (`LANTERN_QA_DEV_*` unset), so a true
+  stage-4 run waits on a product dev environment.*
 - [ ] **P0.2** **[v2 — moved to the END of Phase 0, after P0.3 passes]** Resize the box
   to **m5.2xlarge** (8 vCPU / 32 GB, ~$0.38/hr ≈ **$65/wk**) and raise
   **`LANTERN_MAX_CONCURRENCY`** (the real knob — set to 2 in
@@ -117,12 +126,16 @@ has. No new scope beyond what's listed.
   every failure as a memory entry. Stage 1 alone took seven attempts to pass honestly;
   budget the same discovery tax for stages 4–7's first sandbox runs. Acceptance:
   `prod_signoff` approved on a real run.
-- [ ] **P0.4** **Token ledger**: per-stage-execution token counts (Agents SDK usage
+- [x] **P0.4 DONE (2026-08-26)** **Token ledger**: per-stage-execution token counts (Agents SDK usage
   object) into `stage_executions`, rolled up per run. **[v2]** Scope v1 = fleet stages
   only; the human stage-3 Codex session runs on a developer laptop and its JSONL is out
   of reach until the auto-coding stage exists. Includes a **daily** threshold check that
   posts immediately (email/webhook until Slack exists; Slack from Phase 1) — see §5 for
   thresholds. The weekly digest is reporting; the daily check is the alarm.
+  *Live on the box 2026-08-26: ledger columns applied, `usage`/`usage-check` run
+  against real data (the 16 pre-ledger executions correctly report as unmetered),
+  hourly `lantern-usage-check.timer` enabled and already firing clean. Dollar rates
+  stay provisional until Azure invoice lines confirm them; token counts are exact.*
 
 ### Phase 1 — Slack front-door, core only (~Sep 8 → Sep 15)
 

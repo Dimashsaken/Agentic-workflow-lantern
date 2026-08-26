@@ -92,6 +92,7 @@ sudo apt-get install -y docker.io && sudo usermod -aG docker ubuntu
 cd ~/Agentic-workflow-lantern
 sudo docker build -t lantern-sandbox -f infra/sandbox/Dockerfile .
 bash infra/sandbox/prove_isolation.sh     # the D12 proof battery — run after every image change
+bash infra/sandbox/prove_video.sh         # P0.1: proves an MCP session really records a .webm
 ```
 
 Dispatcher knobs (environment of the daemon):
