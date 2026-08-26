@@ -15,3 +15,4 @@ customer data. Target: under ~200 lines after consolidation.
 
 <!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
 
+- 2026-08-26 [manual · -] 2026-08-25: When the requested run folder is absent, stop before browser execution and explicitly leave the QA gate unevaluated, because inventing expected behavior or a target environment can produce a false pass.

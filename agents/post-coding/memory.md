@@ -13,3 +13,4 @@ customer data. Target: under ~200 lines after consolidation.
 
 <!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
 
+- 2026-08-26 [manual · -] 2026-08-25: A post-coding pass requires both a QA-passed branch and the full intent artifacts; without either, report the compatibility/debt gate as unevaluated rather than inferring cleanliness from an absent diff.
