@@ -47,7 +47,16 @@ Secrets are `${ENV_VAR}` references resolved from SSM — never literal values.
 | `posthog` | qa-staging, debug | Event verification, error trends, session replays |
 | `paper` | ui-ux only | Design files: browse existing designs, create options, export frames |
 
-**Paper caveat (implemented as runner affinity, D9):** Paper's MCP server attaches to
+**Paper is per-developer, never hosted (D10).** Its MCP has no auth of its own: it
+answers plain HTTP on `127.0.0.1:29979` and acts as whoever is signed into the desktop
+app (verified 2026-08-26). A developer therefore "connects their own account" simply by
+running Paper Desktop locally — their laptop runs `pipeline.py daemon --runner
+workstation`, reaches the cloud Postgres over Tailscale, and claims only
+`01-ui-ux.design` for runs they own (`runs.created_by`). Each developer points
+`LANTERN_PAPER_FILE_ID` at an agent-owned file in their own workspace. This removes the
+concurrency ceiling a shared design desktop would impose, and needs no GUI VM.
+
+**Original caveat (implemented as runner affinity, D9):** Paper's MCP server attaches to
 the **desktop app** (`http://127.0.0.1:29979/mcp`, `LANTERN_PAPER_MCP_URL`), so it is
 not available on a headless EC2 box. Stage 1 is therefore split: divergence runs on
 EC2; the Paper convergence execution (`01-ui-ux.design`) is claimed only by

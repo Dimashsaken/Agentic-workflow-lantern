@@ -1,0 +1,33 @@
+{
+  "paper_url": "https://app.paper.design/file/01M0W444P0FVBY0PKRDYAPYDWH/2-0",
+  "paper_file": "Agent sandbox — ui-ux runs · page feat-20260825-candidate-compare",
+  "recommended": "verdict",
+  "options": [
+    {
+      "name": "verdict",
+      "axis": "decision-first — Lantern's read is the hero, evidence table supports",
+      "pngs": ["workflow/runs/feat-20260825-candidate-compare/01-ui-ux/verdict@2x.png"],
+      "status": "presented"
+    },
+    {
+      "name": "overlay",
+      "axis": "trait-first — weights lead, candidates compared inside each trait row",
+      "pngs": ["workflow/runs/feat-20260825-candidate-compare/01-ui-ux/overlay@2x.png"],
+      "status": "presented"
+    },
+    {
+      "name": "duel",
+      "axis": "head-to-head — two finalists flank a central trait spine, bench for the third",
+      "pngs": ["workflow/runs/feat-20260825-candidate-compare/01-ui-ux/duel@2x.png"],
+      "status": "presented"
+    }
+  ],
+  "video": null,
+  "metrics": {
+    "divergence_generated": 6,
+    "divergence_kept": 3,
+    "critique_iterations": {"verdict": 2, "overlay": 2, "duel": 2},
+    "paper_calls_estimate": 55,
+    "design_system_version": "tokens contentHash 288d9538, extracted 2026-08-25"
+  }
+}

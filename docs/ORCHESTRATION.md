@@ -107,6 +107,44 @@ unchanged.
 5. **Zombie runs** — `heartbeat_at` + sweeper requeues/fails stale stages;
    `lantern status` lists every non-terminal run; gate SLAs re-notify.
 
+## The execution plane — sandbox per stage (D10)
+
+The control plane above says *what runs next*. This says *where it runs*, and it is
+what makes the system safe for ~5 developers at once.
+
+```
+                 one always-on AWS VM running Docker
+ [Postgres] <--- dispatcher (claims via SKIP LOCKED, schedules; never executes)
+      ^              |  docker run --rm  (one per stage execution)
+      |              +--> [ sandbox ] /work + product-repo clone @ run branch
+      |              +--> [ sandbox ]   own browser, scoped short-lived creds
+      |              +--> [ sandbox ]   cpu/mem caps, wall-clock timeout, egress allowlist
+      |                                  dies at the end - no residue between runs
+      |
+      +---- developer laptops: `daemon --runner workstation`
+            claims ONLY 01-ui-ux.design for runs that developer owns,
+            talks to *their own* Paper Desktop on 127.0.0.1:29979
+```
+
+**Why a container per execution rather than N daemons on a shared box.** Concurrency is
+not the hard part — `FOR UPDATE SKIP LOCKED` already lets many workers claim safely.
+Isolation is. Without a per-run filesystem, two stages share one working tree and one
+product-repo clone and corrupt each other's checkouts. The container also gives the
+blast-radius controls a review agent should never need but must have: no long-lived
+credentials, a timeout, and an egress allowlist.
+
+**Prerequisite before enabling N>1 (do not skip).** Two of the three postconditions
+write shared files, and the memory check (`memory_now == memory_before`) becomes
+*unsound* under concurrency: another run's append to the same role's `memory.md`
+satisfies it, so a stage that wrote nothing passes. Move role memory to a
+`role_memory` table and check "this execution inserted a row" first. Turning on
+concurrency before that silently disables the verification the pipeline rests on.
+
+**Paper is deliberately not in the cloud.** Its MCP answers plain HTTP on localhost with
+no auth of its own — it inherits whoever is signed into the desktop app. So the design
+stage runs on the developer's own machine against their own account, routed by
+`runs.created_by`. Five developers, five Paper seats, no shared desktop and no ceiling.
+
 ## Operating it
 
 ```bash

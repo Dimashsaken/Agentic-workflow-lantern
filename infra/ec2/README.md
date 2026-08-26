@@ -7,6 +7,12 @@ hurts.
 
 - **Ubuntu 24.04 LTS**, `t3.xlarge` (4 vCPU / 16 GB) — browsers are the memory hog;
   `t3.large` works for non-QA stages.
+- **Sizing for concurrency (D10).** One container per stage execution, and browser
+  stages want ~2 GB each. `t3.xlarge` realistically supports ~4 concurrent sandboxes
+  with Postgres and Mission Control on the same box; for ~5 developers in parallel plan
+  on `m5.2xlarge` (8 vCPU / 32 GB) or cap dispatcher concurrency explicitly. Cap it
+  deliberately either way — an unbounded dispatcher will thrash the box long before
+  Postgres notices.
 - 50 GB gp3. No GPU needed — Playwright records video headless in software.
 - IAM instance profile with: read on the SSM parameters below, read/write on the
   artifact bucket. No long-lived AWS keys on disk.

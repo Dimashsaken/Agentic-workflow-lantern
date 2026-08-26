@@ -121,3 +121,61 @@ because Paper ships no token/component system yet and unconstrained agents produ
 generic output. Full plan + phases: `docs/plans/ui-ux-agent-paper.md`. **Consequence:**
 stage keys in the DB are no longer always run-folder dirs — anything joining stages to
 folders must go through `STAGE_DIR`/`stage_dir()`.
+
+## D10 — 2026-08-26 — Cloud execution: one Docker host, a sandbox per stage, Paper on the developer's own laptop
+
+CTO requirement: the system runs on cloud, every agent gets an isolated shell, and it
+serves ~5 developers concurrently. That requirement invalidates four things in the
+pre-D10 design — all verified in code, not assumed:
+
+1. **One stage at a time.** `claim_and_step` takes `LIMIT 1` and executes the stage
+   synchronously in-process, so a daemon is a single-slot worker.
+2. **All agents share one filesystem.** `REPO` is one checkout and `_safe()` scopes
+   every write into it; concurrent stages would share a working tree and a product-repo
+   clone, colliding on branch checkout.
+3. **Two postconditions mutate shared files, and one becomes _unsound_.** The memory
+   check is `memory_now == memory_before`; under concurrency another run's append to the
+   same role's `memory.md` satisfies it, so a stage that wrote nothing passes. This is
+   verification failure, not just a data race. `RUNBOARD.md` has the same contention and
+   is derived data Postgres already holds.
+4. **Paper's MCP is desktop-bound** and cannot run in a container at all.
+
+**Decisions.**
+
+- **Host: AWS, one always-on VM running Docker.** Kubernetes is rejected for now — the
+  operational weight is unjustified for a system that has not completed one end-to-end
+  run. Revisit when queueing actually hurts (the same trigger as D8's upgrade path).
+  Staying on AWS keeps `infra/ec2/`, SSM and S3; note the standing tension that model
+  spend runs on Azure credits (D7) while compute and storage cost cash on AWS.
+- **Isolation: one ephemeral container per stage execution.** Own `/work`, own
+  product-repo clone at the run's branch, own browser, scoped short-lived credentials
+  (never a shared `.env` baked into the image), CPU/memory caps, wall-clock timeout,
+  egress allowlist. Container death also removes the stale-artifact bug class found on
+  2026-08-26 — a leftover export cannot survive into another run.
+- **Concurrency: N containers, existing claim query.** `FOR UPDATE SKIP LOCKED` already
+  supports many claimers. The daemon becomes a *dispatcher* that schedules sandboxes; it
+  stops executing stages itself.
+- **State plane moves out of the git working tree.** Run artifacts to object storage
+  (`artifacts.uri` already holds URIs); `RUNBOARD.md` becomes a rendered view that agents
+  never write; `memory.md` becomes appends to a `role_memory` table with a consolidation
+  job rendering the file. The memory postcondition becomes "this execution inserted a
+  memory row" — sound under concurrency instead of accidentally correct at N=1.
+- **Paper is NOT hosted.** Its MCP has no auth of its own: it answers plain HTTP on
+  `127.0.0.1:29979` and inherits whoever is signed into the desktop app (verified
+  2026-08-26). So each developer runs Paper Desktop locally with their own account, and a
+  small `pipeline.py daemon --runner workstation` on their laptop reaches the cloud
+  Postgres over Tailscale and claims **only `01-ui-ux.design` for runs they own**
+  (`runs.created_by`). Five developers means five laptops and five Paper accounts, so the
+  design stage has no concurrency ceiling — and there is no GUI VM or server-side seat
+  licensing to buy.
+
+**Consequences.**
+
+- Runner identity gains a per-developer dimension (`workstation:<dev>`), routed by
+  `runs.created_by`; Mission Control's "needs the design workstation" notice becomes
+  per-developer rather than global.
+- Every developer doing design work needs their own Paper Pro seat.
+- **The memory postcondition must move into the database before concurrency is switched
+  on.** Running N>1 against the file-based check silently disables the verification that
+  the whole pipeline's trustworthiness rests on. This is a blocking prerequisite, not a
+  cleanup task.

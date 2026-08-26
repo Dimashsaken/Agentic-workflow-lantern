@@ -30,7 +30,8 @@ from agents.mcp import MCPServerStdio
 from orchestrator import (
     BROWSER_ROLES, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
     append_file, azure_v1_client, build_instructions, check_postconditions,
-    list_dir, model_for, paper_mcp_server, paper_reachable, read_file, write_file,
+    collect_export, list_dir, list_exports, model_for, paper_mcp_server,
+    paper_reachable, read_file, write_file,
 )
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -111,13 +112,14 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
             name=role,
             model=model_for(role, stage),
             instructions=build_instructions(role, run_id, stage),
-            tools=[read_file, write_file, append_file, list_dir],
+            tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export],
             mcp_servers=mcp_servers,
         )
         result = await Runner.run(
             agent,
-            input=f"Begin your {stage} session for run {run_id} (attempt {attempt}). "
-                  "Orient per AGENTS.md, do the work, satisfy all three postconditions.",
+            input=f"Begin your {stage} session for run {run_id} (attempt {attempt}). Do not "
+                  "reply with a plan — start calling tools now and keep working until the "
+                  "three postconditions are written to disk.",
             session=session,
             max_turns=120,
         )
@@ -372,7 +374,9 @@ async def cmd_status() -> None:
 
 def main() -> None:
     set_default_openai_client(azure_v1_client())
-    set_default_openai_api("chat_completions")
+    # Responses API — chat_completions drops image tool outputs, blinding vision
+    # critique loops (see orchestrator.py for the full note).
+    set_default_openai_api(os.environ.get("LANTERN_OPENAI_API", "responses"))
     set_tracing_disabled(True)  # no OpenAI-platform key on the Azure credential set
 
     ap = argparse.ArgumentParser(prog="lantern")

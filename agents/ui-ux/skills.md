@@ -37,15 +37,58 @@ Stage 1 runs as two executions with different runners (plan:
 
 - First `tools/list` — **discover the live Paper tool names, never assume them**
   (they drift; docs and third parties disagree on the count).
+- **Work only in the agent-owned file (hard rule).** Your assignment names it
+  (`LANTERN_PAPER_FILE_ID`); it is already open in the Desktop app. `create_page`
+  named after the run ID, `open_file` with that fileId **and** pageId, then build.
+  Never create a new file unattended, and never create/edit/restyle/rename/delete
+  anything in a file a human made — those are read-only references you may
+  `get_tokens` / `get_screenshot` for grounding. Pass `fileId` on **every** call, so
+  touching someone else's canvas is structurally impossible.
+- Copy the product's tokens into your file once (`get_tokens` on the reference file →
+  `create_tokens` in yours) so every write is token-grounded by construction.
+- **Mount rule (why the file is fixed):** nodes created in a file that has never been
+  rendered do not mount — screenshots/exports return empty ("No DOM element"), and
+  `open_file` does NOT switch the visible tab across files, so a brand-new file
+  cannot mount without a human click. *Page* switches inside the already-open file
+  do mount. Nodes created pre-mount are dead: delete and recreate, never try to
+  style them into life. If no agent-owned file is configured, go BLOCKED (§6).
 - One artboard per surviving option, side by side; `rename_nodes` to the axis names.
+- **Only present what you built this run.** Record the node id `create_artboard`
+  returns for each option and present exactly those. Artboards that already existed on
+  the page are NOT yours — never adopt, rename, re-label, or export one as your
+  option, even if its page is named after this run. If an option has no artboard you
+  created, it is not an option: build it or drop it from `options.md`.
+- **Never claim an artifact you did not produce.** Every path in `handoff.json` must
+  be a file that exists on disk when you finish. Paper's `export` writes to the
+  workstation's export folder, so bring each file in yourself: `list_exports()` to see
+  what Paper wrote, then `collect_export("<name>@2x.png",
+  "workflow/runs/<run-id>/01-ui-ux/<axis>@2x.png")` for each one. There is no
+  "artifact collector" that will do this later. The orchestrator checks every claimed
+  path and fails the stage if one is missing or empty.
 - `write_html` grounded **only** in `design/design-system.md` tokens/components; off-
   token values are defects. All frames this run creates are yours; nothing else is.
+- **Keep the product shell on every screen** (design-system.md "Spacing & layout"):
+  the 64px icon rail, the caps tab rail with the active tab underlined, the ~400px
+  conversation column with Lantern/You and the pinned input, and the caps status
+  footer. Dropping any of them is not a design choice — it is a different product.
 
-### 3C. Critique loop (≤3 iterations per option)
+### 3C. Critique loop (≤3 iterations per option) — and prove it ran
 
 `get_screenshot` → **layout pass** → fix → re-screenshot → **style pass** → fix,
-per `design/critique-checklist.md` (the passes stay separate). Log iterations used
-per option; stop at 3 and note unresolved items in `options.md`.
+per `design/critique-checklist.md` (the passes stay separate). Stop at 3 and note
+unresolved items in `options.md`.
+
+**Write `01-ui-ux/critique-log.md` as you go** — one short block per option per pass:
+what the screenshot showed, which checklist item failed, what you changed, and the
+verdict after re-screenshotting. A pass that found nothing says so explicitly and
+names the two items you checked hardest. This file is the only evidence the loop
+actually happened; `metrics.critique_iterations` is a claim, and the orchestrator
+fails the stage without the log. If you cannot see a screenshot, say that in the log
+and go BLOCKED — never report a pass you could not perform.
+
+The defect this loop misses most often is the **empty bottom third** (both of the
+first two agent runs shipped it). Before you call an option done, look at the bottom
+of every column and apply the empty-bottom test in the checklist.
 
 ### 3D. Present for the gate
 
@@ -78,10 +121,17 @@ PNG each, update `handoff.json` statuses (`chosen` / `rejected`).
 
 ## 4. The handoff package (recommended/chosen option) → `01-ui-ux/`
 
+0. **Before you write anything, re-read your own output.** Screenshot each frame one
+   last time and check: product shell intact (rail, tab rail, conversation column,
+   status footer)? bottom third of every column carrying content? every colour and
+   size traceable to `design/design-system.md`? Fix, then package.
 1. **2x PNGs of every frame** — the acceptance references the coding agent will
    screenshot-diff against.
 2. **`get_jsx` per frame** → `jsx/<frame>.jsx` — structural source of truth, a
-   starting point, NOT production code.
+   starting point, NOT production code. Write the **full returned JSX verbatim**
+   (typically 8–15 KB per frame). A node id, a URL, or a summary is NOT a handoff:
+   the coding agent reads this file to rebuild the screen and cannot open Paper. The
+   orchestrator rejects any jsx file that has no markup in it.
 3. The `design/design-system.md` version used (copy the file in, or record its git
    hash in the report).
 4. `flow-spec.md` — screens, transitions, all states (empty/loading/error), exact
@@ -94,15 +144,24 @@ PNG each, update `handoff.json` statuses (`chosen` / `rejected`).
 
 ## 5. Canvas etiquette (multiplayer safety)
 
+- **Never write into a human's file.** The agent-owned file named in your assignment
+  is the only place you create, edit, or delete. Human files are read-only references
+  you may read for grounding (§3B).
 - Re-read (`get_selection` / `get_node_info`) before writing any frame a human may
   have touched since you last saw it.
 - Never `delete_nodes` outside frames created this run.
 - Call `finish_working_on_nodes` when done with a frame.
 - Long sessions degrade: one run per MCP connection; reconnect rather than push on.
 
-## 6. Session end
+## 6. Session end — including when you are BLOCKED
 
 Report per template, including the divergence scores, critique-iteration counts, and
 unresolved checklist items. Memory: append any pattern decision (chosen or rejected +
 why) and any critique item that kept recurring — recurring items graduate into
 `design/critique-checklist.md`.
+
+**Blocking is not an exit from the contract.** If you stop early, you still write all
+three: the report with `Status: BLOCKED` and exactly one precise question, the memory
+append (what blocked you and why — that is a durable learning), and the runboard row
+showing the run waiting. A blocked stage that writes nothing leaves the next session
+with no idea what happened, and the orchestrator will fail the stage anyway.

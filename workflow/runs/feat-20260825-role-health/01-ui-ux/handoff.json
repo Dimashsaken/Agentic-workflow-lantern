@@ -1,0 +1,11 @@
+{
+  "paper_url": "https://app.paper.design/file/01M0W444P0FVBY0PKRDYAPYDWH/6-0",
+  "recommended": "diagnosis-brief",
+  "options": [
+    {"name":"diagnosis-brief","pngs":["workflow/runs/feat-20260825-role-health/01-ui-ux/diagnosis-brief@2x.png"],"status":"presented"},
+    {"name":"progressive-drilldown","pngs":["workflow/runs/feat-20260825-role-health/01-ui-ux/progressive-drilldown@2x.png"],"status":"presented"},
+    {"name":"channel-lanes","pngs":["workflow/runs/feat-20260825-role-health/01-ui-ux/channel-lanes@2x.png"],"status":"presented"}
+  ],
+  "video": null,
+  "metrics": {"divergence_generated":8,"critique_iterations":{"diagnosis-brief":1,"progressive-drilldown":1,"channel-lanes":1},"paper_calls_estimate":22}
+}

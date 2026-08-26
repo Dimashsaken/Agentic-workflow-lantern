@@ -23,6 +23,13 @@ the style pass. ≤3 iterations per option; if an item still fails after 3, note
   canvas, not implied. A flow showing only the happy path fails this pass.
 - **Density.** Nothing crammed (touch targets ≥ 40px, text blocks ≤ ~70ch); nothing
   wastefully sparse that forces scrolling past emptiness.
+- **The empty-bottom test (most-missed defect).** Look at the bottom third of each
+  column. If it is empty, the layout pass **fails** — no exceptions, and a screenshot
+  that "looks clean" is exactly how this one hides. There are only two honest fixes:
+  the screen is missing content a real user needs there (add it — supporting evidence,
+  what-changed, next action), or the artboard is taller than the design (set
+  `height: fit-content` via update_styles; never guess a new fixed pixel height).
+  Trailing whitespace is not breathing room; it is an unfinished screen.
 
 ## Pass 2 — style (only after layout passes)
 
