@@ -27,10 +27,16 @@ git -C "$seed" add . && git -C "$seed" -c user.email=t@t -c user.name=t commit -
 git -C "$seed" push -q "$WORK/product.git" main
 rm -rf "$seed"
 
+# --user 1000: real stages run as uid 1000 (the entrypoint starts root only to fix
+# mountpoint ownership, then drops — but --entrypoint bash bypasses that, so without
+# --user the payload would run as ROOT: a different identity than production, and one
+# that trips git's dubious-ownership check on the uid-1000-owned mirror. Found when
+# the battery broke after the root-start entrypoint landed (0b03f40). /work is
+# build-time chowned to 1000, so no root repair is needed on these mounts.
 echo "— 1) three concurrent sandboxes, same product-repo path —"
 pids=()
 for i in 1 2 3; do
-  docker run --rm --name "iso-$i" \
+  docker run --rm --name "iso-$i" --user 1000:1000 \
     -v "$WORK/product.git:/product-src.git:ro" \
     --entrypoint bash "$IMG" -c "
       git clone -q /product-src.git /work/product &&
@@ -52,7 +58,7 @@ done
   || fail "host product repo was mutated"
 
 echo "— 2) kill mid-run leaves no residue —"
-docker run -d --rm --name iso-kill --entrypoint bash "$IMG" \
+docker run -d --rm --name iso-kill --user 1000:1000 --entrypoint bash "$IMG" \
   -c "echo residue > /work/exports-x; sleep 300" > /dev/null
 sleep 2
 docker kill iso-kill > /dev/null
