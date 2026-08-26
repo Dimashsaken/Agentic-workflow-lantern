@@ -30,9 +30,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # `@playwright/mcp` at the same moment keeps the browser revision in step with the
 # MCP's bundled playwright-core. Browsers go to a world-readable shared path
 # because the container runs as uid 1000 (below), not root.
+# VERSIONS ARE PINNED. Unpinned `npm install -g` drifted the MCP to a build that
+# demands a different browser distribution than the one baked here, breaking every
+# browser stage at runtime (found 2026-08-26). Bump deliberately, then re-run
+# infra/sandbox/prove_video.sh — MCP video behavior is not covered by semver.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN npm install -g @playwright/mcp playwright \
+RUN npm install -g @playwright/mcp@0.0.79 playwright@1.62.1 \
     && npx playwright install --with-deps chromium \
+    && playwright-mcp install-browser chrome-for-testing \
     && chmod -R a+rX /ms-playwright \
     && rm -rf /var/lib/apt/lists/*
 
@@ -77,7 +82,9 @@ RUN mkdir -p /work && chown 1000:1000 /work
 # so the preinstalled, version-locked binary is used. Exports die with the container —
 # the stale-export bug class (2026-08-26) is structurally impossible here. HOME=/work:
 # anything that writes to $HOME lands in the ephemeral workspace.
-ENV LANTERN_PLAYWRIGHT_MCP="playwright-mcp --headless --isolated" \
+# --browser chromium: without it the MCP hunts for a system Google Chrome at
+# /opt/google/chrome and dies; with it, it uses the chrome-for-testing build above.
+ENV LANTERN_PLAYWRIGHT_MCP="playwright-mcp --headless --isolated --browser chromium" \
     LANTERN_EXPORT_DIR=/work/exports \
     HOME=/work
 WORKDIR /work

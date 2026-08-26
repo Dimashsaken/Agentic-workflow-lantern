@@ -16,6 +16,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -133,11 +134,16 @@ def playwright_mcp_server(run_id: str | None = None, stage: str | None = None) -
     to its preinstalled, version-locked binary so containers never download at stage
     start; the npx default is for laptops/EC2-direct where a fetch is acceptable.
 
-    For QA stages (when run_id+stage are given) the command gains --config (the
-    checked-in saveVideo config — saveVideo has no CLI flag) and --output-dir
-    pointing at the run's media dir, so every browser session records a video that
-    lands in the run folder. Done here, not in the dispatcher, so the SAME behavior
-    holds in-process, in sandboxes, and in manual orchestrator runs.
+    For QA stages (when run_id+stage are given) the MCP is launched with a config
+    that records video into the run's media dir, so every browser session leaves
+    evidence the video postcondition can verify. Done here, not in the dispatcher,
+    so the SAME behavior holds in-process, in sandboxes, and in manual runs.
+
+    Recording is configured through `browser.contextOptions.recordVideo` — the raw
+    Playwright context option. The MCP's own top-level `saveVideo` key is accepted
+    but INERT (verified 2026-08-26 against @playwright/mcp 0.0.79); this passthrough
+    is what actually produces .webm files. `infra/sandbox/prove_video.sh` is the
+    regression check for that behavior after any MCP bump.
     """
     import shlex
     cmd = shlex.split(os.environ.get(
@@ -145,8 +151,15 @@ def playwright_mcp_server(run_id: str | None = None, stage: str | None = None) -
     if run_id and stage and is_qa_video_stage(stage):
         media_dir = REPO / "workflow" / "runs" / run_id / stage_dir(stage) / "media"
         media_dir.mkdir(parents=True, exist_ok=True)
-        cmd += ["--config", str(REPO / "infra" / "sandbox" / "qa-mcp-config.json"),
-                "--output-dir", str(media_dir)]
+        cfg = json.loads((REPO / "infra" / "sandbox" / "qa-mcp-config.json")
+                         .read_text(encoding="utf-8"))
+        cfg.pop("_comment", None)
+        ctx = cfg.setdefault("browser", {}).setdefault("contextOptions", {})
+        ctx.setdefault("recordVideo", {})["dir"] = str(media_dir)
+        fd, cfg_path = tempfile.mkstemp(prefix="lantern-mcp-", suffix=".json")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(cfg, f)
+        cmd += ["--config", cfg_path, "--output-dir", str(media_dir)]
     env = {k: os.environ[k] for k in _MCP_CHILD_ENV_BASE if k in os.environ}
     env.update({k: v for k, v in os.environ.items() if k.startswith("PLAYWRIGHT")})
     return MCPServerStdio(params={"command": cmd[0], "args": cmd[1:], "env": env},
