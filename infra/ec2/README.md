@@ -72,6 +72,47 @@ Reports link the S3 URL (or a presigned/CloudFront URL if reviewers lack AWS acc
 Lifecycle rule: expire run artifacts after 90 days; postmortem-linked videos are
 copied to `/lantern/permanent/` first.
 
+## The execution plane — sandbox per stage (D10/D12)
+
+The EC2 daemon runs as a **dispatcher** (`LANTERN_EXECUTOR=docker`, set in the systemd
+unit): it claims work and runs each stage in an ephemeral `lantern-sandbox` container
+with CPU/memory caps, a wall-clock timeout, a per-stage env allowlist (never a `.env`
+in the image), and exactly one run folder mounted read-write.
+
+```bash
+sudo apt-get install -y docker.io && sudo usermod -aG docker ubuntu
+# Postgres must also listen on the docker bridge for sandboxes:
+#   postgresql.conf: listen_addresses = 'localhost,172.17.0.1'
+#   pg_hba.conf:     host lantern lantern 172.17.0.0/16 scram-sha-256
+cd ~/Agentic-workflow-lantern
+sudo docker build -t lantern-sandbox -f infra/sandbox/Dockerfile .
+bash infra/sandbox/prove_isolation.sh     # the D12 proof battery — run after every image change
+```
+
+Dispatcher knobs (environment of the daemon):
+
+```
+LANTERN_EXECUTOR=docker            # 'inprocess' = laptop/workstation mode
+LANTERN_MAX_CONCURRENCY=2          # sandboxes in flight; see sizing below
+LANTERN_STAGE_TIMEOUT_MIN=45       # wall clock per stage, then docker kill
+LANTERN_SANDBOX_CPUS=1.5  LANTERN_SANDBOX_MEMORY=2500m
+LANTERN_SANDBOX_IMAGE=lantern-sandbox
+LANTERN_SANDBOX_DATABASE_URL=      # default: LANTERN_DATABASE_URL with host.docker.internal
+```
+
+**Sizing (2026-08-26, this t3.large — 2 vCPU / 8 GB, sharing Postgres + Mission
+Control):** the cap is **2**, not the 3 the plan hoped for. What was actually
+measured: two dispatcher-driven diverge sandboxes ran concurrently at ~200 MiB each
+(browser idle). The cap is set by the 2.5 GB per-container memory limit that
+browser-active stages (design/QA) need headroom for: 2 × 2.5 GB + system + Postgres +
+Mission Control fits in 8 GB; 3 × 2.5 GB does not. `t3.xlarge` supports 3–4;
+`m5.2xlarge` for five developers in parallel. Raise the cap only together with the
+instance size.
+
+**Deferred, deliberately:** per-container egress allowlisting (needs a container
+network + nftables or a proxy; must land before any stage touches untrusted
+third-party input) — see D12.
+
 ## Postgres + the pipeline daemon (docs/ORCHESTRATION.md)
 
 ```bash

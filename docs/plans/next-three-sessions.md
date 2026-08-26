@@ -57,6 +57,22 @@ existing hand-written memory survives as the base layer.
 
 ## Session 2 — One sandbox per stage execution
 
+**Status: DONE 2026-08-26, with two honest deviations.** Image + entrypoint + dispatcher
+live in `infra/sandbox/` and `pipeline.py` (D12 records the mechanics: run folders are
+host bind-mounts because D4 needs intra-run immediacy; repo enters read-only and is
+copied minus `workflow/runs`, so cross-run visibility is structurally impossible; claims
+mark runs `executing`; creds cross as a per-stage env allowlist). Proven on the EC2 box:
+3 concurrent containers writing the same product-repo path with zero cross-visibility;
+kill-residue clean; a REAL diverge stage ran end-to-end in a sandbox (claim → container
+→ Azure → Postgres → both postcondition checks → advance), was docker-killed mid-run on
+a second run (dispatcher recorded `sandbox exited 137`) and recovered on retry; two
+dispatcher slots ran simultaneously with no double-claim. Deviations: **cap is 2, not
+3** — on the t3.large, 2×2.5 GB container limits + Postgres + Mission Control is what
+8 GB holds (measured diverge sandboxes at ~200 MiB each, browser idle; the limit exists
+for browser-active stages). **Egress allowlisting deferred** — stated in D12 with the
+trigger that forces it. Image v1 doesn't bake qa-recorder's node_modules yet (needed at
+stage 4, which no run has reached).
+
 > **Prompt:**
 >
 > Read `docs/DECISIONS.md` D10 and confirm session 1's prerequisite is done (role memory

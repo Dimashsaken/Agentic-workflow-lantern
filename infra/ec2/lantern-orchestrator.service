@@ -7,6 +7,9 @@ Requires=docker.service
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner
 Environment=LANTERN_EXECUTOR=docker
+# cap 2 on t3.large: 2 x 2.5G sandbox memory limits + Postgres + Mission Control
+# is what 8 GB honestly holds — raise only together with the instance size
+Environment=LANTERN_MAX_CONCURRENCY=2
 ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/python pipeline.py daemon --runner ec2
 Restart=always
 RestartSec=5

@@ -156,7 +156,8 @@ stage runs on the developer's own machine against their own account, routed by
 python pipeline.py init-db
 # per feature (this is "the one call")
 python pipeline.py run workflow/briefs/bulk-export.md
-# service (EC2)
+# service (EC2) — LANTERN_EXECUTOR=docker makes it a dispatcher: one sandbox
+# container per stage, N concurrent (infra/ec2/README.md "The execution plane")
 python pipeline.py daemon
 # humans
 python pipeline.py status

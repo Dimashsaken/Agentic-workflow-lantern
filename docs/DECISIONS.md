@@ -206,3 +206,38 @@ run, where verification and gates exist. This keeps "ask the security agent a
 question" cheap while making "sneak work past the pipeline" structurally impossible.
 Consult memory entries (optional) carry `consult:` execution keys in `role_memory`.
 Revisit the read-only line only with evidence it blocks real usage.
+
+## D12 — 2026-08-26 — Execution-plane mechanics: mounts, claims, credentials (session 2)
+
+Decisions made while implementing D10's sandbox-per-stage, each with the why:
+
+- **Run folders are HOST BIND-MOUNTS, not object-storage sync.** Each container gets
+  exactly one mount rw: `workflow/runs/<run-id>` from the host checkout. Why: D4 makes
+  the run folder the intra-run handoff channel — stages of one run must see each
+  other's outputs immediately and atomically; S3 sync would add an eventual-consistency
+  window plus a sync daemon that can fail independently. The host checkout keeps git as
+  the audit trail, and `artifacts.uri` already speaks `s3://` for the day multiple VMs
+  make object storage necessary (same "upgrade when it hurts" trigger as D8).
+- **The Lantern repo enters the container as a read-only mount (`/repo-src`) copied to
+  a private `/work/lantern` EXCLUDING `workflow/runs`.** No other run's artifacts exist
+  inside a container at all — cross-run visibility is structurally impossible rather
+  than discouraged. The copy is why image rebuilds are only needed for dependency
+  changes, never for repo edits.
+- **Claims mark the run `executing`.** The old single-slot loop was double-claim-safe
+  only because it executed synchronously; N slots (or a tick during a long stage) would
+  re-claim the same run. Every completion path overwrites the marker; a daemon restart
+  requeues its own runner's orphaned `executing` runs (one daemon per runner).
+- **Credentials cross as a per-stage env allowlist** (Azure endpoint/key, model
+  routing, DB URL rewritten to `host.docker.internal`) — never a `.env` in the image.
+  Secrets no current stage needs (GitHub PAT, PostHog) are added to the allowlist
+  per-stage when such a stage first exists.
+- **The host re-checks postconditions after the container's own check.** A compromised
+  or lying sandbox exiting 0 still cannot pass without the report on the host-mounted
+  run dir and its memory row in Postgres.
+- **Egress allowlisting is DEFERRED, stated plainly.** v1 sandboxes have default bridge
+  egress. Doing it honestly needs a per-container network + nftables rules or an
+  authenticated proxy; bolting on a half measure now would look like a control without
+  being one. It must land before any stage processes untrusted third-party input.
+- **Image v1 scope:** stages 1–2 and the review stages (Python + Playwright MCP with
+  version-locked browsers). qa stages need `tools/qa-recorder`'s node_modules baked in
+  — add when a run first reaches stage 4.

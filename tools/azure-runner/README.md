@@ -23,6 +23,16 @@ LANTERN_MODEL_FAST=terra       # QA charter execution, batch checks, ui-ux diver
 # Runner affinity (docs/plans/ui-ux-agent-paper.md):
 LANTERN_RUNNER=ec2                               # 'workstation' on the design machine
 LANTERN_PAPER_MCP_URL=http://127.0.0.1:29979/mcp # Paper Desktop's local MCP endpoint
+
+# Execution plane (D10/D12 — EC2 dispatcher only; laptops keep the inprocess default):
+LANTERN_EXECUTOR=inprocess          # 'docker' = one sandbox container per stage
+LANTERN_MAX_CONCURRENCY=            # default 3 under docker, 1 inprocess
+LANTERN_STAGE_TIMEOUT_MIN=45
+LANTERN_SANDBOX_CPUS=1.5
+LANTERN_SANDBOX_MEMORY=2500m
+LANTERN_SANDBOX_IMAGE=lantern-sandbox
+LANTERN_SANDBOX_DATABASE_URL=       # DB URL as containers see it (default: host.docker.internal)
+LANTERN_PLAYWRIGHT_MCP=             # MCP launch cmd; the sandbox image pins its own
 ```
 
 Deployment names (`sol`, `terra`, …) are org-internal Azure deployment labels — the
