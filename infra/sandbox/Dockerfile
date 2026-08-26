@@ -43,7 +43,7 @@ RUN chmod 755 /opt/lantern/entrypoint.sh
 # The orchestrator honors LANTERN_PLAYWRIGHT_MCP instead of `npx -y @playwright/mcp@latest`
 # so the preinstalled, version-locked binary is used. Exports die with the container —
 # the stale-export bug class (2026-08-26) is structurally impossible here.
-ENV LANTERN_PLAYWRIGHT_MCP="mcp-server-playwright --headless --isolated" \
+ENV LANTERN_PLAYWRIGHT_MCP="playwright-mcp --headless --isolated" \
     LANTERN_EXPORT_DIR=/work/exports \
     HOME=/root
 WORKDIR /work
