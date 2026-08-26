@@ -46,6 +46,22 @@ python pipeline.py runboard | render-memory     # re-render the Postgres-backed 
 python pipeline.py import-run <run-id>          # backfill a file-era run into the DB
 ```
 
+## Direct consult — use one agent, no run (D11)
+
+```bash
+python pipeline.py agents                                  # what can I ask?
+python pipeline.py ask security "Is storing the QA creds in SSM enough for staging?"
+python pipeline.py ask security "what about rotation?"     # continues the same conversation
+python pipeline.py ask ui-ux "critique this flow idea" -i  # live loop; empty line ends
+python pipeline.py ask qa-dev "..." --session bulk-export  # named parallel thread
+python pipeline.py ask qa-dev "..." --new                  # forget the thread, start over
+```
+
+The role's charter/skills/memory load into the system prompt, the agent can read the
+whole repo (and browser roles get the Playwright MCP — `--no-browser` to skip), and
+conversation state persists in Postgres per `{you}:{role}:{session}`. Consults are
+advisory and read-only by design; producing or changing artifacts is pipeline-run work.
+
 Role memory consolidation (roughly monthly): merge the rendered rows below the marker
 in `agents/<role>/memory.md` up into the hand-written base, then mark them done and
 re-render:

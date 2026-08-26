@@ -7,6 +7,8 @@
     python pipeline.py approve <run-id> <gate> --by <name> [--note "..."]
     python pipeline.py reject  <run-id> <gate> --by <name> [--note "..."]
     python pipeline.py retry   <run-id>
+    python pipeline.py agents                      # list consultable agents
+    python pipeline.py ask <role> "<prompt>" [-i] [--session name] [--new]  # consult one agent directly
     python pipeline.py runboard                    # re-render workflow/RUNBOARD.md from the DB
     python pipeline.py render-memory [--role X]    # re-render agents/<role>/memory.md from role_memory
     python pipeline.py import-run <run-id> [--stage S --status waiting_gate --gate G]  # backfill a file-era run
@@ -31,9 +33,10 @@ from agents.mcp import MCPServerStdio
 
 from orchestrator import (
     BROWSER_ROLES, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
-    append_file, azure_v1_client, build_instructions, check_postconditions,
-    collect_export, db_urls, list_dir, list_exports, make_append_memory, model_for,
-    paper_mcp_server, paper_reachable, read_file, render_role_memory, write_file,
+    append_file, azure_v1_client, build_consult_instructions, build_instructions,
+    check_postconditions, collect_export, consult_roles, db_urls, list_dir,
+    list_exports, make_append_memory, model_for, paper_mcp_server, paper_reachable,
+    read_file, render_role_memory, write_file,
 )
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -423,6 +426,66 @@ async def cmd_retry(run_id: str) -> None:
     await conn.close()
 
 
+async def cmd_agents() -> None:
+    print("Consultable agents (python pipeline.py ask <role> \"<prompt>\"):\n")
+    for name, desc in consult_roles().items():
+        print(f"  {name:<14} {desc}")
+
+
+async def cmd_ask(role: str, prompt: str, session_name: str, by: str,
+                  new: bool, interactive: bool, no_browser: bool) -> None:
+    """Direct consult of one agent, outside any pipeline run.
+
+    Advisory and read-only by design: the agent gets the role's knowledge, repo read
+    tools, and append_memory — no write tools. Conversation persists per
+    {developer}:{role}:{session}, so follow-up prompts continue where you left off
+    (or use -i for a live back-and-forth in one command).
+    """
+    roles = consult_roles()
+    if role not in roles:
+        sys.exit(f"unknown role: {role}\navailable: {', '.join(roles)}")
+    conn = await connect()
+    await render_role_memory(conn, role)   # the prompt embeds memory — render it fresh
+
+    session_id = f"consult:{by}:{role}:{session_name}"
+    session = SQLAlchemySession.from_url(session_id, url=db_urls()[0], create_tables=True)
+    if new:
+        await session.clear_session()
+
+    mcp_servers = []
+    if role in BROWSER_ROLES and not no_browser:
+        mcp_servers.append(MCPServerStdio(
+            params={"command": "npx", "args": ["-y", "@playwright/mcp@latest"]}, name="playwright"))
+    for s in mcp_servers:
+        await s.connect()
+    try:
+        agent = Agent(
+            name=role,
+            model=model_for(role),
+            instructions=build_consult_instructions(role),
+            tools=[read_file, list_dir,
+                   make_append_memory(role, None, None, session_id)],
+            mcp_servers=mcp_servers,
+        )
+
+        async def turn(text: str) -> None:
+            result = await Runner.run(agent, input=text, session=session, max_turns=40)
+            print(f"\n[{role} · {model_for(role)}]\n{result.final_output}\n")
+            await log_event(conn, None, f"human:{by}", "consult",
+                            {"role": role, "session": session_name, "prompt": text[:300]})
+
+        await turn(prompt)
+        while interactive:
+            text = (await asyncio.to_thread(input, f"you -> {role} (empty line ends) > ")).strip()
+            if not text or text.lower() in ("exit", "quit"):
+                break
+            await turn(text)
+    finally:
+        for s in mcp_servers:
+            await s.cleanup()
+    await conn.close()
+
+
 async def cmd_runboard() -> None:
     conn = await connect()
     await render_runboard(conn)
@@ -504,6 +567,14 @@ def main() -> None:
         p.add_argument("--by", required=True); p.add_argument("--note", default="")
     p = sub.add_parser("retry"); p.add_argument("run_id")
     sub.add_parser("status")
+    sub.add_parser("agents")
+    p = sub.add_parser("ask"); p.add_argument("role"); p.add_argument("prompt")
+    p.add_argument("--session", default="default",
+                   help="named conversation; follow-up asks with the same name continue it")
+    p.add_argument("--by", default=os.environ.get("USERNAME") or os.environ.get("USER", "unknown"))
+    p.add_argument("--new", action="store_true", help="clear this session and start fresh")
+    p.add_argument("-i", "--interactive", action="store_true", help="keep prompting in a loop")
+    p.add_argument("--no-browser", action="store_true", help="skip the Playwright MCP for browser roles")
     sub.add_parser("runboard")
     p = sub.add_parser("render-memory"); p.add_argument("--role")
     p = sub.add_parser("import-run"); p.add_argument("run_id")
@@ -519,6 +590,9 @@ def main() -> None:
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))
         case "retry":   asyncio.run(cmd_retry(a.run_id))
         case "status":  asyncio.run(cmd_status())
+        case "agents":  asyncio.run(cmd_agents())
+        case "ask":     asyncio.run(cmd_ask(a.role, a.prompt, a.session, a.by,
+                                            a.new, a.interactive, a.no_browser))
         case "runboard":      asyncio.run(cmd_runboard())
         case "render-memory": asyncio.run(cmd_render_memory(a.role))
         case "import-run":    asyncio.run(cmd_import_run(a.run_id, a.by, a.stage, a.status, a.gate))

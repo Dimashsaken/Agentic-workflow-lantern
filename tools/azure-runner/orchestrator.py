@@ -191,6 +191,46 @@ def build_instructions(role: str, run_id: str, stage: str) -> str:
     return "".join(parts)
 
 
+def consult_roles() -> dict[str, str]:
+    """Every consultable role (agents/<role>/ with a charter) -> one-line description."""
+    out: dict[str, str] = {}
+    for d in sorted((REPO / "agents").iterdir()):
+        charter = d / "charter.md"
+        if d.is_dir() and not d.name.startswith("_") and charter.exists():
+            desc = ""
+            for line in charter.read_text(encoding="utf-8").splitlines():
+                s = line.strip()
+                if s and not s.startswith("#"):
+                    desc = s
+                    break
+            out[d.name] = desc
+    return out
+
+
+def build_consult_instructions(role: str) -> str:
+    """System prompt for consult mode: the role's knowledge, none of the stage contract."""
+    parts = [
+        f"# Consult mode\nYou are the **{role}** agent of the Lantern fleet, consulted "
+        "directly by a developer OUTSIDE any pipeline run. There is no run folder, no "
+        "stage report, and no postconditions — your final message IS the deliverable, "
+        "so answer directly and concretely, sized to the question.\n\n"
+        "- Ground yourself in the repo before answering anything you are not sure of: "
+        "read_file/list_dir any file (workflow/RUNBOARD.md and workflow/runs/ hold the "
+        "live pipeline state; the product work lives in the run folders).\n"
+        "- Consult mode is advisory and read-only: you have no file-write tools. Work "
+        "that changes the product or a run goes through a pipeline run instead — say so "
+        "if the developer asks for it, and describe exactly what the run should do.\n"
+        "- If the conversation surfaces a durable, role-level learning, record it with "
+        "append_memory — optional here, never required.\n"
+        "- The developer may follow up; earlier turns of this consult persist.",
+    ]
+    for name in ("charter.md", "skills.md", "memory.md"):
+        f = REPO / "agents" / role / name
+        if f.exists():
+            parts.append(f"\n\n# {role}/{name}\n" + f.read_text(encoding="utf-8"))
+    return "".join(parts)
+
+
 def _safe(rel: str) -> Path:
     p = (REPO / rel).resolve()
     if not p.is_relative_to(REPO):

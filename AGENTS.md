@@ -89,6 +89,16 @@ and the list of human-in-the-loop gates: `workflow/PIPELINE.md`.
 Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 `workflow/DEBUG-LIFECYCLE.md`, owned by the `debug` agent.
 
+## Two ways to use an agent (D11)
+
+1. **Pipeline runs** — the fixed lifecycle above. The only mode that produces or
+   changes artifacts; postconditions and gates apply.
+2. **Direct consult** — any developer asks any role directly:
+   `pipeline.py agents` to list them, `pipeline.py ask <role> "<prompt>"` to talk
+   (`-i` for a live loop; follow-up asks continue the same conversation). Consults are
+   **advisory and read-only**: the agent reads the repo and answers, but work that
+   mutates the product or a run goes through a pipeline run.
+
 ## Runs and artifacts
 
 - Run ID: `feat-YYYYMMDD-<slug>` or `bug-YYYYMMDD-<slug>` (e.g. `feat-20260824-bulk-export`).

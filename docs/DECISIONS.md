@@ -188,3 +188,21 @@ a row". `RUNBOARD.md` and `agents/<role>/memory.md` are rendered views of Postgr
 agent write tools reject direct edits to both. `tools/azure-runner/test_verification.py`
 proves the old file-diff check passed a stage that wrote nothing under concurrency and
 the new check fails it. Sandboxing (session 2) is now unblocked.
+
+## D11 — 2026-08-26 — Direct consult mode: any agent, on demand, advisory and read-only
+
+Justin's requirement: developers can use any single agent for their own purposes, not
+only through the fixed pipeline. `pipeline.py agents` lists the roles;
+`pipeline.py ask <role> "<prompt>"` runs one — the role's charter/skills/memory in the
+system prompt, repo read tools, the Playwright MCP for browser roles, and the role's
+routed deployment. Conversations persist per `{developer}:{role}:{session}` as Agents
+SDK sessions in Postgres, so follow-up asks continue the thread (`-i` gives a live
+loop, `--new` resets, `--session` names parallel threads). Consults are logged to
+`events`.
+
+**The deliberate line: consults are advisory.** No write tools, no run ID, no
+postconditions — anything that mutates the product or a run goes through a pipeline
+run, where verification and gates exist. This keeps "ask the security agent a
+question" cheap while making "sneak work past the pipeline" structurally impossible.
+Consult memory entries (optional) carry `consult:` execution keys in `role_memory`.
+Revisit the read-only line only with evidence it blocks real usage.
