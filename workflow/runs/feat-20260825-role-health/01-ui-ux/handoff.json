@@ -1,11 +1,43 @@
 {
   "paper_url": "https://app.paper.design/file/01M0W444P0FVBY0PKRDYAPYDWH/6-0",
+  "paper_file": "Agent sandbox \u2014 ui-ux runs \u00b7 page feat-20260825-role-health",
   "recommended": "diagnosis-brief",
   "options": [
-    {"name":"diagnosis-brief","pngs":["workflow/runs/feat-20260825-role-health/01-ui-ux/diagnosis-brief@2x.png"],"status":"presented"},
-    {"name":"progressive-drilldown","pngs":["workflow/runs/feat-20260825-role-health/01-ui-ux/progressive-drilldown@2x.png"],"status":"presented"},
-    {"name":"channel-lanes","pngs":["workflow/runs/feat-20260825-role-health/01-ui-ux/channel-lanes@2x.png"],"status":"presented"}
+    {
+      "name": "diagnosis-brief",
+      "axis": "verdict-first \u2014 Lantern's diagnosis and one action lead; evidence supports",
+      "pngs": [
+        "workflow/runs/feat-20260825-role-health/01-ui-ux/diagnosis-brief@1x.png"
+      ],
+      "status": "presented"
+    },
+    {
+      "name": "progressive-drilldown",
+      "axis": "row-per-signal \u2014 four health signals collapsed, open the one that isn't fine",
+      "pngs": [
+        "workflow/runs/feat-20260825-role-health/01-ui-ux/progressive-drilldown@1x.png"
+      ],
+      "status": "presented"
+    },
+    {
+      "name": "channel-lanes",
+      "axis": "channel-first \u2014 every source answers for itself, side by side",
+      "pngs": [
+        "workflow/runs/feat-20260825-role-health/01-ui-ux/channel-lanes@1x.png"
+      ],
+      "status": "presented"
+    }
   ],
   "video": null,
-  "metrics": {"divergence_generated":8,"critique_iterations":{"diagnosis-brief":1,"progressive-drilldown":1,"channel-lanes":1},"paper_calls_estimate":22}
+  "metrics": {
+    "divergence_generated": 8,
+    "divergence_kept": 3,
+    "critique_iterations": {
+      "diagnosis-brief": 2,
+      "progressive-drilldown": 2,
+      "channel-lanes": 2
+    },
+    "png_scale": "1x \u2014 2x export blocked on canvas viewport, see report.md",
+    "design_system_version": "tokens contentHash 288d9538"
+  }
 }

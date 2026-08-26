@@ -9,7 +9,7 @@ session postcondition. Keep rows to one line; detail lives in the run folder.
 | Run ID | What | Product repo / branch | Stage | Status | Waiting on | Updated |
 |--------|------|-----------------------|-------|--------|------------|---------|
 | feat-20260825-candidate-compare | Compare finalists vs weighted traits, pick who advances | Lantern V2 (design: Paper sandbox) | 01-ui-ux | waiting_gate | ux_signoff — Justin picks an option (rec: verdict) | 2026-08-25 |
-| feat-20260825-role-health | Post-launch pipeline health per role | Lantern V2 (design: Paper sandbox) | 01-ui-ux | waiting_gate | ux_signoff — Justin confirms brief and picks an option (rec: diagnosis-brief) | 2026-08-26 |
+| feat-20260825-role-health | Post-launch pipeline health per role | Lantern V2 (design: Paper sandbox) | 01-ui-ux | waiting_gate | ux_signoff — Justin picks an option (rec: diagnosis-brief); 2x export needs one zoom-to-fit in Paper | 2026-08-26 |
 
 ## Recently completed (move rows here; prune after ~30 days)
 

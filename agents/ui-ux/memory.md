@@ -38,3 +38,14 @@ customer data. Target: under ~200 lines after consolidation.
 - 2026-08-26 (feat-20260825-role-health): Recreating convergence on a fresh mounted page and immediately collecting new exports is the safest recovery path after stale or empty Paper pages; it preserves provenance and avoids adopting prior-run artboards.
 
 - 2026-08-26 (feat-20260825-role-health): After repeated headless convergence attempts, creating a fresh mounted run page and collecting exports immediately gives the clearest artifact provenance; verify screenshots before exporting so a successful export cannot mask an empty or stale canvas.
+- 2026-08-26 (feat-20260825-role-health): Paper virtualises offscreen canvas nodes out
+  of the DOM — `export`/`get_screenshot` fail with "No DOM element found" for artboards
+  outside the viewport even when the right file and page are visible. This is a SECOND
+  mount trap beyond the never-opened-file one: bring the artboards into view (zoom to
+  fit) before exporting, and screenshot right after creating while the canvas is still
+  centred on the new node.
+- 2026-08-26 (feat-20260825-role-health): the empty-bottom test caught a real defect in
+  3 of 3 first drafts, including my own — a `flex:1` spacer pushing a footer down is the
+  usual culprit. The fix is never "leave it": either the screen is missing content the
+  user needs (trait distribution, what-changed, next action) or the frame is taller than
+  the design. Check it before declaring any option done.

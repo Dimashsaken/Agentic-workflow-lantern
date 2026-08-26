@@ -1,20 +1,63 @@
-# UX options — role health
+# Options — feat-20260825-role-health
 
-Paper: https://app.paper.design/file/01M0W444P0FVBY0PKRDYAPYDWH/6-0
+Three structural options for the post-launch "is this role alive?" screen, converged in
+Paper (**Agent sandbox — ui-ux runs**, page `feat-20260825-role-health`:
+<https://app.paper.design/file/01M0W444P0FVBY0PKRDYAPYDWH/6-0>), grounded in
+`design/design-system.md` (tokens contentHash `288d9538`). Divergence explored eight
+axes and kept three — scores and the five cuts are in the divergence section of
+`report.md`. Critique evidence: `critique-log.md`.
 
-## diagnosis-brief — score 96
-Lantern states the diagnosis and single action at left; trend, sources, and trait quality provide evidence at right. Fastest between-meeting read. Trade-off: narration permanently occupies width.
+**IA decision common to all three:** this lives under LAUNCH, not a new tab. It is what
+"11 · Live" grows into once a role has history — so the six-tab nav is untouched.
 
-## progressive-drilldown — score 91
-Three health domains scan as rows; the degraded source expands into cause and action. Best progressive disclosure. Trade-off: evidence is one interaction deeper.
+## Option A — `diagnosis-brief` (recommended)
 
-## channel-lanes — score 89
-Boards, outreach, and inbound remain parallel lanes. Best direct source comparison. Trade-off: closest to a generic dashboard.
+Lantern's verdict is the hero: a headline that states the condition ("Stalling — and
+it's one fix"), a warning card naming the cause and the single next action with its
+price and consequence, then supporting vitals, a source ledger, a what-changed timeline
+and the trait-match distribution.
+
+**Pros:** answers the brief's actual question — *is it healthy, and what do I do?* — in
+one glance and one click; the "if you do nothing" projection makes the cost of ignoring
+it concrete; degradation is localised to a channel, so the user never has to diagnose.
+**Cons:** it leads with one recommended action, so a week with two independent problems
+compresses awkwardly into a single hero card.
+
+## Option B — `progressive-drilldown`
+
+Six health signals as collapsed rows (volume, boards, outreach, quality, calibration
+queue, referrals), each with a status dot and a headline number; the degraded one is
+expanded in place with its day-by-day chart, explanation and action.
+
+**Pros:** fastest scan of *everything* at once, and the row model scales to new signals
+without redesign; hides evidence until asked, which suits a between-meetings check.
+**Cons:** the diagnosis is implied by a dot rather than stated — a hurried reader can
+miss the "why"; two simultaneous problems mean two expansions and more scrolling.
+
+## Option C — `channel-lanes`
+
+One card per source (boards, outreach, inbound, referrals), each carrying its own
+sparkline, volume, quality, status and action, with the degraded lane tinted and the
+never-started lane dashed.
+
+**Pros:** the best answer to "where do my good candidates come from" — quality per lane
+sits directly beside volume per lane, which is where the real decision lives; makes an
+unused channel visible as an absence rather than hiding it in a table row.
+**Cons:** no single verdict — the user assembles the diagnosis themselves; and it is the
+weakest at showing the role's overall trend over time.
+
+## States (all options — detail in flow-spec.md)
+
+Healthy, stalling (one channel degraded — shown), stalled (no flow), just-launched (not
+enough data, must not read as failure), stale data, and per-source load errors.
 
 ## Recommendation
-Choose **diagnosis-brief** because it turns a degraded signal into one understandable action before charts. Strongest argument against it: expert users may prefer denser channel comparison.
 
-## Critique log
-All three options used one iteration. Layout passed focal point, shell preservation, alignment, scan path, density, states, and 900px fit. Style passed token usage, contrast, typography, semantic color, and product consistency. No unresolved items.
+**diagnosis-brief** — it is the only option that enacts the product's promise on this
+screen: Lantern forms an opinion, names the cause, and proposes one action, with the
+numbers as evidence rather than as the answer.
 
-States covered in `flow-spec.md`: healthy, stalling, stalled, just-launched, loading, error, and no permission.
+**Strongest argument against it:** it optimises for the common case of one problem at a
+time. If real pipelines routinely degrade on two axes at once, `progressive-drilldown`
+degrades more gracefully and `diagnosis-brief` becomes a summary card that sits on top
+of it — a cheap merge later, but a rebuild if we discover it after shipping.
