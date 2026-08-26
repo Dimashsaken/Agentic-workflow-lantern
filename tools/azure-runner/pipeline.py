@@ -194,10 +194,11 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     run_dir = REPO / "workflow" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     name = f"lantern-{run_id}-{stage}-{attempt}".replace(".", "-")
+    # No --user here: the entrypoint starts as root solely to repair docker-created
+    # root-owned mountpoint parents, then drops itself to uid 1000 (the host app
+    # user) — so artifacts on the mounted run dir come out host-owned. Root-owned
+    # files in the git tree broke cleanup on 2026-08-26.
     cmd = ["docker", "run", "--rm", "--name", name,
-           # uid 1000 == the host app user: artifacts on the mounted run dir come out
-           # host-owned; root-owned files in the git tree broke cleanup on 2026-08-26
-           "--user", os.environ.get("LANTERN_SANDBOX_UID", "1000:1000"),
            "--cpus", SANDBOX_CPUS, "--memory", SANDBOX_MEMORY,
            "--add-host=host.docker.internal:host-gateway",
            "-v", f"{REPO}:/repo-src:ro",

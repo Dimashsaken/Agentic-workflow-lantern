@@ -244,6 +244,8 @@ Decisions made while implementing D10's sandbox-per-stage, each with the why:
 
 **Addendum 2026-08-26 — sandboxes run as uid 1000, not root.** The first sandboxed
 stage wrote root-owned files onto the host-mounted run dir (inside the git working
-tree), which the app user then could not manage. The dispatcher now passes
-`--user 1000:1000` (host app user); the image keeps browsers in a world-readable
-`/ms-playwright` and `HOME=/work` so nothing needs root at runtime.
+tree), which the app user then could not manage. The entrypoint now starts as
+root ONLY to chown the docker-created root-owned mountpoint parents, then drops
+itself to uid 1000 (setpriv) — a straight `--user 1000` start cannot write beside
+mountpoints docker pre-creates as root. The image keeps browsers in a world-readable
+`/ms-playwright` and `HOME=/work`, so nothing runs as root past the first line.
