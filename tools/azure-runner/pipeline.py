@@ -29,20 +29,45 @@ from dotenv import load_dotenv
 
 from agents import Agent, Runner, set_default_openai_api, set_default_openai_client, set_tracing_disabled
 from agents.extensions.memory import SQLAlchemySession
-from agents.mcp import MCPServerStdio
 
 from orchestrator import (
     BROWSER_ROLES, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
     append_file, azure_v1_client, build_consult_instructions, build_instructions,
     check_postconditions, collect_export, consult_roles, db_urls, list_dir,
     list_exports, make_append_memory, model_for, paper_mcp_server, paper_reachable,
-    read_file, render_role_memory, write_file,
+    playwright_mcp_server, read_file, render_role_memory, write_file,
 )
 
 load_dotenv(Path(__file__).parent / ".env")
 
 PIPELINE_VERSION = "2"  # v2: stage 1 split into diverge/design executions (runner affinity)
 POLL_SECONDS = 5
+
+# ── execution plane (D10/D12) ────────────────────────────────────────────────
+# LANTERN_EXECUTOR=docker turns the daemon into a dispatcher: it claims work and
+# schedules one ephemeral sandbox container per stage execution instead of running
+# the agent in-process. 'inprocess' (default) is the laptop/workstation mode.
+EXECUTOR = os.environ.get("LANTERN_EXECUTOR", "inprocess")
+SANDBOX_IMAGE = os.environ.get("LANTERN_SANDBOX_IMAGE", "lantern-sandbox")
+SANDBOX_CPUS = os.environ.get("LANTERN_SANDBOX_CPUS", "1.5")
+SANDBOX_MEMORY = os.environ.get("LANTERN_SANDBOX_MEMORY", "2500m")
+STAGE_TIMEOUT_MIN = int(os.environ.get("LANTERN_STAGE_TIMEOUT_MIN", "45"))
+MAX_CONCURRENCY = int(os.environ.get(
+    "LANTERN_MAX_CONCURRENCY", "3" if EXECUTOR == "docker" else "1"))
+# Only these env vars cross into a sandbox — never a whole .env. Secrets a stage
+# doesn't need (GitHub PAT, PostHog key) are added per-stage when a stage that
+# needs them first exists.
+SANDBOX_ENV_ALLOWLIST = (
+    "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_API_VERSION",
+    "LANTERN_MODEL_REASONING", "LANTERN_MODEL_FAST", "LANTERN_OPENAI_API",
+)
+
+
+def sandbox_db_url() -> str:
+    """The DB URL as seen from inside a container (host Postgres via the gateway)."""
+    return os.environ.get(
+        "LANTERN_SANDBOX_DATABASE_URL",
+        db_urls()[0].replace("@localhost", "@host.docker.internal"))
 
 # (stage key, run-folder dir, type, gate-after, runner). Human stages produce an
 # approval immediately and wait. Stage 1 is split by runner affinity: cheap divergence
@@ -96,8 +121,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
 
     mcp_servers = []
     if role in BROWSER_ROLES:
-        mcp_servers.append(MCPServerStdio(
-            params={"command": "npx", "args": ["-y", "@playwright/mcp@latest"]}, name="playwright"))
+        mcp_servers.append(playwright_mcp_server())
     if stage in PAPER_STAGES:
         if not await paper_reachable():
             raise RuntimeError(PAPER_PREFLIGHT_HINT)
@@ -140,6 +164,76 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     await conn.execute(
         "UPDATE stage_executions SET status = 'succeeded', output = $1, finished_at = now() WHERE id = $2",
         json.dumps({"final_output": final[-4000:], "report": report}), exec_id,
+    )
+    await log_event(conn, run_id, f"agent:{role}", "stage_succeeded", {"stage": stage})
+
+
+async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> None:
+    """One stage in one ephemeral sandbox container (D10/D12).
+
+    The host side owns the DB row lifecycle and the postcondition verdict; the
+    container runs orchestrator.py with this execution's key and checks its own
+    postconditions too (defense in depth — a compromised container exiting 0 still
+    cannot pass without the report on the mounted run dir and its memory row).
+    """
+    role = ROLE_FOR_STAGE[stage]
+    sdir = STAGE_DIR[stage]
+    attempt = await conn.fetchval(
+        "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
+        run_id, stage,
+    )
+    execution_key = f"{run_id}:{stage}:{attempt}"
+    exec_id = await conn.fetchval(
+        """INSERT INTO stage_executions (run_id, stage, runner, attempt, status, idempotency_key, heartbeat_at)
+           VALUES ($1, $2, $3, $4, 'running', $5, now()) RETURNING id""",
+        run_id, stage, runner, attempt, execution_key,
+    )
+    await log_event(conn, run_id, "orchestrator", "stage_started",
+                    {"stage": stage, "attempt": attempt, "runner": runner, "executor": "docker"})
+
+    run_dir = REPO / "workflow" / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    name = f"lantern-{run_id}-{stage}-{attempt}".replace(".", "-")
+    cmd = ["docker", "run", "--rm", "--name", name,
+           "--cpus", SANDBOX_CPUS, "--memory", SANDBOX_MEMORY,
+           "--add-host=host.docker.internal:host-gateway",
+           "-v", f"{REPO}:/repo-src:ro",
+           "-v", f"{run_dir}:/work/lantern/workflow/runs/{run_id}:rw",
+           "-e", f"LANTERN_EXECUTION_KEY={execution_key}",
+           "-e", f"LANTERN_DATABASE_URL={sandbox_db_url()}"]
+    for var in SANDBOX_ENV_ALLOWLIST:
+        if os.environ.get(var):
+            cmd += ["-e", f"{var}={os.environ[var]}"]
+    cmd += [SANDBOX_IMAGE, run_id, stage]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=STAGE_TIMEOUT_MIN * 60)
+    except asyncio.TimeoutError:
+        kill = await asyncio.create_subprocess_exec("docker", "kill", name)
+        await kill.wait()
+        await proc.communicate()
+        raise RuntimeError(f"sandbox hit the {STAGE_TIMEOUT_MIN}-minute wall clock and was killed")
+    tail = out.decode(errors="replace")[-4000:]
+    if proc.returncode != 0:
+        raise RuntimeError(f"sandbox exited {proc.returncode}: {tail[-1500:]}")
+
+    missing = await check_postconditions(conn, role, run_id, stage, execution_key)
+    if missing:
+        raise RuntimeError("postconditions failed (host re-check): " + "; ".join(missing))
+    await render_role_memory(conn, role)   # keep the host's rendered view fresh
+
+    report = f"workflow/runs/{run_id}/{sdir}/report.md"
+    await conn.execute(
+        "INSERT INTO artifacts (run_id, stage, kind, uri) VALUES ($1, $2, 'report', $3)",
+        run_id, sdir, report,
+    )
+    if stage == "01-ui-ux.design":
+        await register_design_artifacts(conn, run_id, sdir)
+    await conn.execute(
+        "UPDATE stage_executions SET status = 'succeeded', output = $1, finished_at = now() WHERE id = $2",
+        json.dumps({"final_output": tail, "report": report}), exec_id,
     )
     await log_event(conn, run_id, f"agent:{role}", "stage_succeeded", {"stage": stage})
 
@@ -224,6 +318,8 @@ async def render_runboard(conn) -> None:
                 pass
         elif r["status"] == "failed":
             waiting = "rework, then `pipeline.py retry`"
+        elif r["status"] == "executing":
+            waiting = "stage in progress"
         elif r["status"] == "running":
             waiting = f"runner `{STAGE_RUNNER.get(r['current_stage'], '?')}`"
         lines.append(
@@ -275,7 +371,8 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
     _, _, stype, gate, _ = FEATURE_STAGES[STAGE_INDEX[stage]]
     try:
         if stype == "agent":
-            await run_agent_stage(conn, run_id, stage, runner)
+            execute = run_agent_stage_docker if EXECUTOR == "docker" else run_agent_stage
+            await execute(conn, run_id, stage, runner)
         else:  # human stage: nothing to execute — the gate IS the stage
             print(f"[{run_id}] {stage} is a human stage (developer + Codex CLI).")
         if gate:
@@ -300,19 +397,25 @@ async def heartbeat(conn, runner: str) -> None:
            ON CONFLICT (name) DO UPDATE SET last_seen = now()""", runner)
 
 
-async def claim_and_step(conn, runner: str) -> bool:
-    """One tick: claim a runnable run whose current stage belongs to this runner."""
+async def claim_run(conn, runner: str) -> str | None:
+    """Claim one runnable run whose current stage belongs to this runner.
+
+    The claim marks the run 'executing' — without that, a daemon running N>1 slots
+    (or a second tick during a long stage) would claim the same run twice; the old
+    single-slot loop was only safe because it executed synchronously. The status
+    is overwritten by every completion path (gate/advance/fail); a daemon crash is
+    recovered by the startup requeue in cmd_daemon.
+    """
     stages = [s for s, r in STAGE_RUNNER.items() if r == runner]
     async with conn.transaction():
         row = await conn.fetchrow(
             """SELECT id FROM runs WHERE status = 'running' AND current_stage = ANY($1::text[])
                ORDER BY updated_at FOR UPDATE SKIP LOCKED LIMIT 1""", stages)
         if not row:
-            return False
-        run_id = row["id"]
-        await conn.execute("UPDATE runs SET updated_at = now() WHERE id = $1", run_id)
-    await step_run(conn, run_id, runner)
-    return True
+            return None
+        await conn.execute(
+            "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1", row["id"])
+        return row["id"]
 
 
 # ── commands ─────────────────────────────────────────────────────────────────
@@ -347,15 +450,23 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool) ->
         waiting_on = None
         while True:
             row = await conn.fetchrow("SELECT status, current_stage FROM runs WHERE id = $1", run_id)
-            if row["status"] != "running":
+            if row["status"] not in ("running", "executing"):
                 print(f"[{run_id}] status: {row['status']}")
                 break
+            if row["status"] == "executing":   # a daemon slot has it — just watch
+                await asyncio.sleep(POLL_SECONDS)
+                continue
             needed = STAGE_RUNNER[row["current_stage"]]
             if needed != local:
                 if waiting_on != row["current_stage"]:
                     print(f"[{run_id}] {row['current_stage']} needs the '{needed}' runner — waiting for its daemon.")
                     waiting_on = row["current_stage"]
                 await asyncio.sleep(POLL_SECONDS)
+                continue
+            claimed = await conn.execute(
+                "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1 AND status = 'running'",
+                run_id)
+            if claimed.endswith(" 0"):         # a daemon won the race — watch instead
                 continue
             await step_run(conn, run_id, local)
     await conn.close()
@@ -365,20 +476,40 @@ async def cmd_daemon(runner: str) -> None:
     conn = await connect()
     if runner == "workstation" and not await paper_reachable():
         sys.exit(PAPER_PREFLIGHT_HINT)  # fail fast at startup, never mid-run
-    print(f"lantern orchestrator daemon [{runner}] — polling every {POLL_SECONDS}s")
+    # Crashed-daemon recovery: with one daemon per runner, any of OUR stages still
+    # marked 'executing' at startup is an orphan from a dead process — requeue it.
+    my_stages = [s for s, r in STAGE_RUNNER.items() if r == runner]
+    await conn.execute(
+        """UPDATE runs SET status = 'running', updated_at = now()
+           WHERE status = 'executing' AND current_stage = ANY($1::text[])""", my_stages)
+    print(f"lantern orchestrator daemon [{runner}] executor={EXECUTOR} "
+          f"concurrency={MAX_CONCURRENCY} — polling every {POLL_SECONDS}s")
 
     async def heartbeat_loop() -> None:
-        # Own connection: keeps beating while the main connection runs a long stage,
-        # so Mission Control never shows a busy runner as offline.
+        # Own connection: keeps beating while stages run, so Mission Control never
+        # shows a busy runner as offline.
         hb_conn = await connect()
         while True:
             await heartbeat(hb_conn, runner)
             await asyncio.sleep(POLL_SECONDS)
 
+    async def execute(run_id: str) -> None:
+        # Own connection per slot — one asyncpg connection cannot serve concurrent
+        # executions.
+        c = await connect()
+        try:
+            await step_run(c, run_id, runner)
+        except Exception as e:  # noqa: BLE001 — a dead slot must not kill the daemon
+            print(f"[{run_id}] executor slot crashed: {e}", file=sys.stderr)
+        finally:
+            await c.close()
+
     hb_task = asyncio.create_task(heartbeat_loop())
+    slots: set[asyncio.Task] = set()
     paper_ok = True
     try:
         while True:
+            slots = {t for t in slots if not t.done()}
             if runner == "workstation":
                 ok = await paper_reachable()
                 if not ok and paper_ok:
@@ -387,9 +518,12 @@ async def cmd_daemon(runner: str) -> None:
                 if not ok:           # hold claims until Paper is back — no mid-run failures
                     await asyncio.sleep(POLL_SECONDS)
                     continue
-            worked = await claim_and_step(conn, runner)
-            if not worked:
-                await asyncio.sleep(POLL_SECONDS)
+            if len(slots) < MAX_CONCURRENCY:
+                run_id = await claim_run(conn, runner)
+                if run_id:
+                    slots.add(asyncio.create_task(execute(run_id)))
+                    continue         # fill remaining slots before sleeping
+            await asyncio.sleep(POLL_SECONDS)
     finally:
         hb_task.cancel()
 
@@ -454,8 +588,7 @@ async def cmd_ask(role: str, prompt: str, session_name: str, by: str,
 
     mcp_servers = []
     if role in BROWSER_ROLES and not no_browser:
-        mcp_servers.append(MCPServerStdio(
-            params={"command": "npx", "args": ["-y", "@playwright/mcp@latest"]}, name="playwright"))
+        mcp_servers.append(playwright_mcp_server())
     for s in mcp_servers:
         await s.connect()
     try:

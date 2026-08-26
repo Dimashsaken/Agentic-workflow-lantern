@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS runs (
     id               text PRIMARY KEY,          -- 'feat-20260825-bulk-export'
     brief            text NOT NULL,
     pipeline_version text NOT NULL,
-    status           text NOT NULL DEFAULT 'running',  -- running|waiting_gate|failed|done|cancelled
+    status           text NOT NULL DEFAULT 'running',  -- running|executing|waiting_gate|failed|done|cancelled
+                                                       -- ('executing' = claimed by a daemon slot; requeued to
+                                                       --  'running' on daemon restart if the process died)
     current_stage    text NOT NULL,
     created_by       text NOT NULL,
     created_at       timestamptz NOT NULL DEFAULT now(),

@@ -1,10 +1,12 @@
 [Unit]
-Description=Lantern pipeline orchestrator
-After=network.target postgresql.service
+Description=Lantern pipeline orchestrator (dispatcher: one sandbox container per stage)
+After=network.target postgresql.service docker.service
+Requires=docker.service
 
 [Service]
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner
+Environment=LANTERN_EXECUTOR=docker
 ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/python pipeline.py daemon --runner ec2
 Restart=always
 RestartSec=5

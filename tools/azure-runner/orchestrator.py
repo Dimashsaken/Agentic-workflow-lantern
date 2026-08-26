@@ -104,6 +104,19 @@ def model_for(role: str, stage: str | None = None) -> str:
     return deployment
 
 
+def playwright_mcp_server() -> MCPServerStdio:
+    """The Playwright MCP server process for browser roles.
+
+    LANTERN_PLAYWRIGHT_MCP overrides the launch command — the sandbox image sets it
+    to its preinstalled, version-locked binary so containers never download at stage
+    start; the npx default is for laptops/EC2-direct where a fetch is acceptable.
+    """
+    import shlex
+    cmd = shlex.split(os.environ.get(
+        "LANTERN_PLAYWRIGHT_MCP", "npx -y @playwright/mcp@latest"))
+    return MCPServerStdio(params={"command": cmd[0], "args": cmd[1:]}, name="playwright")
+
+
 def paper_mcp_url() -> str:
     return os.environ.get("LANTERN_PAPER_MCP_URL", "http://127.0.0.1:29979/mcp")
 
@@ -462,6 +475,12 @@ async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("run_id")
     ap.add_argument("stage")
+    ap.add_argument("--execution-key", default=None,
+                    help="ties this execution to its stage_executions row (the dispatcher "
+                         "sets it in sandboxes); default: a fresh manual key")
+    ap.add_argument("--persist-session", action="store_true",
+                    help="persist the conversation as the Agents SDK session "
+                         "{run_id}:{stage} in Postgres, like pipeline.py does")
     args = ap.parse_args()
 
     role = ROLE_FOR_STAGE.get(args.stage) or sys.exit(f"unknown stage: {args.stage}")
@@ -476,15 +495,18 @@ async def main() -> None:
     set_tracing_disabled(True)  # no OpenAI-platform key on the Azure credential set
 
     conn = await db_connect()
-    execution_key = f"manual:{args.run_id}:{args.stage}:{uuid4().hex[:8]}"
+    execution_key = args.execution_key or f"manual:{args.run_id}:{args.stage}:{uuid4().hex[:8]}"
     await render_role_memory(conn, role)   # instructions must read a fresh view
+
+    session = None
+    if args.persist_session:
+        from agents.extensions.memory import SQLAlchemySession
+        session = SQLAlchemySession.from_url(
+            f"{args.run_id}:{args.stage}", url=db_urls()[0], create_tables=True)
 
     mcp_servers = []
     if role in BROWSER_ROLES:
-        mcp_servers.append(MCPServerStdio(
-            params={"command": "npx", "args": ["-y", "@playwright/mcp@latest"]},
-            name="playwright",
-        ))
+        mcp_servers.append(playwright_mcp_server())
     if args.stage in PAPER_STAGES:
         if not await paper_reachable():
             sys.exit(PAPER_PREFLIGHT_HINT)
@@ -506,6 +528,7 @@ async def main() -> None:
             input=f"Begin your {args.stage} session for run {args.run_id}. Do not reply with a "
                   "plan — start calling tools now and keep working until the report is on "
                   "disk and append_memory has been called.",
+            session=session,
             max_turns=120,
         )
         print(result.final_output)

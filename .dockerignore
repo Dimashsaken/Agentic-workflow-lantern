@@ -1,0 +1,8 @@
+# Sandbox image build context (infra/sandbox/Dockerfile) — keep it tiny.
+# The repo is mounted at runtime, never baked; only requirements.txt and
+# infra/sandbox/ are COPYed.
+.git
+**/.venv
+**/__pycache__
+**/node_modules
+workflow/runs
