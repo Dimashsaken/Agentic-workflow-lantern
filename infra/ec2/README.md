@@ -68,11 +68,13 @@ s3://<bucket>/lantern/<run-id>/<stage>/<file>.webm
 ```
 
 **Uploads are host-side (P0.1):** after a sandbox exits and postconditions pass, the
-dispatcher uploads every `.webm` in the stage dir to the layout above (`aws` CLI via
-the instance role — AWS credentials never cross into a sandbox), records an
-`artifacts` row per file, writes `media-manifest.json` next to the report (the MCP
-names video files itself, so the manifest is the name→URL evidence), and deletes the
-local copies. Set `LANTERN_ARTIFACT_BUCKET` in the daemon env. Reports link the S3
+dispatcher uploads THIS attempt's `.webm` files (`aws` CLI via the instance role —
+AWS credentials never cross into a sandbox) to
+`s3://<bucket>/lantern/<run-id>/<stage>/attempt-<k>/<run-id>--<stage>--session-<n>.webm`
+— attempt-prefixed so a retry never overwrites earlier evidence, session-numbered in
+recording order (the MCP names files itself). It records an `artifacts` row per file,
+regenerates `media-manifest.json` next to the report FROM those rows (never merged
+from the agent-writable run dir), and deletes the local copies. Set `LANTERN_ARTIFACT_BUCKET` in the daemon env. Reports link the S3
 URL (or a presigned/CloudFront URL if reviewers lack AWS access). Lifecycle rule:
 expire run artifacts after 90 days; postmortem-linked videos are copied to
 `/lantern/permanent/` first.
@@ -110,16 +112,20 @@ LANTERN_QA_STAGING_BASE_URL=       # + _USER/_PASS from /lantern/qa/staging/*
 ```
 
 **QA stages (image v2, P0.1):** the sandbox image bakes `tools/qa-recorder`'s deps;
-video recording is configured by the ORCHESTRATOR itself — for QA stages it launches
-the Playwright MCP with `--config infra/sandbox/qa-mcp-config.json` (the checked-in
-`saveVideo` setting, which has no CLI flag) and `--output-dir` at the run's mounted
-`media/` folder, so every browser session leaves a `.webm` on the host in every
-executor (sandbox, in-process, manual). The video postcondition (a fresh, non-empty
-`.webm` from the current attempt) is enforced in `check_postconditions` at all three
-verdict sites; uploads happen after it passes (above). The QA target must be
-reachable from the docker bridge network. After any image change, re-run
-`prove_isolation.sh` and one smoke QA stage to confirm a video actually lands —
-the MCP's config keys are upstream's, not ours.
+video recording is configured by the ORCHESTRATOR itself — for QA stages it reads the
+`infra/sandbox/qa-mcp-config.json` template, injects the run's mounted `media/` dir as
+`browser.contextOptions.recordVideo.dir`, and launches the MCP with that config, so
+every browser session leaves a `.webm` on the host in every executor (sandbox,
+in-process, manual). **The MCP's own top-level `saveVideo` key is inert** — accepted
+and silently records nothing (verified on 0.0.79); the `recordVideo` passthrough is
+what works, which is why `@playwright/mcp` and `playwright` are version-pinned in the
+Dockerfile and the MCP's `chrome-for-testing` browser is installed at build time.
+The video postcondition (a fresh, non-empty `.webm` from the current attempt) is
+enforced in `check_postconditions` at all three verdict sites; uploads happen after it
+passes (above). The QA target must be reachable from the docker bridge network. After
+any image change or MCP bump, re-run `prove_isolation.sh` AND `prove_video.sh` — the
+MCP's config keys are upstream's, not ours, and a config that looks right is not
+evidence.
 
 **Sizing (2026-08-26, this t3.large — 2 vCPU / 8 GB, sharing Postgres + Mission
 Control):** the cap is **2**, not the 3 the plan hoped for. What was actually
