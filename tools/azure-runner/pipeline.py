@@ -285,7 +285,8 @@ async def render_runboard(conn) -> None:
     humans reading the repo and for agent orientation.
     """
     active = await conn.fetch(
-        "SELECT id, status, current_stage, updated_at FROM runs WHERE status != 'done' ORDER BY updated_at DESC")
+        """SELECT id, status, current_stage, updated_at FROM runs
+           WHERE status NOT IN ('done', 'cancelled') ORDER BY updated_at DESC""")
     done = await conn.fetch(
         """SELECT id, completed_at FROM runs
            WHERE status = 'done' AND completed_at > now() - interval '30 days'
@@ -667,7 +668,8 @@ async def cmd_import_run(run_id: str, by: str, stage: str, status: str, gate: st
 async def cmd_status() -> None:
     conn = await connect()
     runs = await conn.fetch(
-        "SELECT id, status, current_stage, updated_at FROM runs WHERE status != 'done' ORDER BY updated_at DESC")
+        """SELECT id, status, current_stage, updated_at FROM runs
+           WHERE status NOT IN ('done', 'cancelled') ORDER BY updated_at DESC""")
     if not runs:
         print("no active runs")
     for r in runs:

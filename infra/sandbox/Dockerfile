@@ -36,7 +36,9 @@ COPY tools/azure-runner/requirements.txt /opt/lantern/requirements.txt
 RUN python3.12 -m venv /opt/lantern/venv \
     && /opt/lantern/venv/bin/pip install --quiet -r /opt/lantern/requirements.txt
 
-COPY --chmod=755 infra/sandbox/entrypoint.sh /opt/lantern/entrypoint.sh
+# plain COPY + chmod: --chmod needs BuildKit, which docker.io's legacy builder lacks
+COPY infra/sandbox/entrypoint.sh /opt/lantern/entrypoint.sh
+RUN chmod 755 /opt/lantern/entrypoint.sh
 
 # The orchestrator honors LANTERN_PLAYWRIGHT_MCP instead of `npx -y @playwright/mcp@latest`
 # so the preinstalled, version-locked binary is used. Exports die with the container —
