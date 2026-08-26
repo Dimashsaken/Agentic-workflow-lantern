@@ -241,3 +241,9 @@ Decisions made while implementing D10's sandbox-per-stage, each with the why:
 - **Image v1 scope:** stages 1–2 and the review stages (Python + Playwright MCP with
   version-locked browsers). qa stages need `tools/qa-recorder`'s node_modules baked in
   — add when a run first reaches stage 4.
+
+**Addendum 2026-08-26 — sandboxes run as uid 1000, not root.** The first sandboxed
+stage wrote root-owned files onto the host-mounted run dir (inside the git working
+tree), which the app user then could not manage. The dispatcher now passes
+`--user 1000:1000` (host app user); the image keeps browsers in a world-readable
+`/ms-playwright` and `HOME=/work` so nothing needs root at runtime.
