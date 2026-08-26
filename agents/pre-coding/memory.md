@@ -13,3 +13,6 @@ customer data. Target: under ~200 lines after consolidation.
 - 2026-08-24 (seed): Every schema plan ships with a rollback migration written at the
   same time as the forward one; "we'll write it if needed" means it doesn't exist
   during the incident.
+
+<!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
+

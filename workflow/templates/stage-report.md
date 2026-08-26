@@ -30,5 +30,5 @@ What the next agent should look at first, and any landmines.
 
 ## Memory candidates
 
-Learnings appended to `agents/<role>/memory.md` this session (copy them here for the
+Learnings recorded via `append_memory` this session (copy them here for the
 postmortem trail), or "None".

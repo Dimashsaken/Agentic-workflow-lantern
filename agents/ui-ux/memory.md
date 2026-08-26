@@ -49,3 +49,7 @@ customer data. Target: under ~200 lines after consolidation.
   usual culprit. The fix is never "leave it": either the screen is missing content the
   user needs (trait distribution, what-changed, next action) or the frame is taller than
   the design. Check it before declaring any option done.
+
+<!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
+
+- 2026-08-26 [feat-20260825-role-health · 01-ui-ux.diverge] 2026-08-26 (feat-20260825-role-health): For operational-health screens, a dedicated “diagnosis before evidence” judge criterion prevents familiar metric grids from winning on completeness even though they increase interpretation time.

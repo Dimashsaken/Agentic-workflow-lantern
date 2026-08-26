@@ -12,3 +12,6 @@ customer data. Target: under ~200 lines after consolidation.
   otherwise.
 - 2026-08-24 (seed): A video nobody can navigate is write-only. Always pair the link
   with timestamps per scenario; reviewers watch 30 seconds, not 10 minutes.
+
+<!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
+

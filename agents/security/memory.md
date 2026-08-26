@@ -12,3 +12,6 @@ Target: under ~200 lines after consolidation.
   covers it" is the assumption behind most IDOR findings.
 - 2026-08-24 (seed): The lockfile diff is part of the diff. New transitive dependencies
   arrive silently and are nobody's explicit decision unless this role makes them one.
+
+<!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
+

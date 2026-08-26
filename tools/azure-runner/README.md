@@ -42,6 +42,16 @@ python pipeline.py init-db                      # once
 python pipeline.py run workflow/briefs/x.md     # the one call
 python pipeline.py daemon                       # service loop (systemd on EC2)
 python pipeline.py status | approve | reject | retry
+python pipeline.py runboard | render-memory     # re-render the Postgres-backed views
+python pipeline.py import-run <run-id>          # backfill a file-era run into the DB
+```
+
+Role memory consolidation (roughly monthly): merge the rendered rows below the marker
+in `agents/<role>/memory.md` up into the hand-written base, then mark them done and
+re-render:
+
+```sql
+UPDATE role_memory SET consolidated = true WHERE role = '<role>' AND created_at < '<date>';
 ```
 
 ### Runner affinity — the design workstation daemon
@@ -75,16 +85,36 @@ python orchestrator.py feat-20260824-bulk-export 04-qa-dev
 
 What it does:
 
-1. Builds the system prompt: `AGENTS.md` core rules + the role's `charter.md` +
-   `skills.md` + `memory.md` + the run/stage assignment.
+1. Renders the role's `memory.md` fresh from the `role_memory` table, then builds the
+   system prompt: `AGENTS.md` core rules + the role's `charter.md` + `skills.md` +
+   `memory.md` + the run/stage assignment.
 2. Creates an Agents SDK `Agent` on the role's routed deployment, with tools:
-   file read/write scoped to the repo, the Playwright MCP server for browser roles,
-   and shell access only where the role's charter needs it.
-3. Runs the loop, then **enforces the three postconditions** (stage report exists,
-   memory appended, runboard row updated) — failing loudly if the model skipped one.
+   file read/write scoped to the repo (rejects the rendered views RUNBOARD.md and
+   memory.md), `append_memory` bound to this execution, the Playwright MCP server for
+   browser roles, and shell access only where the role's charter needs it.
+3. Runs the loop, then **enforces the two written postconditions** (stage report
+   exists + claimed artifacts are real, memory row inserted by THIS execution) —
+   failing loudly if the model skipped one. Sound under concurrent runs:
+   `test_verification.py` is the proof.
 
-Status: **scaffold** — reviewed but not yet exercised on EC2; expect to tune tool
-scoping and the api-version pin on first real run. `pip install -r requirements.txt`.
+**Requires Postgres** (`LANTERN_DATABASE_URL` + `pipeline.py init-db` once) even for
+one-off stage runs — role memory lives in the database. `pip install -r requirements.txt`.
+
+### Local dev Postgres on Windows (no admin, no service)
+
+Portable binaries from EDB, kept outside the OneDrive-synced repo:
+
+```powershell
+# once: download + extract https://get.enterprisedb.com/postgresql/postgresql-16.9-1-windows-x64-binaries.zip
+#       to %USERPROFILE%\.lantern\pgsql, then:
+& "$env:USERPROFILE\.lantern\pgsql\bin\initdb" -U lantern -A trust -E UTF8 -D "$env:USERPROFILE\.lantern\pgdata"
+& "$env:USERPROFILE\.lantern\pgsql\bin\pg_ctl" -D "$env:USERPROFILE\.lantern\pgdata" -l "$env:USERPROFILE\.lantern\pg.log" start
+& "$env:USERPROFILE\.lantern\pgsql\bin\createdb" -U lantern -h localhost lantern
+# every reboot: just the pg_ctl ... start line
+```
+
+The default `LANTERN_DATABASE_URL` (`postgresql+asyncpg://lantern:lantern@localhost:5432/lantern`)
+matches this setup as-is.
 
 ## Codex CLI for developers (stage 3)
 

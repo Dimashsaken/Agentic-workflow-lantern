@@ -25,9 +25,10 @@ no process ever waits on a human.
 
 **Inner layer — Agents SDK primitives.** Each stage runs one agent whose
 conversation persists via `SQLAlchemySession` (session ID `{run_id}:{stage}`) in the
-same Postgres. The three AGENTS.md postconditions are enforced mechanically after
-every agent stage. (v2: `needs_approval` tools + serialized `RunState` for
-mid-stage approvals — schema already has the column.)
+same Postgres. The two written AGENTS.md postconditions (report on disk, memory row
+from this execution via `append_memory`) are enforced mechanically after every agent
+stage; the runboard is rendered, not written. (v2: `needs_approval` tools +
+serialized `RunState` for mid-stage approvals — schema already has the column.)
 
 **Explicitly rejected for now:** Temporal (operational weight of a cluster + replay
 discipline, overkill for one box) and LangGraph (second framework; interrupted nodes
@@ -133,12 +134,15 @@ product-repo clone and corrupt each other's checkouts. The container also gives 
 blast-radius controls a review agent should never need but must have: no long-lived
 credentials, a timeout, and an egress allowlist.
 
-**Prerequisite before enabling N>1 (do not skip).** Two of the three postconditions
-write shared files, and the memory check (`memory_now == memory_before`) becomes
-*unsound* under concurrency: another run's append to the same role's `memory.md`
-satisfies it, so a stage that wrote nothing passes. Move role memory to a
-`role_memory` table and check "this execution inserted a row" first. Turning on
-concurrency before that silently disables the verification the pipeline rests on.
+**Prerequisite before enabling N>1 — DONE 2026-08-26 (session 1).** The old memory
+check (`memory_now == memory_before` on a shared file) was unsound under concurrency:
+another run's append to the same role's `memory.md` satisfied it, so a stage that
+wrote nothing passed. Now role memory lives in the `role_memory` table, agents write
+it only through the `append_memory` tool (bound to the stage execution's key), and
+the postcondition is "this execution inserted a row" — which no other run can
+satisfy. `RUNBOARD.md` and `memory.md` are rendered views of Postgres; the agent
+write tools reject direct edits to them. Proof: `tools/azure-runner/test_verification.py`
+shows the old check passing a do-nothing stage and the new one failing it.
 
 **Paper is deliberately not in the cloud.** Its MCP answers plain HTTP on localhost with
 no auth of its own — it inherits whoever is signed into the desktop app. So the design
@@ -158,6 +162,11 @@ python pipeline.py daemon
 python pipeline.py status
 python pipeline.py approve feat-20260825-bulk-export ux_signoff --by justin --note "option B"
 python pipeline.py retry feat-20260825-bulk-export
+# rendered views (also refresh automatically on every state change / stage start)
+python pipeline.py runboard
+python pipeline.py render-memory [--role ui-ux]
+# one-time backfill of a file-era run into the DB
+python pipeline.py import-run feat-20260825-role-health --gate ux_signoff
 ```
 
 Postgres setup + the systemd unit: `infra/ec2/README.md`.

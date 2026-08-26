@@ -76,5 +76,23 @@ CREATE TABLE IF NOT EXISTS runners (          -- daemon heartbeats (runner affin
     details   jsonb
 );
 
+-- Role memory lives here, not in agents/<role>/memory.md (session 1, D10 prerequisite).
+-- The file is a RENDERED VIEW of this table; the postcondition is "this stage execution
+-- inserted at least one row", keyed by execution_key — sound under concurrency, unlike
+-- the old file-diff check which another run's append could satisfy.
+-- No FK on run_id: manual/legacy entries may predate any runs row.
+CREATE TABLE IF NOT EXISTS role_memory (
+    id            bigserial PRIMARY KEY,
+    role          text NOT NULL,
+    run_id        text,
+    stage         text,
+    execution_key text,                       -- '{run_id}:{stage}:{attempt}' | 'manual:...'
+    entry         text NOT NULL,
+    consolidated  boolean NOT NULL DEFAULT false,  -- true once merged into the file's base section
+    created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_role_memory_role ON role_memory(role, created_at);
+CREATE INDEX IF NOT EXISTS idx_role_memory_exec ON role_memory(execution_key);
+
 -- idempotent upgrades for databases created before these columns existed
 ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS runner text NOT NULL DEFAULT 'ec2';

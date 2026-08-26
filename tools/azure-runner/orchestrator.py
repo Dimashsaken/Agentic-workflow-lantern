@@ -3,9 +3,11 @@
     python orchestrator.py <run-id> <stage-dir>
     python orchestrator.py feat-20260824-bulk-export 04-qa-dev
 
-SCAFFOLD: reviewed, not yet exercised on EC2. Deterministic pipeline control lives
-here; the model only has autonomy inside a stage. After the run, the three AGENTS.md
-postconditions are enforced mechanically — a stage that skipped one fails loudly.
+Deterministic pipeline control lives here; the model only has autonomy inside a
+stage. After the run, the two written AGENTS.md postconditions are enforced
+mechanically — a stage that skipped one fails loudly. Requires Postgres
+(LANTERN_DATABASE_URL): role memory is a role_memory table and memory.md files are
+rendered views of it, so the postcondition is sound under concurrent runs.
 """
 
 import argparse
@@ -15,7 +17,9 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
+import asyncpg
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from agents import (Agent, Runner, function_tool, set_default_openai_api,
@@ -25,6 +29,33 @@ from agents.mcp import MCPServerStdio, MCPServerStreamableHttp
 REPO = Path(__file__).resolve().parents[2]
 PROCESS_START = datetime.now(timezone.utc).timestamp()  # stale-export guard
 load_dotenv(Path(__file__).parent / ".env")
+
+
+def db_urls() -> tuple[str, str]:
+    """(sqlalchemy_url, asyncpg_url) for LANTERN_DATABASE_URL."""
+    url = os.environ.get(
+        "LANTERN_DATABASE_URL",
+        "postgresql+asyncpg://lantern:lantern@localhost:5432/lantern",
+    )
+    sqlalchemy_url = url if "+asyncpg" in url else url.replace("postgresql://", "postgresql+asyncpg://")
+    return sqlalchemy_url, sqlalchemy_url.replace("+asyncpg", "")
+
+
+DB_REQUIRED_HINT = (
+    "Postgres is required: role memory lives in the role_memory table (the memory.md "
+    "files are rendered views). Set LANTERN_DATABASE_URL, run `python pipeline.py "
+    "init-db` once, and see tools/azure-runner/README.md for the local-dev setup.")
+
+
+async def db_connect() -> asyncpg.Connection:
+    try:
+        conn = await asyncpg.connect(db_urls()[1])
+        await conn.fetchval("SELECT 1 FROM role_memory LIMIT 1")
+        return conn
+    except asyncpg.UndefinedTableError:
+        sys.exit(f"role_memory table missing — {DB_REQUIRED_HINT}")
+    except OSError as e:
+        sys.exit(f"cannot reach Postgres ({e}) — {DB_REQUIRED_HINT}")
 
 
 def azure_v1_client() -> AsyncOpenAI:
@@ -135,11 +166,14 @@ def build_instructions(role: str, run_id: str, stage: str) -> str:
         f"\n\n# Your assignment\nYou are the **{role}** agent. Run ID: `{run_id}`. "
         f"Stage directory: `workflow/runs/{run_id}/{stage_dir(stage)}/`.\n"
         "Follow your charter and skills exactly. Before finishing you MUST: "
-        "(1) write the stage report, (2) append learnings to your memory.md, "
-        "(3) update workflow/RUNBOARD.md. These are verified mechanically. "
+        "(1) write the stage report, (2) record at least one durable learning with the "
+        "`append_memory` tool (an explicit 'nothing durable learned this run' note also "
+        "counts). Both are verified mechanically. Do NOT edit memory.md or "
+        "workflow/RUNBOARD.md directly — memory.md is rendered from the database "
+        "(append_memory is the only write path) and the runboard renders itself. "
         "This applies EVEN IF you end BLOCKED: a blocked stage still writes its report "
-        "(Status: BLOCKED, one precise question), still appends memory, still updates the "
-        "runboard. Blocking is not an exit from the contract.\n\n"
+        "(Status: BLOCKED, one precise question) and still records memory. "
+        "Blocking is not an exit from the contract.\n\n"
         "# How to run your turn\n"
         "You are running headless: there is no human to read a plan and no one to reply to "
         "you mid-stage. Your reply text is a return value, not a message. NEVER end a turn "
@@ -164,6 +198,26 @@ def _safe(rel: str) -> Path:
     return p
 
 
+def _writable(rel: str) -> Path:
+    """Like _safe, but rejects files that are rendered views of Postgres.
+
+    Under concurrency these files are shared between runs; a direct write both races
+    other runs and is silently discarded on the next render — so it is an error, not
+    a convenience.
+    """
+    p = _safe(rel)
+    rp = p.relative_to(REPO).as_posix()
+    if rp == "workflow/RUNBOARD.md":
+        raise ValueError(
+            "RUNBOARD.md is rendered from the pipeline database — agents never write it; "
+            "it updates automatically when your stage finishes")
+    if rp.startswith("agents/") and rp.endswith("/memory.md"):
+        raise ValueError(
+            "memory.md is rendered from the role_memory table — record learnings with "
+            "the append_memory tool instead")
+    return p
+
+
 @function_tool
 def read_file(path: str) -> str:
     """Read a file. Path is relative to the Lantern repo root."""
@@ -173,7 +227,7 @@ def read_file(path: str) -> str:
 @function_tool
 def write_file(path: str, content: str) -> str:
     """Create or overwrite a file. Path is relative to the Lantern repo root."""
-    p = _safe(path)
+    p = _writable(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
     return f"wrote {path}"
@@ -181,10 +235,60 @@ def write_file(path: str, content: str) -> str:
 
 @function_tool
 def append_file(path: str, content: str) -> str:
-    """Append to a file (memory entries, runboard rows). Path relative to repo root."""
-    with _safe(path).open("a", encoding="utf-8") as f:
+    """Append to a file (reports, logs). Path relative to repo root."""
+    with _writable(path).open("a", encoding="utf-8") as f:
         f.write(content)
     return f"appended to {path}"
+
+
+# ── role memory: Postgres is the source of truth, memory.md is a rendered view ──
+
+MEMORY_MARKER = ("<!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not "
+                 "edit here; agents use append_memory, humans consolidate upward and "
+                 "re-run `pipeline.py render-memory` -->")
+
+
+async def render_role_memory(conn: asyncpg.Connection, role: str) -> None:
+    """Regenerate agents/<role>/memory.md: human-consolidated base + unconsolidated rows."""
+    f = REPO / "agents" / role / "memory.md"
+    base = f.read_text(encoding="utf-8").split(MEMORY_MARKER)[0].rstrip() if f.exists() else f"# {role} — memory\n"
+    rows = await conn.fetch(
+        """SELECT run_id, stage, entry, created_at FROM role_memory
+           WHERE role = $1 AND NOT consolidated ORDER BY created_at""", role)
+    lines = [base, "", MEMORY_MARKER, ""]
+    for r in rows:
+        origin = r["run_id"] or "manual"
+        entry = "\n  ".join(r["entry"].strip().splitlines())
+        lines.append(f"- {r['created_at']:%Y-%m-%d} [{origin} · {r['stage'] or '-'}] {entry}")
+    f.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def make_append_memory(role: str, run_id: str, stage: str, execution_key: str):
+    """Build the append_memory tool bound to this stage execution's identity.
+
+    The binding is what makes the memory postcondition sound under concurrency: the
+    check asks for a row with THIS execution_key, which no other run can insert.
+    """
+    @function_tool
+    async def append_memory(entry: str) -> str:
+        """Record ONE durable learning in your role memory — the only write path to it.
+
+        Make it dated-quality judgement: concrete, with the why ("Modal flows on mobile
+        Safari need X because Y"), never a session log. If the run taught you nothing
+        durable, record exactly that ("nothing durable learned this run: <one line why>")
+        — required before finishing either way. Call once per distinct learning.
+        """
+        conn = await asyncpg.connect(db_urls()[1])
+        try:
+            await conn.execute(
+                """INSERT INTO role_memory (role, run_id, stage, execution_key, entry)
+                   VALUES ($1, $2, $3, $4, $5)""",
+                role, run_id, stage, execution_key, entry.strip())
+            await render_role_memory(conn, role)
+        finally:
+            await conn.close()
+        return "memory entry recorded"
+    return append_memory
 
 
 @function_tool
@@ -293,17 +397,24 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     return problems
 
 
-def check_postconditions(role: str, run_id: str, stage: str, memory_before: str) -> list[str]:
+async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
+                               stage: str, execution_key: str) -> list[str]:
+    """The two written postconditions: stage report on disk, memory row from THIS execution.
+
+    The memory check queries by execution_key, not by diffing memory.md — the file diff
+    was unsound under concurrency (another run's append to the same role's file satisfied
+    it, so a stage that wrote nothing passed). Proven by test_verification.py.
+    """
     missing = []
     sdir = stage_dir(stage)
     if not (REPO / "workflow/runs" / run_id / sdir / "report.md").exists():
         missing.append(f"stage report workflow/runs/{run_id}/{sdir}/report.md not written")
     missing.extend(check_claimed_artifacts(run_id, sdir))
-    memory_now = (REPO / "agents" / role / "memory.md").read_text(encoding="utf-8")
-    if memory_now == memory_before:
-        missing.append(f"agents/{role}/memory.md not appended (an explicit 'nothing learned' note also counts)")
-    if run_id not in (REPO / "workflow/RUNBOARD.md").read_text(encoding="utf-8"):
-        missing.append(f"workflow/RUNBOARD.md has no row for {run_id}")
+    n = await conn.fetchval("SELECT count(*) FROM role_memory WHERE execution_key = $1", execution_key)
+    if not n:
+        missing.append(
+            f"no role_memory row from this execution — the agent never called append_memory "
+            "(an explicit 'nothing durable learned' entry also counts)")
     return missing
 
 
@@ -324,7 +435,9 @@ async def main() -> None:
     set_default_openai_api(os.environ.get("LANTERN_OPENAI_API", "responses"))
     set_tracing_disabled(True)  # no OpenAI-platform key on the Azure credential set
 
-    memory_before = (REPO / "agents" / role / "memory.md").read_text(encoding="utf-8")
+    conn = await db_connect()
+    execution_key = f"manual:{args.run_id}:{args.stage}:{uuid4().hex[:8]}"
+    await render_role_memory(conn, role)   # instructions must read a fresh view
 
     mcp_servers = []
     if role in BROWSER_ROLES:
@@ -344,14 +457,15 @@ async def main() -> None:
             name=role,
             model=model_for(role, args.stage),
             instructions=build_instructions(role, args.run_id, args.stage),
-            tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export],
+            tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export,
+                   make_append_memory(role, args.run_id, args.stage, execution_key)],
             mcp_servers=mcp_servers,
         )
         result = await Runner.run(
             agent,
             input=f"Begin your {args.stage} session for run {args.run_id}. Do not reply with a "
-                  "plan — start calling tools now and keep working until the three "
-                  "postconditions are written to disk.",
+                  "plan — start calling tools now and keep working until the report is on "
+                  "disk and append_memory has been called.",
             max_turns=120,
         )
         print(result.final_output)
@@ -364,7 +478,8 @@ async def main() -> None:
         for s in mcp_servers:
             await s.cleanup()
 
-    missing = check_postconditions(role, args.run_id, args.stage, memory_before)
+    missing = await check_postconditions(conn, role, args.run_id, args.stage, execution_key)
+    await conn.close()
     if missing:
         print("POSTCONDITIONS FAILED:\n- " + "\n- ".join(missing), file=sys.stderr)
         sys.exit(1)

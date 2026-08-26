@@ -23,7 +23,7 @@ This repo holds three things:
 agents/<role>/          charter.md + skills.md + memory.md per role (harness-agnostic)
 design/                 the design constraint layer ui-ux grounds in: design-system.md + critique-checklist.md
 workflow/PIPELINE.md    the fixed lifecycle: stages, inputs/outputs, gates
-workflow/RUNBOARD.md    live index of runs — orientation step 1, updated every session
+workflow/RUNBOARD.md    live index of runs — RENDERED from Postgres; read for orientation, never hand-edit
 workflow/DEBUG-LIFECYCLE.md   bug intake → repro → fix → regression
 workflow/briefs/        feature briefs from Justin (start from _TEMPLATE.md)
 workflow/runs/          one folder per feature/bug run; all stage artifacts live here
@@ -51,16 +51,21 @@ Every agent session, **before doing anything else**, reads in this order:
 5. The product repo's git state and its own AGENTS.md — full orientation protocol in
    `docs/AGENT-TOOLING.md` §5 (branches, prior commits for this run, open agent PRs)
 
-And **before ending**, it must:
+And **before ending**, it must write two things (both verified mechanically by the
+orchestrator after every stage run):
 
-1. Write its stage report to `workflow/runs/<run-id>/<stage-dir>/report.md`
+1. Its stage report at `workflow/runs/<run-id>/<stage-dir>/report.md`
    (copy `workflow/templates/stage-report.md`)
-2. Append durable learnings to its own `agents/<role>/memory.md` (dated, append-only —
-   never rewrite history; consolidation happens separately, see Memory protocol)
-3. Update the run's row in `workflow/RUNBOARD.md`
+2. At least one durable learning via the **`append_memory` tool** (an explicit
+   "nothing durable learned this run" note also counts). Memory lives in the
+   `role_memory` table; `agents/<role>/memory.md` is a rendered view of it — never
+   edit the file directly (the orchestrator's write tools reject it).
 
-An agent that skips any step breaks the pipeline for everyone downstream. The
-orchestrator (`tools/azure-runner`) verifies all three after every stage run.
+`workflow/RUNBOARD.md` is **derived data, rendered from the pipeline database** —
+agents read it for orientation but never write it; it updates itself on every
+pipeline state change. An agent that skips a postcondition breaks the pipeline for
+everyone downstream — the checks are sound under concurrent runs by design
+(`tools/azure-runner/test_verification.py` is the proof).
 
 ## The pipeline (fixed — do not reorder)
 
@@ -94,10 +99,16 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 
 ## Memory protocol
 
-- `memory.md` is each agent's long-term judgement. Entries are dated, concrete, and
+- Role memory is each agent's long-term judgement. Entries are dated, concrete, and
   say *why* — "2026-08-24: Modal flows on mobile Safari need X because Y", not "be careful with modals".
-- Append-only during runs. Roughly monthly, a human (or a dedicated session) consolidates:
-  merge duplicates, delete entries proven wrong, keep the file under ~200 lines.
+- **Write path: the `append_memory` tool only** — it inserts into the `role_memory`
+  table keyed by the stage execution, which is what makes the postcondition sound when
+  runs are concurrent. `agents/<role>/memory.md` is rendered from the table
+  (`pipeline.py render-memory`); the hand-written base above the render marker is the
+  consolidated layer.
+- Roughly monthly, a human (or a dedicated session) consolidates: merge rendered rows
+  up into the base section, mark them `consolidated = true` in the table, delete
+  entries proven wrong, keep the file under ~200 lines.
 - Never store secrets, customer data, or anything derivable from this repo's code in memory files.
 
 ## Models and providers

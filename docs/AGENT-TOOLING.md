@@ -124,8 +124,9 @@ orients in this order. This is cheap (a minute) and non-negotiable:
 5. **Role-relevant externals** — open agent PRs (`gh pr list --label agent:<role>`),
    and for qa-staging/debug: current PostHog error state.
 
-And the session-end postconditions grow by one (now three, see AGENTS.md): stage
-report, memory append, **runboard row update**.
+Session-end postconditions (see AGENTS.md): stage report on disk, and a memory entry
+recorded via the `append_memory` tool. The runboard is **rendered from the pipeline
+database** — agents read it during orientation but never write it.
 
 ---
 

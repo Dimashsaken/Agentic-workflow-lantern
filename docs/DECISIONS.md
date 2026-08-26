@@ -179,3 +179,12 @@ pre-D10 design — all verified in code, not assumed:
   on.** Running N>1 against the file-based check silently disables the verification that
   the whole pipeline's trustworthiness rests on. This is a blocking prerequisite, not a
   cleanup task.
+
+**Addendum 2026-08-26 — the blocking prerequisite is DONE (session 1).** Role memory
+lives in the `role_memory` table; agents write it only via the `append_memory` tool,
+bound to the stage execution's key, and the postcondition is "this execution inserted
+a row". `RUNBOARD.md` and `agents/<role>/memory.md` are rendered views of Postgres
+(`pipeline.py runboard` / `render-memory`, auto-refreshed on every state change); the
+agent write tools reject direct edits to both. `tools/azure-runner/test_verification.py`
+proves the old file-diff check passed a stage that wrote nothing under concurrency and
+the new check fails it. Sandboxing (session 2) is now unblocked.

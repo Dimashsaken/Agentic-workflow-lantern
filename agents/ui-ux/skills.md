@@ -156,12 +156,13 @@ PNG each, update `handoff.json` statuses (`chosen` / `rejected`).
 ## 6. Session end — including when you are BLOCKED
 
 Report per template, including the divergence scores, critique-iteration counts, and
-unresolved checklist items. Memory: append any pattern decision (chosen or rejected +
-why) and any critique item that kept recurring — recurring items graduate into
-`design/critique-checklist.md`.
+unresolved checklist items. Memory (via the `append_memory` tool): record any pattern
+decision (chosen or rejected + why) and any critique item that kept recurring —
+recurring items graduate into `design/critique-checklist.md`.
 
-**Blocking is not an exit from the contract.** If you stop early, you still write all
-three: the report with `Status: BLOCKED` and exactly one precise question, the memory
-append (what blocked you and why — that is a durable learning), and the runboard row
-showing the run waiting. A blocked stage that writes nothing leaves the next session
-with no idea what happened, and the orchestrator will fail the stage anyway.
+**Blocking is not an exit from the contract.** If you stop early, you still write
+both: the report with `Status: BLOCKED` and exactly one precise question, and the
+memory entry (what blocked you and why — that is a durable learning). The runboard
+renders itself from the pipeline database — you never write it. A blocked stage that
+writes nothing leaves the next session with no idea what happened, and the
+orchestrator will fail the stage anyway.

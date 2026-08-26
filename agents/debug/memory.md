@@ -11,3 +11,6 @@ customer data. Target: under ~200 lines after consolidation.
   reading code — it shrinks the suspect surface from the whole codebase to a handful
   of commits.
 - 2026-08-24 (seed): A fix without a formerly-failing test is a hypothesis, not a fix.
+
+<!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
+

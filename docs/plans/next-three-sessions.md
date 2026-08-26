@@ -12,6 +12,17 @@ Context every session should load first: `AGENTS.md`, `docs/DECISIONS.md` (D8, D
 
 ## Session 1 — Make the pipeline's verification sound
 
+**Status: DONE 2026-08-26.** `role_memory` table + `append_memory` tool (bound to the
+execution key), RUNBOARD.md and memory.md are rendered views the agent write tools
+reject, `test_verification.py` proves old-check-unsound/new-check-sound, and the live
+re-run of `01-ui-ux.diverge` passed end-to-end against Azure under the new contract
+(the agent recorded memory via the tool, never touched the runboard). Also gained:
+`pipeline.py runboard | render-memory | import-run`, both file-era runs imported into
+the DB, and a no-admin local Postgres recipe for Windows dev (azure-runner README).
+One deviation from the prompt: agents append through a *tool*, and consolidation
+merges rendered rows upward in the file rather than regenerating the whole file —
+existing hand-written memory survives as the base layer.
+
 > **Prompt:**
 >
 > Read `AGENTS.md`, `docs/DECISIONS.md` D10, and `docs/ORCHESTRATION.md` "The execution
