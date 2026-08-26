@@ -32,10 +32,11 @@ from agents.extensions.memory import SQLAlchemySession
 
 from orchestrator import (
     BROWSER_ROLES, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
-    append_file, azure_v1_client, build_consult_instructions, build_instructions,
-    check_postconditions, collect_export, consult_roles, db_urls, list_dir,
-    list_exports, make_append_memory, model_for, paper_mcp_server, paper_reachable,
-    playwright_mcp_server, read_file, render_role_memory, write_file,
+    USAGE_MARKER, append_file, azure_v1_client, build_consult_instructions,
+    build_instructions, check_postconditions, collect_export, consult_roles, db_urls,
+    list_dir, list_exports, make_append_memory, model_for, paper_mcp_server,
+    paper_reachable, playwright_mcp_server, read_file, render_role_memory, usage_dict,
+    write_file,
 )
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -61,6 +62,38 @@ SANDBOX_ENV_ALLOWLIST = (
     "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_API_VERSION",
     "LANTERN_MODEL_REASONING", "LANTERN_MODEL_FAST", "LANTERN_OPENAI_API",
 )
+
+# ── QA stages (P0.1): target credentials + video ─────────────────────────────
+# Which stages are QA is derived from ROLE_FOR_STAGE (orchestrator.is_qa_video_stage)
+# — one source of truth, so the debug lifecycle's regression stage is covered the day
+# it gets a dispatch path, with no parallel stage-key set to drift. Video recording
+# itself is configured by the orchestrator (playwright_mcp_server appends --config/
+# --output-dir), so it works identically in-process, in sandboxes, and manually;
+# the video postcondition lives in check_postconditions for the same reason.
+QA_TARGET_PREFIX = {"qa-dev": "LANTERN_QA_DEV", "qa-staging": "LANTERN_QA_STAGING"}
+# Media uploads happen HOST-side after the container exits — AWS credentials never
+# enter a sandbox (D10's scoped-credentials rule; the instance role stays host-only).
+ARTIFACT_BUCKET = os.environ.get("LANTERN_ARTIFACT_BUCKET", "")
+
+
+def qa_stage_env(stage: str) -> dict[str, str]:
+    """Container env additions for QA stages: target creds + the bucket NAME.
+
+    Host vars come from SSM (/lantern/qa/{dev,staging}/*); in-container names are
+    uniform (QA_BASE_URL/QA_USER/QA_PASS) so role skills don't fork by stage. The
+    bucket name is not a credential — it lets the agent pre-link the deterministic
+    S3 URLs (PIPELINE.md naming) in its report before the host uploads.
+    """
+    prefix = QA_TARGET_PREFIX.get(ROLE_FOR_STAGE.get(stage, ""))
+    if not prefix:
+        return {}
+    env = {}
+    for inner, suffix in (("QA_BASE_URL", "_BASE_URL"), ("QA_USER", "_USER"), ("QA_PASS", "_PASS")):
+        if os.environ.get(prefix + suffix):
+            env[inner] = os.environ[prefix + suffix]
+    if ARTIFACT_BUCKET:
+        env["LANTERN_ARTIFACT_BUCKET"] = ARTIFACT_BUCKET
+    return env
 
 
 def sandbox_db_url() -> str:
@@ -98,6 +131,177 @@ async def log_event(conn, run_id: str | None, actor: str, type_: str, data: dict
     )
 
 
+# ── token ledger (P0.4) ──────────────────────────────────────────────────────
+
+async def record_usage(conn, exec_id: int, usage: dict, model: str | None = None) -> None:
+    """Write one execution's token counts onto its stage_executions row (host-side)."""
+    if not usage:
+        return
+    await conn.execute(
+        """UPDATE stage_executions
+           SET model = coalesce($1, model), requests = $2, input_tokens = $3,
+               cached_input_tokens = $4, output_tokens = $5, total_tokens = $6
+           WHERE id = $7""",
+        usage.get("model", model), usage.get("requests"), usage.get("input_tokens"),
+        usage.get("cached_input_tokens"), usage.get("output_tokens"),
+        usage.get("total_tokens"), exec_id)
+
+
+# Per-key upper bounds match the column types: requests is int4, tokens are bigint.
+_USAGE_INT_BOUNDS = {"requests": 2**31 - 1, "input_tokens": 10**12,
+                     "cached_input_tokens": 10**12, "output_tokens": 10**12,
+                     "total_tokens": 10**12}
+
+
+def parse_usage_line(container_output: str) -> dict:
+    """Extract and VALIDATE the orchestrator's LANTERN_USAGE line from container output.
+
+    The line shares stdout with agent-controlled text, so nothing here is trusted:
+    ints only (bools rejected), sane bounds, model as a short string — a fabricated
+    or malformed line degrades to an empty dict, never to a DataError mid-bookkeeping.
+    """
+    for line in reversed(container_output.splitlines()):
+        if not line.startswith(USAGE_MARKER):
+            continue
+        try:
+            raw = json.loads(line[len(USAGE_MARKER):])
+        except ValueError:
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        clean: dict = {}
+        for k, bound in _USAGE_INT_BOUNDS.items():
+            v = raw.get(k)
+            if type(v) is int and 0 <= v <= bound:
+                clean[k] = v
+        if isinstance(raw.get("model"), str):
+            clean["model"] = raw["model"][:100]
+        return clean
+    return {}
+
+
+def _price_rates(model: str | None) -> tuple[float, float, float]:
+    """($/1M input, $/1M cached input, $/1M output) for a deployment.
+
+    LANTERN_PRICE_JSON ('{"sol": {"in": 4, "cached": 1, "out": 20}, ...}') gives
+    per-deployment rates — the fleet deliberately routes across two price classes,
+    so one flat rate misprices the alarms by the models' ratio. The flat
+    LANTERN_PRICE_*_PER_M vars are the fallback. All PROVISIONAL until real Azure
+    invoice lines confirm them; token counts are exact, only dollars are estimates.
+    """
+    flat = (float(os.environ.get("LANTERN_PRICE_IN_PER_M", "4")),
+            float(os.environ.get("LANTERN_PRICE_CACHED_IN_PER_M", "1")),
+            float(os.environ.get("LANTERN_PRICE_OUT_PER_M", "20")))
+    try:
+        table = json.loads(os.environ.get("LANTERN_PRICE_JSON", "") or "{}")
+        r = table.get(model or "") if isinstance(table, dict) else None
+        if isinstance(r, dict):
+            return (float(r.get("in", flat[0])), float(r.get("cached", flat[1])),
+                    float(r.get("out", flat[2])))
+    except (ValueError, TypeError):
+        pass
+    return flat
+
+
+def est_cost_usd(input_tokens, cached_input_tokens, output_tokens, model: str | None = None) -> float:
+    """Estimated spend for one bucket of tokens (int-coerced: SQL sums arrive as Decimal)."""
+    p_in, p_cached, p_out = _price_rates(model)
+    cached = int(cached_input_tokens or 0)
+    uncached = max(0, int(input_tokens or 0) - cached)
+    return (uncached * p_in + cached * p_cached + int(output_tokens or 0) * p_out) / 1_000_000
+
+
+def est_cost_rows(rows) -> float:
+    """Total est. cost of per-model aggregate rows (model, inp, cached, outp)."""
+    return sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"]) for r in rows)
+
+
+# ── media uploads (P0.1): host-side, after the container exits ───────────────
+
+async def insert_artifact(conn, run_id: str, stage: str, kind: str, uri: str,
+                          metadata: dict | None = None) -> None:
+    await conn.execute(
+        "INSERT INTO artifacts (run_id, stage, kind, uri, metadata) VALUES ($1, $2, $3, $4, $5)",
+        run_id, stage, kind, uri, json.dumps(metadata) if metadata else None)
+
+
+async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str) -> None:
+    """Ship THIS attempt's videos to the artifact bucket, then delete them locally.
+
+    Runs on the HOST after postconditions pass — sandboxes have no AWS credentials.
+    Contract: NOTHING here may fail a stage that already passed — every failure
+    path degrades to a media_upload_failed event (the files stay on disk).
+
+    Scoped to the current attempt (same mtime floor as the video postcondition):
+    a failed earlier attempt's leftover .webm must not be renumbered into this
+    attempt's evidence. Keys are prefixed `attempt-<k>/` so a retry after a gate
+    rejection never overwrites approved-or-rejected footage, and each artifacts
+    row stays unique. Only .webm (browser recordings) is handled — Paper MP4
+    walkthroughs are referenced by handoff.json/the gate payload as local files
+    and get their own flow later; deleting them here would break the ux_signoff
+    payload (found in review).
+
+    media-manifest.json is REGENERATED from the artifacts table — never merged
+    from the on-disk file, which every sandbox in the run can write: an
+    agent-seeded manifest must not survive as host evidence.
+    """
+    try:
+        started = await conn.fetchval(
+            "SELECT started_at FROM stage_executions WHERE idempotency_key = $1", execution_key)
+        floor_ts = (started.timestamp() - 60) if started else 0
+        tail = execution_key.rsplit(":", 1)[-1]
+        attempt = int(tail) if tail.isdigit() else 1
+        stage_path = REPO / "workflow" / "runs" / run_id / sdir
+        media = sorted((p for p in stage_path.rglob("*.webm") if p.is_file()
+                        and p.stat().st_size > 0 and p.stat().st_mtime >= floor_ts),
+                       key=lambda p: p.stat().st_mtime)
+        if not media:
+            return
+        if not ARTIFACT_BUCKET:
+            await log_event(conn, run_id, "orchestrator", "media_upload_skipped",
+                            {"stage": sdir, "files": [p.name for p in media],
+                             "reason": "LANTERN_ARTIFACT_BUCKET not set"})
+            return
+        uploaded = 0
+        for session, f in enumerate(media, start=1):
+            name = f"{run_id}--{sdir}--session-{session}.webm"
+            uri = f"s3://{ARTIFACT_BUCKET}/lantern/{run_id}/{sdir}/attempt-{attempt}/{name}"
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "aws", "s3", "cp", str(f), uri,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+                out, _ = await proc.communicate()
+                err = None if proc.returncode == 0 else out.decode(errors="replace")[-300:]
+            except OSError as e:          # aws CLI missing / not on the unit's PATH
+                err = str(e)
+            if err is not None:
+                await log_event(conn, run_id, "orchestrator", "media_upload_failed",
+                                {"stage": sdir, "file": f.name, "error": err})
+                continue
+            await insert_artifact(conn, run_id, sdir, "qa_video", uri,
+                                  {"local_name": f.name, "bytes": f.stat().st_size,
+                                   "attempt": attempt, "session": session})
+            f.unlink()   # .gitignore also excludes *.webm — belt and braces
+            uploaded += 1
+        rows = await conn.fetch(
+            """SELECT uri, metadata, created_at FROM artifacts
+               WHERE run_id = $1 AND stage = $2 AND kind = 'qa_video' ORDER BY created_at""",
+            run_id, sdir)
+        (stage_path / "media-manifest.json").write_text(json.dumps({"uploaded": [
+            {"uri": r["uri"], **json.loads(r["metadata"] or "{}"),
+             "at": r["created_at"].isoformat(timespec="seconds")} for r in rows
+        ]}, indent=2) + "\n", encoding="utf-8")
+        if uploaded:
+            await log_event(conn, run_id, "orchestrator", "media_uploaded",
+                            {"stage": sdir, "count": uploaded})
+    except Exception as e:  # noqa: BLE001 — uploads must never fail a passed stage
+        try:
+            await log_event(conn, run_id, "orchestrator", "media_upload_failed",
+                            {"stage": sdir, "error": str(e)[:300]})
+        except Exception:  # noqa: BLE001
+            print(f"[{run_id}] media upload bookkeeping failed: {e}", file=sys.stderr)
+
+
 # ── stage execution ──────────────────────────────────────────────────────────
 
 async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
@@ -121,7 +325,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
 
     mcp_servers = []
     if role in BROWSER_ROLES:
-        mcp_servers.append(playwright_mcp_server())
+        mcp_servers.append(playwright_mcp_server(run_id, stage))
     if stage in PAPER_STAGES:
         if not await paper_reachable():
             raise RuntimeError(PAPER_PREFLIGHT_HINT)
@@ -150,15 +354,18 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         for s in mcp_servers:
             await s.cleanup()
 
+    # Ledger before the postcondition verdict: tokens are spent either way (P0.4).
+    # Known gap, both paths: a Runner.run exception (max_turns, API error) yields no
+    # result/usage line, so that spend goes unmetered — `usage` reports the count.
+    await record_usage(conn, exec_id, usage_dict(result), model_for(role, stage))
+
     missing = await check_postconditions(conn, role, run_id, stage, execution_key)
     if missing:
         raise RuntimeError("postconditions failed: " + "; ".join(missing))
+    await upload_stage_media(conn, run_id, sdir, execution_key)
 
     report = f"workflow/runs/{run_id}/{sdir}/report.md"
-    await conn.execute(
-        "INSERT INTO artifacts (run_id, stage, kind, uri) VALUES ($1, $2, 'report', $3)",
-        run_id, sdir, report,
-    )
+    await insert_artifact(conn, run_id, sdir, "report", report)
     if stage == "01-ui-ux.design":
         await register_design_artifacts(conn, run_id, sdir)
     await conn.execute(
@@ -208,6 +415,10 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     for var in SANDBOX_ENV_ALLOWLIST:
         if os.environ.get(var):
             cmd += ["-e", f"{var}={os.environ[var]}"]
+    # Per-stage additions (D12: secrets cross only when the stage needs them).
+    # Video recording needs no env here — orchestrator.py configures the MCP itself.
+    for inner, value in qa_stage_env(stage).items():
+        cmd += ["-e", f"{inner}={value}"]
     cmd += [SANDBOX_IMAGE, run_id, stage]
 
     proc = await asyncio.create_subprocess_exec(
@@ -219,20 +430,26 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
         await kill.wait()
         await proc.communicate()
         raise RuntimeError(f"sandbox hit the {STAGE_TIMEOUT_MIN}-minute wall clock and was killed")
-    tail = out.decode(errors="replace")[-4000:]
+    full = out.decode(errors="replace")
+    tail = full[-4000:]
+    # Ledger first — tokens are spent whether or not the stage passed (P0.4). The
+    # usage line comes from container stdout, so this write stays host-side even
+    # after sandboxes lose stage_executions access (plan item C2.0).
+    await record_usage(conn, exec_id, parse_usage_line(full))
     if proc.returncode != 0:
         raise RuntimeError(f"sandbox exited {proc.returncode}: {tail[-1500:]}")
 
+    # The video-evidence gate for QA stages lives inside check_postconditions
+    # (mtime-scoped to this attempt), so it holds at all three verdict sites:
+    # container self-check, this host re-check, and the in-process path.
     missing = await check_postconditions(conn, role, run_id, stage, execution_key)
     if missing:
         raise RuntimeError("postconditions failed (host re-check): " + "; ".join(missing))
     await render_role_memory(conn, role)   # keep the host's rendered view fresh
+    await upload_stage_media(conn, run_id, sdir, execution_key)
 
     report = f"workflow/runs/{run_id}/{sdir}/report.md"
-    await conn.execute(
-        "INSERT INTO artifacts (run_id, stage, kind, uri) VALUES ($1, $2, 'report', $3)",
-        run_id, sdir, report,
-    )
+    await insert_artifact(conn, run_id, sdir, "report", report)
     if stage == "01-ui-ux.design":
         await register_design_artifacts(conn, run_id, sdir)
     await conn.execute(
@@ -267,9 +484,7 @@ async def register_design_artifacts(conn, run_id: str, sdir: str) -> None:
         for png in opt.get("pngs", []):
             rows.append((png, "design_png", {"option": opt.get("name"), "status": opt.get("status")}))
     for uri, kind, meta in rows:
-        await conn.execute(
-            "INSERT INTO artifacts (run_id, stage, kind, uri, metadata) VALUES ($1, $2, $3, $4, $5)",
-            run_id, sdir, kind, uri, json.dumps(meta) if meta else None)
+        await insert_artifact(conn, run_id, sdir, kind, uri, meta)
 
 
 def _run_title(run_id: str) -> str:
@@ -610,7 +825,8 @@ async def cmd_ask(role: str, prompt: str, session_name: str, by: str,
             result = await Runner.run(agent, input=text, session=session, max_turns=40)
             print(f"\n[{role} · {model_for(role)}]\n{result.final_output}\n")
             await log_event(conn, None, f"human:{by}", "consult",
-                            {"role": role, "session": session_name, "prompt": text[:300]})
+                            {"role": role, "session": session_name, "prompt": text[:300],
+                             "usage": usage_dict(result)})   # consults burn credits too
 
         await turn(prompt)
         while interactive:
@@ -685,6 +901,122 @@ async def cmd_status() -> None:
     await conn.close()
 
 
+def _post_alarm(text: str) -> None:
+    """Deliver an alarm line: webhook if configured (Slack-compatible payload),
+    stdout either way (systemd journal keeps it)."""
+    print(text)
+    hook = os.environ.get("LANTERN_ALARM_WEBHOOK")
+    if not hook:
+        return
+    import urllib.request
+    req = urllib.request.Request(
+        hook, data=json.dumps({"text": text}).encode(),
+        headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=10).read()
+    except OSError as e:
+        print(f"alarm webhook failed: {e}", file=sys.stderr)
+
+
+# Aggregate fragment shared by every ledger query. ::bigint matters: Postgres
+# sum(bigint) is numeric, which asyncpg decodes as Decimal — and Decimal * float
+# rates would TypeError the moment real data exists. Grouped by model because the
+# fleet routes across two price classes (see _price_rates).
+USAGE_COLS = """model,
+           coalesce(sum(input_tokens), 0)::bigint        AS inp,
+           coalesce(sum(cached_input_tokens), 0)::bigint AS cached,
+           coalesce(sum(output_tokens), 0)::bigint       AS outp,
+           count(*)::bigint                              AS n,
+           count(*) FILTER (WHERE total_tokens IS NULL)::bigint AS unmetered"""
+
+
+async def cmd_usage(days: int) -> None:
+    """Token + estimated-spend report from the ledger (P0.4)."""
+    conn = await connect()
+    daily = await conn.fetch(
+        f"""SELECT date_trunc('day', started_at)::date AS day, {USAGE_COLS}
+            FROM stage_executions
+            WHERE started_at >= now() - make_interval(days => $1)
+            GROUP BY 1, model ORDER BY 1 DESC""", days)
+    print(f"last {days} days (rates are estimates until Azure invoice lines confirm them):")
+    print(f"{'day':<12}{'model':<12}{'stages':>7}{'input':>14}{'cached':>12}{'output':>12}{'est $':>10}")
+    unmetered = 0
+    for r in daily:
+        cost = est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+        unmetered += r["unmetered"]
+        print(f"{r['day']:%Y-%m-%d}  {(r['model'] or '?'):<12}{r['n']:>7}"
+              f"{r['inp']:>14,}{r['cached']:>12,}{r['outp']:>12,}{cost:>10.2f}")
+    if not daily:
+        print("  (no executions yet)")
+    if unmetered:
+        print(f"  NOTE: {unmetered} execution(s) have no token counts (crashed/killed "
+              "before reporting) — real spend is higher than shown")
+    top = await conn.fetch(
+        f"""SELECT run_id, {USAGE_COLS}
+            FROM stage_executions
+            WHERE started_at >= now() - make_interval(days => $1)
+            GROUP BY run_id, model ORDER BY coalesce(sum(total_tokens), 0) DESC LIMIT 20""", days)
+    if top:
+        print("\ntop runs:")
+        for r in top:
+            cost = est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+            print(f"  {r['run_id']:<40}{(r['model'] or '?'):<12}{r['inp']:>14,}{r['outp']:>12,}{cost:>10.2f}")
+    await conn.close()
+
+
+async def cmd_usage_check() -> None:
+    """The spend tripwires (plan §5): run hourly from lantern-usage-check.timer.
+
+    Two ceilings, two alarms — both dedupe through the events table so a crossed
+    threshold alerts once (daily for the rate alarm, once ever per pool threshold):
+      1. rate:  today's est spend > LANTERN_DAILY_SPEND_ALARM_USD (default 1200)
+      2. pool:  cumulative est spend (+ LANTERN_POOL_SPENT_OFFSET_USD for pre-ledger
+                burn) crosses 25/50/75% of LANTERN_CREDIT_POOL_USD (default 25000)
+
+    Known undercount, on the record: executions that crash or get docker-killed
+    before the usage line prints leave NULL token columns — `usage` surfaces the
+    count, and the alarms fire on what IS metered.
+    """
+    conn = await connect()
+    today_rows = await conn.fetch(
+        f"""SELECT {USAGE_COLS} FROM stage_executions
+            WHERE started_at >= date_trunc('day', now()) GROUP BY model""")
+    today_cost = est_cost_rows(today_rows)
+    daily_limit = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "1200"))
+    if today_cost > daily_limit:
+        already = await conn.fetchval(
+            """SELECT 1 FROM events WHERE actor = 'usage-check' AND type = 'spend_alarm'
+               AND at >= date_trunc('day', now())""")
+        if not already:
+            # plain ASCII (see cmd_status note): cp1252 consoles choke on fancy glyphs
+            _post_alarm(f":rotating_light: Lantern model spend today ~${today_cost:,.0f} "
+                        f"(> ${daily_limit:,.0f}/day tripwire). Check `pipeline.py usage` "
+                        "for the run responsible — unattended retries are the known blow-up mode.")
+            await log_event(conn, None, "usage-check", "spend_alarm",
+                            {"est_usd": round(today_cost, 2), "limit": daily_limit})
+
+    alltime_rows = await conn.fetch(
+        f"SELECT {USAGE_COLS} FROM stage_executions GROUP BY model")
+    pool = float(os.environ.get("LANTERN_CREDIT_POOL_USD", "25000"))
+    offset = float(os.environ.get("LANTERN_POOL_SPENT_OFFSET_USD", "0"))
+    drawn = est_cost_rows(alltime_rows) + offset
+    for pct in (75, 50, 25):
+        if drawn >= pool * pct / 100:
+            already = await conn.fetchval(
+                """SELECT 1 FROM events WHERE actor = 'usage-check' AND type = 'pool_alarm'
+                   AND (data->>'threshold')::int = $1""", pct)
+            if not already:
+                _post_alarm(f":warning: Lantern has drawn ~${drawn:,.0f} of the "
+                            f"${pool:,.0f} Azure credit pool ({pct}% threshold). "
+                            "Per the plan: decide post-credit budget vs throttle "
+                            "before the 75% mark — auto-coding is the spend to cut first.")
+                await log_event(conn, None, "usage-check", "pool_alarm",
+                                {"threshold": pct, "est_drawn_usd": round(drawn, 2)})
+            break   # highest crossed threshold only; lower ones are implied
+    print(f"usage-check: today ~${today_cost:,.2f}, pool drawn ~${drawn:,.0f}/{pool:,.0f}")
+    await conn.close()
+
+
 def main() -> None:
     set_default_openai_client(azure_v1_client())
     # Responses API — chat_completions drops image tool outputs, blinding vision
@@ -715,6 +1047,8 @@ def main() -> None:
     p.add_argument("-i", "--interactive", action="store_true", help="keep prompting in a loop")
     p.add_argument("--no-browser", action="store_true", help="skip the Playwright MCP for browser roles")
     sub.add_parser("runboard")
+    p = sub.add_parser("usage"); p.add_argument("--days", type=int, default=7)
+    sub.add_parser("usage-check")
     p = sub.add_parser("render-memory"); p.add_argument("--role")
     p = sub.add_parser("import-run"); p.add_argument("run_id")
     p.add_argument("--by", default="justin"); p.add_argument("--stage", default="01-ui-ux.design")
@@ -733,6 +1067,8 @@ def main() -> None:
         case "ask":     asyncio.run(cmd_ask(a.role, a.prompt, a.session, a.by,
                                             a.new, a.interactive, a.no_browser))
         case "runboard":      asyncio.run(cmd_runboard())
+        case "usage":         asyncio.run(cmd_usage(a.days))
+        case "usage-check":   asyncio.run(cmd_usage_check())
         case "render-memory": asyncio.run(cmd_render_memory(a.role))
         case "import-run":    asyncio.run(cmd_import_run(a.run_id, a.by, a.stage, a.status, a.gate))
 

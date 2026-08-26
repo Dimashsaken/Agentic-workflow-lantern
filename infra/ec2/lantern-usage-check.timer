@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Lantern spend tripwires hourly — a daily alarm delivered weekly is not a tripwire
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

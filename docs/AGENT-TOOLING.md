@@ -137,10 +137,10 @@ database** — agents read it during orientation but never write it.
 | ui-ux | `paper` (workstation only), `playwright`, qa-recorder | — | run folder, `proto/*` branches |
 | pre-coding | `github`, git (read), product repo clone | github bot token | run folder only |
 | coding (developer) | developer's own gh/git + product tooling | human's own | `feat/*`, `fix/*` |
-| qa-dev | `playwright`, qa-recorder, `github` (read + PR comments), S3 | github, `/lantern/qa/dev/*` | run folder, PR comments, regression specs on the feature branch |
+| qa-dev | `playwright` (video-recording, orchestrator-configured), qa-recorder, `github` (read + PR comments) | github, `/lantern/qa/dev/*` (as `QA_*`) | run folder, PR comments, regression specs on the feature branch |
 | post-coding | git diff, `github` (PR review comments) | github | run folder, PR comments |
 | security | git, `npm audit`, `github` (read), WebSearch for advisories | github | run folder only (vuln details follow charter confidentiality) |
-| qa-staging | `playwright`, qa-recorder, `posthog`, S3, `github` (read) | github, posthog, `/lantern/qa/staging/*` | run folder, PR comments |
+| qa-staging | `playwright` (video-recording, orchestrator-configured), qa-recorder, `posthog`, `github` (read) | github, posthog, `/lantern/qa/staging/*` (as `QA_*`) | run folder, PR comments |
 | debug | `posthog`, CloudWatch logs (read), git, `github`, qa-recorder | github, posthog | bug run folder, `fix/*` (trivial fixes only, per charter) |
 
 Rule of thumb behind the matrix: **review-type agents get read + comment, never

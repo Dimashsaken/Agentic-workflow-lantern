@@ -110,6 +110,11 @@ verify PostHog events fire as specced.
 - **Every stage feeds memory.** A bug that QA missed in dev but staging caught means
   `qa-dev` appends a memory entry. A security finding that pre-coding should have
   predicted means `pre-coding` appends one. This is how the pipeline gets better.
-- **Videos:** any stage that drives a browser records video. Naming:
-  `<run-id>--<stage>--<session-n>.webm`, uploaded to the artifact bucket, linked from
-  the report with a one-line description of what the video shows.
+- **Videos:** any stage that drives a browser records video automatically — the
+  browser MCP launches with recording on and files land in `<stage-dir>/media/`.
+  After the stage passes its postconditions the orchestrator uploads the attempt's
+  videos to the artifact bucket as `<run-id>--<stage>--session-<n>.webm` (recording
+  order) under an `attempt-<k>/` prefix — retries never overwrite earlier footage —
+  and writes `media-manifest.json` beside the report; QA stages fail without a video
+  from the current attempt. Reports link the deterministic bucket URL with a
+  one-line description of what the video shows.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Lantern spend tripwires (P0.4): daily-rate + credit-pool alarms from the token ledger
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner
+# Env (DB URL, LANTERN_ALARM_WEBHOOK, price/pool overrides) comes from the same
+# tools/azure-runner/.env the daemon loads. Rates are provisional — see README.
+ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/python pipeline.py usage-check

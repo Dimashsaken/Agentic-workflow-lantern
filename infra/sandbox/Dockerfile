@@ -12,9 +12,10 @@
 # Nothing secret is baked in: credentials arrive as -e vars from the dispatcher's
 # allowlist, scoped per stage execution.
 #
-# v1 scope: stages that need Python + a browser (01-ui-ux.diverge, 02-pre-coding,
-# 05/06 review stages). qa stages additionally need tools/qa-recorder's node_modules
-# baked — add that when a run first reaches stage 4.
+# v2 scope (P0.1): v1 (Python + browser stages) PLUS the QA stages — tools/qa-recorder
+# deps and the video-recording MCP config are baked so stage 4/7 runs record video with
+# zero downloads at stage start. AWS credentials are deliberately NOT here and never
+# cross the env allowlist: the dispatcher uploads media to S3 after the container exits.
 
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive PIP_ROOT_USER_ACTION=ignore
@@ -38,6 +39,29 @@ RUN npm install -g @playwright/mcp playwright \
 COPY tools/azure-runner/requirements.txt /opt/lantern/requirements.txt
 RUN python3.12 -m venv /opt/lantern/venv \
     && /opt/lantern/venv/bin/pip install --quiet -r /opt/lantern/requirements.txt
+
+# QA stages (04-qa-dev, 07-qa-staging, debug regression): qa-recorder deps resolved at
+# build time; the entrypoint links them into the per-run repo copy (rsync excludes
+# node_modules). Placed AFTER the pip layer so a package.json bump never invalidates
+# the venv cache. `npx playwright install chromium` fetches the browser revision
+# qa-recorder's OWN playwright version wants into the shared /ms-playwright — it may
+# coexist with the MCP's revision; disk is the only cost. The chmod is targeted: a
+# blanket `chmod -R /ms-playwright` here would overlayfs-copy-up the entire earlier
+# browser layer (~hundreds of MB duplicated); only revision dirs this step ADDED
+# (newer than the marker file) need their bits fixed.
+# (Video recording config is NOT baked: the orchestrator points the MCP at the
+# checked-in infra/sandbox/qa-mcp-config.json inside the repo copy.)
+# The marker is touched INSIDE this RUN — a COPYed file keeps its host mtime, which
+# predates the earlier browser layer's dirs on cache-cold builds and would sweep
+# (and overlayfs-duplicate) the whole tree.
+COPY tools/qa-recorder/package.json /opt/lantern/qa-recorder/package.json
+RUN touch /tmp/.qa-build-marker \
+    && cd /opt/lantern/qa-recorder && npm install \
+    && npx playwright install chromium \
+    && chmod -R a+rX /opt/lantern/qa-recorder \
+    && find /ms-playwright -mindepth 1 -maxdepth 1 -newer /tmp/.qa-build-marker \
+         -exec chmod -R a+rX {} + \
+    && rm /tmp/.qa-build-marker
 
 # plain COPY + chmod: --chmod needs BuildKit, which docker.io's legacy builder lacks
 COPY infra/sandbox/entrypoint.sh /opt/lantern/entrypoint.sh

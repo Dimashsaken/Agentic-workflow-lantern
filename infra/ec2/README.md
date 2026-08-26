@@ -67,10 +67,15 @@ only.
 s3://<bucket>/lantern/<run-id>/<stage>/<file>.webm
 ```
 
-Upload: `aws s3 cp videos/<name>.webm s3://<bucket>/lantern/<run-id>/<stage>/`.
-Reports link the S3 URL (or a presigned/CloudFront URL if reviewers lack AWS access).
-Lifecycle rule: expire run artifacts after 90 days; postmortem-linked videos are
-copied to `/lantern/permanent/` first.
+**Uploads are host-side (P0.1):** after a sandbox exits and postconditions pass, the
+dispatcher uploads every `.webm` in the stage dir to the layout above (`aws` CLI via
+the instance role — AWS credentials never cross into a sandbox), records an
+`artifacts` row per file, writes `media-manifest.json` next to the report (the MCP
+names video files itself, so the manifest is the name→URL evidence), and deletes the
+local copies. Set `LANTERN_ARTIFACT_BUCKET` in the daemon env. Reports link the S3
+URL (or a presigned/CloudFront URL if reviewers lack AWS access). Lifecycle rule:
+expire run artifacts after 90 days; postmortem-linked videos are copied to
+`/lantern/permanent/` first.
 
 ## The execution plane — sandbox per stage (D10/D12)
 
@@ -98,7 +103,22 @@ LANTERN_STAGE_TIMEOUT_MIN=45       # wall clock per stage, then docker kill
 LANTERN_SANDBOX_CPUS=1.5  LANTERN_SANDBOX_MEMORY=2500m
 LANTERN_SANDBOX_IMAGE=lantern-sandbox
 LANTERN_SANDBOX_DATABASE_URL=      # default: LANTERN_DATABASE_URL with host.docker.internal
+LANTERN_ARTIFACT_BUCKET=           # media uploads after each stage (see Artifact bucket)
+LANTERN_QA_DEV_BASE_URL=           # + _USER/_PASS from SSM /lantern/qa/dev/* — QA stages
+LANTERN_QA_STAGING_BASE_URL=       # + _USER/_PASS from /lantern/qa/staging/*
 ```
+
+**QA stages (image v2, P0.1):** the sandbox image bakes `tools/qa-recorder`'s deps;
+video recording is configured by the ORCHESTRATOR itself — for QA stages it launches
+the Playwright MCP with `--config infra/sandbox/qa-mcp-config.json` (the checked-in
+`saveVideo` setting, which has no CLI flag) and `--output-dir` at the run's mounted
+`media/` folder, so every browser session leaves a `.webm` on the host in every
+executor (sandbox, in-process, manual). The video postcondition (a fresh, non-empty
+`.webm` from the current attempt) is enforced in `check_postconditions` at all three
+verdict sites; uploads happen after it passes (above). The QA target must be
+reachable from the docker bridge network. After any image change, re-run
+`prove_isolation.sh` and one smoke QA stage to confirm a video actually lands —
+the MCP's config keys are upstream's, not ours.
 
 **Sizing (2026-08-26, this t3.large — 2 vCPU / 8 GB, sharing Postgres + Mission
 Control):** the cap is **2**, not the 3 the plan hoped for. What was actually
@@ -145,6 +165,22 @@ The EC2 daemon claims only `ec2`-affinity stages. The Paper-bound `01-ui-ux.desi
 execution needs a second daemon on the design workstation — setup in
 `tools/azure-runner/README.md` ("Runner affinity"); it is a plain terminal process
 there, not a systemd unit.
+
+## Spend tripwires (P0.4)
+
+The token ledger lives on `stage_executions`; `pipeline.py usage` reports it. The
+hourly timer runs the two alarms from the plan (§5): daily-rate
+(`LANTERN_DAILY_SPEND_ALARM_USD`, default 1200) and credit-pool drawdown
+(25/50/75% of `LANTERN_CREDIT_POOL_USD`), deduped through the `events` table and
+delivered to `LANTERN_ALARM_WEBHOOK` (Slack-compatible) or the journal:
+
+```bash
+sudo cp infra/ec2/lantern-usage-check.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now lantern-usage-check.timer
+```
+
+Dollar figures are estimates from `LANTERN_PRICE_*_PER_M` env rates until real Azure
+invoice lines confirm them; token counts are exact.
 
 ## Running a stage headless
 

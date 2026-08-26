@@ -1,0 +1,4 @@
+{
+  "_comment": "Playwright MCP config for QA stages (P0.1). saveVideo has no CLI flag in @playwright/mcp — only this config-file key — so orchestrator.playwright_mcp_server() passes `--config <this file> --output-dir <run's media dir>` when launching the MCP for a QA stage (any executor: in-process, sandbox, manual). Every browser session then records a video into the run folder, which the check_postconditions video gate requires and the dispatcher uploads to S3.",
+  "saveVideo": "1280x720"
+}

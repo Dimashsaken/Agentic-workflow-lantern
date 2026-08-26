@@ -104,8 +104,9 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 - Run ID: `feat-YYYYMMDD-<slug>` or `bug-YYYYMMDD-<slug>` (e.g. `feat-20260824-bulk-export`).
 - Everything a stage produces goes in `workflow/runs/<run-id>/<stage-dir>/`:
   `report.md` (required), plus plans, diffs, screenshots.
-- **Videos and large binaries never go in git.** Upload to the artifact bucket
-  (see `infra/ec2/README.md`) and link the URL from the report.
+- **Videos and large binaries never go in git.** Stage media is uploaded to the
+  artifact bucket automatically after the stage passes (see `infra/ec2/README.md`);
+  the report links the URL (deterministic `session-<n>` naming for QA videos).
 
 ## Memory protocol
 

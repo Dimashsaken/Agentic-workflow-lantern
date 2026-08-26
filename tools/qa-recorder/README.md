@@ -47,10 +47,18 @@ used.
 
 ## Conventions
 
-- Video naming: `<run-id>--<stage>--<scenario>.webm`.
-- Videos/traces land in `videos/` and `traces/` (gitignored). Upload to the artifact
-  bucket (`infra/ec2/README.md`), then link from the stage report **with timestamps**
-  ("0:00 login, 0:25 the failing submit").
+- **In-stage evidence is automatic (P0.1):** pipeline QA stages don't use this harness
+  for recording — the orchestrator launches the agent's browser MCP with recording on,
+  videos land in the run's `<stage-dir>/media/`, and the ORCHESTRATOR uploads them to
+  the bucket as `<run-id>--<stage>--session-<n>.webm` after the stage passes. Agents
+  never upload (sandboxes hold no AWS credentials) and never claim S3 URLs for
+  sessions they didn't record.
+- This harness's scripted specs are for committed regression tests and local repro
+  work. Their videos/traces land in `videos/` and `traces/` (gitignored) — name them
+  `<run-id>--<stage>--<scenario>.webm`; anything worth keeping goes into the run
+  folder so the orchestrator's upload pass ships it.
+- Reports always link videos **with timestamps** ("0:00 login, 0:25 the failing
+  submit").
 - 1280×720 is the standard size — big enough to read, small enough to upload fast.
 - Base URLs and credentials come from env vars (`QA_BASE_URL`, `QA_USER`, `QA_PASS` via
   SSM/.env) — never hardcoded, never in reports.

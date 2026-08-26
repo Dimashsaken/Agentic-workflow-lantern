@@ -33,6 +33,20 @@ LANTERN_SANDBOX_MEMORY=2500m
 LANTERN_SANDBOX_IMAGE=lantern-sandbox
 LANTERN_SANDBOX_DATABASE_URL=       # DB URL as containers see it (default: host.docker.internal)
 LANTERN_PLAYWRIGHT_MCP=             # MCP launch cmd; the sandbox image pins its own
+
+# QA stages (P0.1 — dispatcher host env; containers see uniform QA_BASE_URL/QA_USER/QA_PASS):
+LANTERN_QA_DEV_BASE_URL=            # + LANTERN_QA_DEV_USER / LANTERN_QA_DEV_PASS   (SSM /lantern/qa/dev/*)
+LANTERN_QA_STAGING_BASE_URL=        # + LANTERN_QA_STAGING_USER / LANTERN_QA_STAGING_PASS
+LANTERN_ARTIFACT_BUCKET=            # S3 bucket name; unset = media stays local (dev)
+
+# Token ledger + spend tripwires (P0.4 — `pipeline.py usage` / `usage-check`):
+LANTERN_PRICE_IN_PER_M=4            # $/1M input tokens — PROVISIONAL until Azure
+LANTERN_PRICE_CACHED_IN_PER_M=1     #   invoice lines confirm the deployment rates
+LANTERN_PRICE_OUT_PER_M=20
+LANTERN_DAILY_SPEND_ALARM_USD=1200  # rate tripwire (plan §5)
+LANTERN_CREDIT_POOL_USD=25000       # pool tripwire: alarms at 25/50/75% drawn
+LANTERN_POOL_SPENT_OFFSET_USD=0     # est. credits burned before the ledger existed
+LANTERN_ALARM_WEBHOOK=              # Slack-compatible webhook; unset = journal only
 ```
 
 Deployment names (`sol`, `terra`, …) are org-internal Azure deployment labels — the
@@ -54,7 +68,24 @@ python pipeline.py daemon                       # service loop (systemd on EC2)
 python pipeline.py status | approve | reject | retry
 python pipeline.py runboard | render-memory     # re-render the Postgres-backed views
 python pipeline.py import-run <run-id>          # backfill a file-era run into the DB
+python pipeline.py usage [--days 7]             # token ledger: per-day + per-run est. spend
+python pipeline.py usage-check                  # spend tripwires (hourly systemd timer on EC2)
 ```
+
+Every stage execution records its token usage on its `stage_executions` row (P0.4):
+the Agents SDK usage object in-process, or the container's `LANTERN_USAGE` stdout
+line (validated — it shares stdout with agent text) parsed by the dispatcher — a
+host-side write either way, so the ledger keeps working when sandboxes lose direct
+table access. Executions that crash before reporting stay unmetered; `usage` prints
+the count. QA stages (04/07, debug regression) must leave a fresh, non-empty `.webm`
+from the current attempt (the orchestrator launches the browser MCP with the
+checked-in `saveVideo` config — recording is automatic in every executor); the check
+lives in `check_postconditions`, so container, host re-check, and in-process runs
+all enforce it. After postconditions pass, the **host** uploads the attempt's videos
+to `s3://$LANTERN_ARTIFACT_BUCKET/lantern/<run-id>/<stage>/attempt-<k>/` under the
+PIPELINE.md `session-<n>` naming (AWS creds never enter a sandbox; retries never
+overwrite earlier attempts' footage), regenerates `media-manifest.json` from the
+artifacts table, and deletes the local files.
 
 ## Direct consult — use one agent, no run (D11)
 

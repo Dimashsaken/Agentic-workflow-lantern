@@ -34,6 +34,12 @@ rsync -a --exclude '.venv' --exclude '.git' --exclude 'node_modules' \
       --exclude 'workflow/runs' /repo-src/ /work/lantern/
 mkdir -p /work/lantern/workflow/runs   # the run-dir mount already sits below this
 
+# qa-recorder deps are baked at image build (rsync excluded node_modules above);
+# link them into the fresh copy so `node record-session.mjs` works in QA stages.
+if [ -d /opt/lantern/qa-recorder/node_modules ]; then
+  ln -sfn /opt/lantern/qa-recorder/node_modules /work/lantern/tools/qa-recorder/node_modules
+fi
+
 if [ -n "${LANTERN_PRODUCT_REPO:-}" ]; then
   git clone --quiet --branch "${LANTERN_PRODUCT_BRANCH:-main}" \
       "${LANTERN_PRODUCT_REPO}" /work/product

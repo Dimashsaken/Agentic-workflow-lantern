@@ -12,6 +12,7 @@ rendered views of it, so the postcondition is sound under concurrent runs.
 
 import argparse
 import asyncio
+import json
 import os
 import shutil
 import sys
@@ -82,6 +83,15 @@ ROLE_FOR_STAGE = {
 # Roles that drive a browser get the Playwright MCP server.
 BROWSER_ROLES = {"ui-ux", "qa-dev", "qa-staging", "debug"}
 
+# QA roles must leave video evidence (P0.1). Derived from ROLE_FOR_STAGE so the
+# debug lifecycle's 05-regression is covered by the same rule automatically —
+# a parallel stage-key set would silently drift when stages are added/renamed.
+QA_VIDEO_ROLES = {"qa-dev", "qa-staging"}
+
+
+def is_qa_video_stage(stage: str) -> bool:
+    return ROLE_FOR_STAGE.get(stage) in QA_VIDEO_ROLES
+
 # Stage executions that get the Paper MCP server (desktop-bound — workstation only).
 PAPER_STAGES = {"01-ui-ux", "01-ui-ux.design"}
 
@@ -104,17 +114,43 @@ def model_for(role: str, stage: str | None = None) -> str:
     return deployment
 
 
-def playwright_mcp_server() -> MCPServerStdio:
+# Env keys the MCP child process needs. MCPServerStdio spawns children with the MCP
+# SDK's MINIMAL default environment (PATH/HOME and little else), which silently strips
+# PLAYWRIGHT_BROWSERS_PATH — the browser install would be invisible to the very server
+# that needs it. So the child env is built explicitly: platform basics + PLAYWRIGHT*.
+_MCP_CHILD_ENV_BASE = (
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "TMPDIR", "DISPLAY",
+    # Windows (laptop runs): node/npx need these to start at all
+    "SYSTEMROOT", "SYSTEMDRIVE", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA",
+    "TEMP", "TMP", "USERPROFILE", "PROGRAMFILES",
+)
+
+
+def playwright_mcp_server(run_id: str | None = None, stage: str | None = None) -> MCPServerStdio:
     """The Playwright MCP server process for browser roles.
 
     LANTERN_PLAYWRIGHT_MCP overrides the launch command — the sandbox image sets it
     to its preinstalled, version-locked binary so containers never download at stage
     start; the npx default is for laptops/EC2-direct where a fetch is acceptable.
+
+    For QA stages (when run_id+stage are given) the command gains --config (the
+    checked-in saveVideo config — saveVideo has no CLI flag) and --output-dir
+    pointing at the run's media dir, so every browser session records a video that
+    lands in the run folder. Done here, not in the dispatcher, so the SAME behavior
+    holds in-process, in sandboxes, and in manual orchestrator runs.
     """
     import shlex
     cmd = shlex.split(os.environ.get(
         "LANTERN_PLAYWRIGHT_MCP", "npx -y @playwright/mcp@latest"))
-    return MCPServerStdio(params={"command": cmd[0], "args": cmd[1:]}, name="playwright")
+    if run_id and stage and is_qa_video_stage(stage):
+        media_dir = REPO / "workflow" / "runs" / run_id / stage_dir(stage) / "media"
+        media_dir.mkdir(parents=True, exist_ok=True)
+        cmd += ["--config", str(REPO / "infra" / "sandbox" / "qa-mcp-config.json"),
+                "--output-dir", str(media_dir)]
+    env = {k: os.environ[k] for k in _MCP_CHILD_ENV_BASE if k in os.environ}
+    env.update({k: v for k, v in os.environ.items() if k.startswith("PLAYWRIGHT")})
+    return MCPServerStdio(params={"command": cmd[0], "args": cmd[1:], "env": env},
+                          name="playwright")
 
 
 def paper_mcp_url() -> str:
@@ -401,7 +437,6 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     observed 2026-08-26: handoff.json listed three option PNGs, none of which were on
     disk, and the stage still passed. Claims are not evidence.
     """
-    import json
     handoff = REPO / "workflow/runs" / run_id / sdir / "handoff.json"
     if not handoff.exists():
         return []
@@ -421,7 +456,14 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
             elif p.stat().st_size == 0:
                 problems.append(f"handoff.json claims '{rel}' but the file is empty")
     vid = data.get("video")
-    if vid and not str(vid).startswith(("http://", "https://", "s3://")):
+    if vid and str(vid).startswith("s3://"):
+        # Under host-side uploads (P0.1) an agent can never legitimately know an S3
+        # URL at report time — the host uploads only after postconditions pass. An
+        # s3:// claim is therefore unverifiable-by-construction, i.e. fabricated.
+        problems.append(
+            f"handoff.json claims video '{vid}' — s3:// URLs cannot exist yet at report "
+            "time; reference the local file, the orchestrator uploads and manifests it")
+    elif vid and not str(vid).startswith(("http://", "https://")):
         if not (REPO / vid).is_file():
             problems.append(f"handoff.json claims video '{vid}' but no such file exists")
     # Presence AND validity. A validity-only check passes vacuously when the agent
@@ -450,6 +492,34 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     return problems
 
 
+def usage_dict(result) -> dict:
+    """Token usage of one Runner.run, as plain ints (P0.4 token ledger).
+
+    Defensive getattr throughout: the Agents SDK usage shape has shifted between
+    releases, and a missing field must degrade to an absent key, never a crash —
+    the ledger is observability, not a postcondition.
+    """
+    u = getattr(getattr(result, "context_wrapper", None), "usage", None)
+    if u is None:
+        return {}
+    d = {
+        "requests": getattr(u, "requests", None),
+        "input_tokens": getattr(u, "input_tokens", None),
+        "output_tokens": getattr(u, "output_tokens", None),
+        "total_tokens": getattr(u, "total_tokens", None),
+    }
+    details = getattr(u, "input_tokens_details", None)
+    if details is not None:
+        d["cached_input_tokens"] = getattr(details, "cached_tokens", None)
+    return {k: int(v) for k, v in d.items() if isinstance(v, (int, float))}
+
+
+# The dispatcher greps container stdout for this prefix to fill the token ledger —
+# host-side write, so it keeps working when sandboxes lose stage_executions access
+# (the planned restricted DB role, plan item C2.0).
+USAGE_MARKER = "LANTERN_USAGE "
+
+
 async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
                                stage: str, execution_key: str) -> list[str]:
     """The two written postconditions: stage report on disk, memory row from THIS execution.
@@ -463,6 +533,22 @@ async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
     if not (REPO / "workflow/runs" / run_id / sdir / "report.md").exists():
         missing.append(f"stage report workflow/runs/{run_id}/{sdir}/report.md not written")
     missing.extend(check_claimed_artifacts(run_id, sdir))
+    if is_qa_video_stage(stage):
+        # Presence AND validity AND recency (the fabrication lesson, applied to video):
+        # a real, non-empty .webm recorded by THIS attempt — a stale file from a failed
+        # earlier attempt must not stand in as evidence, exactly like the memory check
+        # is scoped by execution_key rather than "any row exists".
+        started = await conn.fetchval(
+            "SELECT started_at FROM stage_executions WHERE idempotency_key = $1", execution_key)
+        floor_ts = (started.timestamp() if started else PROCESS_START) - 60  # clock-skew slack
+        videos = [p for p in (REPO / "workflow/runs" / run_id / sdir).rglob("*.webm")
+                  if p.is_file() and p.stat().st_size > 0 and p.stat().st_mtime >= floor_ts]
+        if not videos:
+            missing.append(
+                f"no video from this attempt under workflow/runs/{run_id}/{sdir}/ — QA "
+                "browser sessions record automatically (the MCP is launched with "
+                "saveVideo); a QA pass without fresh video evidence is a claim, not "
+                "evidence, and does not advance")
     n = await conn.fetchval("SELECT count(*) FROM role_memory WHERE execution_key = $1", execution_key)
     if not n:
         missing.append(
@@ -506,7 +592,7 @@ async def main() -> None:
 
     mcp_servers = []
     if role in BROWSER_ROLES:
-        mcp_servers.append(playwright_mcp_server())
+        mcp_servers.append(playwright_mcp_server(args.run_id, args.stage))
     if args.stage in PAPER_STAGES:
         if not await paper_reachable():
             sys.exit(PAPER_PREFLIGHT_HINT)
@@ -523,15 +609,21 @@ async def main() -> None:
                    make_append_memory(role, args.run_id, args.stage, execution_key)],
             mcp_servers=mcp_servers,
         )
+        # Attempt number from the execution key ('run:stage:attempt') — the agent
+        # needs it to pre-link the attempt-scoped media URLs in its report.
+        _tail = execution_key.rsplit(":", 1)[-1]
+        attempt_note = f" (attempt {_tail})" if _tail.isdigit() else ""
         result = await Runner.run(
             agent,
-            input=f"Begin your {args.stage} session for run {args.run_id}. Do not reply with a "
-                  "plan — start calling tools now and keep working until the report is on "
-                  "disk and append_memory has been called.",
+            input=f"Begin your {args.stage} session for run {args.run_id}{attempt_note}. "
+                  "Do not reply with a plan — start calling tools now and keep working "
+                  "until the report is on disk and append_memory has been called.",
             session=session,
             max_turns=120,
         )
         print(result.final_output)
+        print(USAGE_MARKER + json.dumps(
+            {**usage_dict(result), "model": model_for(role, args.stage)}))
         calls = sum(1 for i in result.new_items if type(i).__name__ == "ToolCallItem")
         if calls == 0:
             print("\nDIAGNOSIS: the agent ended its turn without calling a single tool — the "

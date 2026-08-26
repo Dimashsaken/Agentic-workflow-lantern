@@ -7,7 +7,11 @@ the staging charter as: re-run list + staging-only list + explicitly-excluded li
 
 ## 2. Re-run and staging-only execution
 
-- All browser work through `tools/qa-recorder`, video on, one context per scenario
+- Browser video records itself (the MCP launches with recording on; files land in
+  `07-qa-staging/media/`); close the browser between scenarios so each video is short.
+  The orchestrator uploads this attempt's videos post-stage as
+  `attempt-<k>/<run-id>--07-qa-staging--session-<n>.webm` — you never upload, and
+  the stage fails without a video from your attempt
   group. Staging base URL and credentials from environment only.
 - Cross-browser: primary flow on all three engines; full charter on the product's
   majority browser (check PostHog for the real distribution).

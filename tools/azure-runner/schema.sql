@@ -30,10 +30,19 @@ CREATE TABLE IF NOT EXISTS stage_executions (
     error_class       text,                             -- retryable | terminal
     idempotency_key   text UNIQUE,
     heartbeat_at      timestamptz,
+    -- token ledger (P0.4): filled by the executor after the agent run; the ONLY
+    -- basis for spend reporting and the daily alarm (`pipeline.py usage[-check]`)
+    model               text,
+    requests            int,
+    input_tokens        bigint,
+    cached_input_tokens bigint,
+    output_tokens       bigint,
+    total_tokens        bigint,
     started_at        timestamptz NOT NULL DEFAULT now(),
     finished_at       timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_stage_exec_run ON stage_executions(run_id, stage);
+CREATE INDEX IF NOT EXISTS idx_stage_exec_started ON stage_executions(started_at);
 
 CREATE TABLE IF NOT EXISTS approvals (
     id                 bigserial PRIMARY KEY,
@@ -98,3 +107,9 @@ CREATE INDEX IF NOT EXISTS idx_role_memory_exec ON role_memory(execution_key);
 
 -- idempotent upgrades for databases created before these columns existed
 ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS runner text NOT NULL DEFAULT 'ec2';
+ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS model text;
+ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS requests int;
+ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS input_tokens bigint;
+ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS cached_input_tokens bigint;
+ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS output_tokens bigint;
+ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS total_tokens bigint;

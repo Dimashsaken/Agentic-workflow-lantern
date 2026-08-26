@@ -18,12 +18,23 @@ Sections, in priority order:
 
 ## 3. Executing with video
 
-- Everything runs through `tools/qa-recorder` (see its README): Playwright with
-  `recordVideo` on, trace on. One browser context per charter section keeps videos short
-  and named per scenario.
-- Exploratory sessions: drive interactively (headed or via the harness), keep video on,
-  narrate in the session log file as you go.
-- Video naming: `<run-id>--04-qa-dev--<scenario>.webm`; upload; link with timestamps.
+- **Video records itself.** Your browser (the Playwright MCP) is launched with
+  recording on; every session's video lands in `04-qa-dev/media/` on the run folder.
+  Close the browser between charter sections — each browser session is one video, and
+  short per-section videos are what reviewers actually watch.
+- **You never upload.** After your stage passes, the orchestrator uploads this
+  attempt's videos to the artifact bucket as `<run-id>--04-qa-dev--session-<n>.webm`
+  (n = recording order) under an `attempt-<k>/` prefix, and writes
+  `media-manifest.json` beside your report. The stage FAILS if no video from your
+  attempt exists — a QA pass without video evidence is a claim.
+- Link videos in the report by recording order **with timestamps** ("session 2, 0:25 —
+  the failing submit"). When `LANTERN_ARTIFACT_BUCKET` is set in your environment, the
+  final URL is deterministic (your attempt number is in the kickoff message):
+  `s3://$LANTERN_ARTIFACT_BUCKET/lantern/<run-id>/04-qa-dev/attempt-<k>/<run-id>--04-qa-dev--session-<n>.webm`.
+  Never write an S3 URL for a session you did not record — claims are checked.
+- Exploratory sessions: same mechanism — drive, narrate in the session log as you go.
+- `tools/qa-recorder` scripted specs are for promoting repros into committed
+  regression tests (§5), not for in-stage evidence.
 
 ## 4. Filing bugs
 
