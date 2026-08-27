@@ -49,38 +49,37 @@ a{color:inherit;text-decoration:none}
 .caps{font-family:var(--font-label);text-transform:uppercase;letter-spacing:.14em;
   font-size:var(--text-caps);color:var(--text-muted)}
 
-/* ── shell: 64px icon rail + caps top nav ─────────────────────────────── */
-.shell{display:grid;grid-template-columns:64px 1fr;min-height:100vh}
-.rail{background:var(--surface-0);border-right:1px solid var(--edge);
-  display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:22px;
-  position:sticky;top:0;height:100vh}
-.rail .logo{width:26px;height:26px;border-radius:var(--r-pill);
-  border:1.5px solid var(--gold-light)}
-.rail .spacer{flex:1}
-.rail .me{width:26px;height:26px;border-radius:var(--r-pill);background:var(--surface-2);
-  border:1px solid var(--edge);display:grid;place-items:center;
-  font-size:11px;color:var(--text-muted)}
-.topnav{display:flex;gap:0;padding:0 32px;border-bottom:1px solid var(--edge)}
-.topnav a{flex:0 0 auto;min-width:148px;padding:22px 0 12px;
-  border-bottom:1px solid var(--edge);margin-bottom:-1px;
-  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.14em;
-  font-size:var(--text-caps);color:var(--text-dim)}
-.topnav a.on{color:var(--text);border-bottom-color:var(--accent)}
-.topnav a:hover{color:var(--text-muted)}
-.topnav a.on:hover{color:var(--text)}
-.topnav .grow{flex:1;border-bottom:1px solid var(--edge);margin-bottom:-1px}
-.topnav .live{align-self:stretch;display:flex;align-items:center;gap:8px;
-  padding:22px 0 12px;border-bottom:1px solid var(--edge);margin-bottom:-1px;
-  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.12em;
-  font-size:var(--text-caps);color:var(--text-muted)}
-.topnav .live.stale{color:var(--danger)}
-.topnav .live.stale .dot{background:var(--danger);box-shadow:none}
-.topnav .who{align-self:stretch;display:flex;align-items:center;margin-left:26px;
-  padding:22px 0 12px;border-bottom:1px solid var(--edge);margin-bottom:-1px;
-  font-size:var(--text-caps);color:var(--text-dim)}
-.topnav .who a{min-width:0;border:0;padding:0;margin:0 0 0 8px;color:var(--text-dim);
-  text-decoration:underline;text-underline-offset:3px}
-.page{padding:0 32px 44px}
+/* ── shell: one slim top bar, nothing else ────────────────────────────── */
+.topbar{display:flex;align-items:center;gap:30px;padding:15px 28px;
+  border-bottom:1px solid var(--edge)}
+.topbar .wordmark{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.24em;font-size:var(--text-xs);color:var(--gold-light)}
+.topbar nav{display:flex;gap:24px}
+.topbar nav a{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.13em;font-size:var(--text-caps);color:var(--text-muted);
+  padding:6px 0 5px;border-bottom:2px solid transparent}
+.topbar nav a.on{color:var(--text);border-bottom-color:var(--accent)}
+.topbar nav a:hover{color:var(--text)}
+.topbar .right{margin-left:auto;display:flex;align-items:center;gap:16px;
+  font-size:var(--text-xs);color:var(--text-muted)}
+.topbar .right .live{display:inline-flex;align-items:center;gap:8px;color:var(--text)}
+.topbar .right .live.stale{color:var(--danger)}
+.topbar .right .live.stale .dot{background:var(--danger);box-shadow:none}
+.topbar .right a{color:var(--text-muted);text-decoration:underline;
+  text-underline-offset:3px}
+.topbar .right a:hover{color:var(--text)}
+.page{padding:0 28px 44px}
+
+/* one-line status bar under the top bar (board only) */
+.statusline{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  padding:13px 28px;border-bottom:1px solid var(--edge);
+  font-size:var(--text-xs);color:var(--text-muted)}
+.statusline b{color:var(--text);font-weight:600}
+.statusline .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  color:var(--text);font-size:var(--text-xs)}
+.statusline .sep{color:var(--text-dim)}
+.statusline .warn{color:var(--warning)}
+.statusline .bad{color:var(--danger)}
 
 /* ── atoms ────────────────────────────────────────────────────────────── */
 .dot{width:6px;height:6px;border-radius:var(--r-pill);display:inline-block;
@@ -116,6 +115,57 @@ input::placeholder{color:var(--text-dim)}
 .srail i.now{background:var(--dawn-4)}
 .srail i.fail{background:var(--danger)}
 .srail.tall{height:6px}
+
+/* ── the board: five ticket columns, Fredrin-style ────────────────────── */
+.kb{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;
+  padding:22px 28px 44px;align-items:start}
+.kbcol{min-width:0}
+.kbhead{display:flex;align-items:baseline;gap:9px;padding:2px 2px 10px;
+  border-bottom:1px solid var(--edge);margin-bottom:12px}
+.kbhead .n{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.14em;font-size:var(--text-xs);color:var(--text-muted)}
+.kbhead .c{font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--text-dim);font-variant-numeric:tabular-nums}
+.kbhead.hot{border-bottom-color:var(--accent)}
+.kbhead.hot .n{color:var(--accent)} .kbhead.hot .c{color:var(--accent)}
+.kbempty{font-size:var(--text-xs);color:var(--text-dim);line-height:1.55;
+  padding:2px 2px 0}
+.kcard{background:var(--surface-1);border:1px solid var(--edge);
+  border-top:1px solid var(--edge-top);border-radius:var(--r-md);
+  padding:13px 14px;margin-bottom:12px}
+.kcard.hot{background:var(--surface-2);border-color:#2E2A22}
+.kcard.dim{opacity:.6}
+.kcard .title{display:block;font-size:var(--text-sm);font-weight:600;
+  color:var(--text);line-height:1.35;overflow-wrap:anywhere}
+.kcard .title:hover{color:var(--dawn-3)}
+.kcard .meta{font-family:var(--font-mono);font-size:var(--text-caps);
+  color:var(--text-dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.kcard .chips{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 0}
+.kcard .stg{display:flex;align-items:center;justify-content:space-between;
+  gap:8px;margin:11px 0 6px}
+.kcard .stg .lab{font-size:var(--text-caps);color:var(--text-muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kcard .stg .age{font-family:var(--font-mono);font-size:var(--text-caps);
+  color:var(--dawn-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.kcard .stg .age.cold{color:var(--text-dim)}
+.kcard .wl{font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;
+  margin-top:8px}
+.kcard .wl b{color:var(--text);font-weight:600}
+.kcard .kerr{font-family:var(--font-mono);font-size:var(--text-caps);
+  color:var(--danger);margin-top:8px;line-height:1.5;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden}
+.kcard .foot{display:flex;align-items:baseline;justify-content:space-between;
+  gap:8px;margin-top:11px;padding-top:9px;border-top:1px solid var(--edge);
+  font-family:var(--font-mono);font-size:var(--text-caps);color:var(--text-dim)}
+.kcard .foot .m{font-size:var(--text-xs);color:var(--text)}
+.kcard .acts{display:flex;gap:8px;align-items:center;margin-top:11px}
+.kcard .acts form{display:inline}
+.btn.sm{padding:6px 12px;font-size:var(--text-xs)}
+.kcard .acts .ev{font-size:var(--text-caps);color:var(--text-muted);
+  text-decoration:underline;text-underline-offset:3px;margin-left:auto}
+.kcard .acts .ev:hover{color:var(--text)}
 
 /* ── board readout ────────────────────────────────────────────────────── */
 .readout{display:grid;grid-template-columns:repeat(5,1fr) auto;gap:1px;
@@ -374,7 +424,7 @@ SCRIPT = """
     if(!pill) return;
     var s=Math.floor((Date.now()-t0)/1000);
     if(s>=75){pill.classList.add('stale');
-      pill.querySelector('b').textContent='STALE '+s+'S';}
+      pill.querySelector('b').textContent='Stale '+s+'s';}
   },5000);
   setInterval(function(){
     if(document.querySelector('input:focus,textarea:focus')) return;
@@ -398,18 +448,15 @@ def page(title: str, body: str, user: str | None = None, active: str = "/",
     tabs = "".join(
         f"<a href='{href}'{' class=on' if href == active else ''}>{H(name)}</a>"
         for name, href in NAV)
-    nav = (f"<nav class='topnav'>{tabs}<span class='grow'></span>"
+    top = (f"<header class='topbar'><a class='wordmark' href='/'>Lantern</a>"
+           f"<nav>{tabs}</nav><span class='right'>"
            f"<span class='live' id='livepill'><span class='dot live'></span>"
-           f"<b>LIVE</b>&nbsp;· {H(clock)} UTC</span>"
-           f"<span class='who'>{H(user)} <a href='/logout'>log out</a></span></nav>")
-    rail = ("<nav class='rail'><a class='logo' href='/' title='Board'></a>"
-            "<span class='spacer'></span>"
-            f"<span class='me'>{H(user[:1].upper())}</span></nav>")
+           f"<b>Live</b>&nbsp;· {H(clock)} UTC</span>"
+           f"<span>{H(user)}</span><a href='/logout'>log out</a></span></header>")
     return (f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
             f"<title>{H(title)}</title>{FONTS}<style>{CSS}</style></head>"
-            f"<body><div class='shell'>{rail}<div>{nav}"
-            f"<div class='page'>{body}</div></div></div>{SCRIPT}</body></html>")
+            f"<body>{top}{body}{SCRIPT}</body></html>")
 
 
 # ── atoms ────────────────────────────────────────────────────────────────────

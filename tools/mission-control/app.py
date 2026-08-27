@@ -2,9 +2,10 @@
 
     uvicorn app:app --host 0.0.0.0 --port 8080     (or: python app.py)
 
-One run, one strip, grouped by who owes the next move (NEEDS YOU · AGENTS
-WORKING · STUCK · CLOSED) with the 7-stage pipeline compressed into a rail per
-row — the "flight strips" direction from tools/mission-control/mockups/.
+The board is a ticket board in the Fredrin sense — five workflow columns
+(Queued · Running · Blocked · Review · Done) and every run is a card moving
+through them, with the 7-stage pipeline compressed into a rail on the card.
+Review cards carry Approve/Reject directly; /runs keeps the dense strip list.
 
 Two hard rules carried over unchanged from v1:
   * Gate integrity: approvals are written server-side via
@@ -47,7 +48,7 @@ from pipeline import (  # noqa: E402
     log_event,
 )
 import ui  # noqa: E402
-from ui import H, ago, chip, fmt_int, fmt_money, group_head, strip, strip_header  # noqa: E402
+from ui import H, ago, chip, fmt_int, fmt_money, group_head, srail, strip, strip_header  # noqa: E402
 
 # Board columns = run-folder dirs; split stage-1 executions share one column.
 BOARD_DIRS = list(dict.fromkeys(d for _, d, *_ in FEATURE_STAGES))
@@ -519,6 +520,121 @@ async def logout():
     return resp
 
 
+def fmt_k(n) -> str:
+    return f"{n / 1000:,.0f}k" if n and n >= 1000 else (str(n) if n else "0")
+
+
+def led_model(led: dict) -> str:
+    models = led.get("models") or set()
+    return next(iter(models)) if len(models) == 1 else ("mixed" if models else "—")
+
+
+def build_card(run, snap: dict, now: datetime) -> tuple[str, str]:
+    """One run, one ticket. Returns (column, card html).
+
+    The board is Fredrin's concept, not a pipeline diagram: five workflow
+    columns — Queued · Running · Blocked · Review · Done — and the ticket
+    moves through them. Where the run is inside the 7-stage pipeline is the
+    rail ON the card, not the geometry of the board. Review cards carry the
+    actual controls; the decision is still the same server-side POST.
+    """
+    lat = snap["latest_by_dir"]
+    led = snap["ledger"].get(run["id"], {})
+    pend_by_run = {x["run_id"]: x for x in snap["pend"]}
+    a = pend_by_run.get(run["id"])
+    segs, curdir, curidx = rail_segs(run, lat)
+    e = lat.get((run["id"], curdir))
+    verdict = None
+    if run["status"] not in ("done", "cancelled"):
+        verdict = report_verdict(report_text(run["id"], curdir))
+
+    title = run_short(run["id"])
+    prefix = run["id"][: len(run["id"]) - len(title)].rstrip("-") \
+        if run["id"].endswith(title) and title != run["id"] else ""
+    stage_name = curdir.split("-", 1)[1]
+    stage_lab = f"stage {curidx + 1}/{len(BOARD_DIRS)} · {stage_name}"
+    chips: list[tuple[str, str]] = []
+    wl = err = acts = ""
+    age, cold, hot, dim = "", False, False, False
+
+    if a is not None:
+        col, hot = "review", True
+        age = ago((now - a["requested_at"]).total_seconds())
+        if verdict == "BLOCKED":
+            chips.append(("report: blocked", "blocked"))
+        chips.append((GATE_SHORT.get(a["gate"], a["gate"]), "gate"))
+        wl = ("Waiting on <b>you</b> — the report says BLOCKED, read it first."
+              if verdict == "BLOCKED" else
+              "Waiting on <b>you</b> — review the evidence, then decide.")
+        confirm = (" onsubmit=\"return confirm('The report says BLOCKED — approve anyway?')\""
+                   if verdict == "BLOCKED" else "")
+        acts = (f"<div class='acts'>"
+                f"<form method='post' action='/gate/{a['id']}/approve'{confirm}>"
+                f"<button class='btn primary sm'>Approve</button></form>"
+                f"<form method='post' action='/gate/{a['id']}/reject' "
+                f"onsubmit=\"return confirm('Reject and stop this run for rework?')\">"
+                f"<button class='btn danger sm'>Reject</button></form>"
+                f"<a class='ev' href='/gates'>evidence →</a></div>")
+    elif run["status"] == "executing":
+        col = "running"
+        age = ago((now - (e["started_at"] if e else run["updated_at"])).total_seconds())
+        hb = e["heartbeat_at"] if e and e["heartbeat_at"] else None
+        runner = STAGE_RUNNER.get(run["current_stage"], "ec2")
+        wl = (f"<b>{H(led_model(led))}</b> working on {H(runner)}"
+              + (f" · heartbeat {ago((now - hb).total_seconds())} ago" if hb else ""))
+    elif workstation_blocked(run, snap["online"]):
+        col = "blocked"
+        chips.append(("no runner", "warn"))
+        age = ago((now - run["updated_at"]).total_seconds())
+        wl = "Needs the <b>design workstation</b>, which is offline."
+    elif run["status"] == "running":
+        col = "queued"
+        runner = STAGE_RUNNER.get(run["current_stage"], "ec2")
+        age = ago((now - run["updated_at"]).total_seconds())
+        wl = f"Waiting for a free <b>{H(runner)}</b> slot."
+    elif run["status"] == "failed":
+        col = "blocked"
+        chips.append(("failed", "blocked"))
+        age = ago((now - run["updated_at"]).total_seconds())
+        if e and e["error"]:
+            err = e["error"].splitlines()[0][:160]
+        wl = "Needs rework — fix, then retry from the run page."
+    elif run["status"] in ("done", "cancelled"):
+        col, dim, cold = "done", True, True
+        when = run["completed_at"] or run["updated_at"]
+        age = f"{when:%b %d}"
+        if run["status"] == "done":
+            chips.append(("shipped", "ok"))
+        elif led.get("max_att", 1) > 1:
+            chips.append((f"{led['max_att']} attempts", "warn"))
+        else:
+            chips.append(("cancelled", ""))
+        wl = f"{run['status'].capitalize()} at stage {curidx + 1} · {H(stage_name)}"
+    else:                                    # waiting_gate but no approval row
+        col = "blocked"
+        chips.append(("no gate", "warn"))
+        age = ago((now - run["updated_at"]).total_seconds())
+        wl = "Gate open but no approval row — check pipeline.py."
+
+    chips_html = "".join(chip(t, k) for t, k in chips)
+    foot = ""
+    if led.get("tot"):
+        cpct = f" · {round(led['cached'] / led['inp'] * 100)}% cached" if led.get("inp") else ""
+        foot = (f"<div class='foot'><span class='m'>{H(fmt_money(led['cost']))}</span>"
+                f"<span>{H(led_model(led))} · {fmt_k(led['tot'])} tok{cpct}</span></div>")
+    card = (f"<div class='kcard{' hot' if hot else ''}{' dim' if dim else ''}'>"
+            f"<a class='title' href='/run/{H(run['id'])}'>{H(title)}</a>"
+            f"<div class='meta'>{H(prefix)}{' · ' if prefix else ''}{H(run['created_by'])}</div>"
+            + (f"<div class='chips'>{chips_html}</div>" if chips_html else "")
+            + f"<div class='stg'><span class='lab'>{H(stage_lab)}</span>"
+              f"<span class='age{' cold' if cold else ''}'>{H(age)}</span></div>"
+            + srail(segs)
+            + (f"<div class='wl'>{wl}</div>" if wl else "")
+            + (f"<div class='kerr'>{H(err)}</div>" if err else "")
+            + foot + acts + "</div>")
+    return col, card
+
+
 @app.get("/", response_class=HTMLResponse)
 async def board(request: Request):
     user = current_user(request)
@@ -528,143 +644,50 @@ async def board(request: Request):
     snap = await snapshot(p)
     now = datetime.now(timezone.utc)
 
-    groups: dict[str, list] = {"needs_you": [], "working": [], "stuck": [], "closed": []}
-    strips: dict[str, list[str]] = {k: [] for k in groups}
-    cutoff = 48 * 3600
+    cols: dict[str, list[str]] = {k: [] for k in
+                                  ("queued", "running", "blocked", "review", "done")}
     for run in snap["runs"]:
-        group, d = build_strip(run, snap, now)
-        if group == "closed" and (now - run["updated_at"]).total_seconds() > cutoff:
+        col, card = build_card(run, snap, now)
+        if col == "done" and (now - run["updated_at"]).total_seconds() > 48 * 3600:
             continue
-        groups[group].append((run, d))
-        strips[group].append(strip(d, hot=(group == "needs_you"),
-                                   dim=(group == "closed")))
+        cols[col].append(card)
 
-    n_pend = len(snap["pend"])
-    oldest = max(((now - a["requested_at"]).total_seconds() for a in snap["pend"]),
-                 default=0)
-    blocked_n = sum(1 for _, d in groups["needs_you"] if d["chip"][0] == "Blocked")
-    n_exec = sum(1 for r, _ in groups["working"] if r["status"] == "executing")
-    n_queued = len(groups["working"]) - n_exec
-    cost_today, n_today, models_today = today_spend(snap)
+    cost_today, _n_today, _models = today_spend(snap)
     tripwire = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "50"))
-    runner_v, runner_d = runner_sentence(snap)
-    ws_offline = not snap["online"].get("workstation")
-
-    # readout — the five numbers someone crossing the room needs, plus the CTA
-    work_d = f"{n_queued} queued · " if n_queued else ""
-    work_d += f"{max(EC2_SLOTS - n_exec, 0)} of {EC2_SLOTS} ec2 slots free"
-    cta = (f"<a class='btn primary' href='/gates'>Decide {n_pend} "
-           f"gate{'s' if n_pend != 1 else ''}</a>") if n_pend else ""
-    readout = f"""<section class='readout'>
-      <div><div class='caps'>Waiting on you</div>
-        <div class='v{' act' if n_pend else ''}'>{n_pend}</div>
-        <div class='d'>{'Oldest ' + ago(oldest) if n_pend else 'Nothing needs a decision'}</div></div>
-      <div><div class='caps'>Agents working</div><div class='v'>{n_exec}</div>
-        <div class='d'>{H(work_d)}</div></div>
-      <div><div class='caps'>Reports say blocked</div>
-        <div class='v{' bad' if blocked_n else ''}'>{blocked_n}</div>
-        <div class='d'>{"Stage passed, verdict didn't" if blocked_n else 'No verdict disagreements'}</div></div>
-      <div><div class='caps'>Spent today</div>
-        <div class='v'>{H(fmt_money(cost_today))}<small> / {tripwire:.0f}</small></div>
-        <div class='d'>{n_today} stage run{'s' if n_today != 1 else ''} · {H(models_today)} · est.</div></div>
-      <div><div class='caps'>Runners</div><div class='v'>{runner_v}</div>
-        <div class='d'>{H(runner_d)}</div></div>
-      <div class='cta'>{cta}</div>
-    </section>"""
-
-    # headline — templated from facts only
-    if n_pend:
-        h1 = f"{n_pend} decision{'s are' if n_pend != 1 else ' is'} waiting on a human"
-        parts = [f"The oldest gate has been open <b>{ago(oldest)}</b>."]
-        if blocked_n:
-            parts.append(
-                f"<b>{blocked_n}</b> of the waiting runs sit on a stage whose own report "
-                f"says <em>BLOCKED</em> — the database alone says succeeded, so read the "
-                f"report before approving.")
-        if ws_offline:
-            parts.append("The design workstation has never checked in, so stage 1 "
-                         "cannot start until it does.")
-    elif groups["working"]:
-        h1 = f"{len(groups['working'])} run{'s' if len(groups['working']) != 1 else ''} in flight"
-        parts = ["No gate is waiting on a human right now."]
-    elif groups["stuck"]:
-        h1 = f"{len(groups['stuck'])} run{'s are' if len(groups['stuck']) != 1 else ' is'} stuck"
-        parts = ["Nothing is waiting on a human, but nothing can move either."]
-    else:
-        h1 = "The board is quiet"
-        parts = ["No open runs. Start one with <b>pipeline.py run</b>."]
-    ages_rows = "".join(
-        f"<div class='row'><span>{H(run_short(a['run_id']))} · "
-        f"{H(GATE_SHORT.get(a['gate'], a['gate']))}</span>"
-        f"<b>{ago((now - a['requested_at']).total_seconds())}</b></div>"
-        for a in snap["pend"])
-    med = snap["decided"]
-    med_row = (f"<div class='row split'><span>Median decision time "
-               f"({med['n']} decided)</span><b>{ago(med['med'])}</b></div>"
-               if med and med["n"] else "")
-    ages = (f"<div class='ages'><div class='caps'>Gate age</div>"
-            f"<div class='bar'><i style='width:{min(oldest / 86400, 1) * 100:.0f}%'></i></div>"
-            f"{ages_rows}{med_row}</div>") if n_pend else ""
-    saidrow = (f"<section class='saidrow{'' if ages else ' noages'}'>"
-               f"<div class='said'><h1>{h1}</h1><p>{' '.join(parts)}</p></div>"
-               f"{ages}</section>")
-
-    # groups
-    body = [readout, saidrow]
+    sep = "<span class='sep'>·</span>"
     ec2 = snap["runners"].get("ec2")
-    ec2_s = (f"The ec2 daemon answered {ago(ec2['age'])} ago" if ec2 and snap["online"].get("ec2")
-             else f"The ec2 daemon was last seen {ago(ec2['age'])} ago" if ec2
-             else "The ec2 daemon has never checked in")
-    empties = {
-        "needs_you": "<b>No gate is waiting.</b> When a stage finishes behind a gate, "
-                     "the decision lands here.",
-        "working": f"<b>Nothing is executing.</b> {H(ec2_s)} and "
-                   f"{'both slots are' if n_exec == 0 else 'a slot is'} free. It stays "
-                   f"idle until a gate is decided — an agent never moves a run past a human.",
-        "stuck": "<b>Nothing has failed.</b>" + (
-            " The design workstation has never checked in, so the next stage-1 run "
-            "will land here instead of starting — open Paper Desktop on the Lantern "
-            "file and start <code>pipeline.py daemon --runner workstation</code>."
-            if ws_offline else ""),
-        "closed": "<b>Nothing closed in the last 48 hours.</b>",
-    }
-    titles = [("needs_you", "Needs you", "oldest first", True),
-              ("working", "Agents working", "", False),
-              ("stuck", "Stuck", "retries exhausted, or no runner", False),
-              ("closed", "Closed", "last 48 hours" +
-               (" · none shipped" if not any(r["status"] == "done" for r, _ in groups["closed"]) else ""),
-               False)]
-    for key, name, note, hot in titles:
-        body.append(group_head(name, len(groups[key]), note, hot=hot and bool(groups[key])))
-        if strips[key]:
-            hdr = strip_header() if key == "needs_you" else ""
-            body.append(f"<div class='stripwrap'>{hdr}{''.join(strips[key])}</div>")
-        else:
-            body.append(f"<p class='empty'>{empties[key]}</p>")
+    ec2_bit = (f"ec2 <b>live</b>" if ec2 and snap["online"].get("ec2")
+               else f"ec2 last seen {ago(ec2['age'])} ago" if ec2
+               else "<span class='bad'>ec2 never seen</span>")
+    ws_bit = ("workstation <b>live</b>" if snap["online"].get("workstation")
+              else "<span class='warn'>workstation offline — stage 1 can't start</span>")
+    n_rev, n_run = len(cols["review"]), len(cols["running"])
+    statusline = (
+        f"<div class='statusline'>"
+        f"<span><span class='num'>{n_rev}</span> waiting on you</span>{sep}"
+        f"<span><span class='num'>{n_run}</span> running</span>{sep}"
+        f"<span>spent today <span class='num'>{H(fmt_money(cost_today))}</span>"
+        f" of ${tripwire:.0f}</span>{sep}"
+        f"<span>{ec2_bit}</span>{sep}<span>{ws_bit}</span></div>")
 
-    # retry / failure feed — where the fleet's real story lives
-    if snap["feed"]:
-        n_fail = sum(1 for f in snap["feed"] if f["status"] == "failed")
-        n_rec = sum(1 for f in snap["feed"] if f["status"] == "succeeded")
-        rows = []
-        for f in snap["feed"]:
-            if f["status"] == "failed":
-                msg = (f["error"] or "failed, no error recorded").splitlines()[0][:110]
-                cls = "er"
-            else:
-                msg, cls = f"succeeded on attempt {f['attempt']}", "er ok"
-            rows.append(
-                f"<div class='att'><span class='tm'>{f['started_at']:%b %d %H:%M}</span>"
-                f"<span class='rn'><a href='/run/{H(f['run_id'])}'>{H(run_short(f['run_id']))}</a>"
-                f" · {H(f['stage'])}</span>"
-                f"<span class='{cls}'>{H(msg)}</span>"
-                f"<span class='at'>attempt {f['attempt']}</span></div>")
-        body.append(f"<section class='feed'><div class='th'>"
-                    f"<span class='caps'>Attempts · last 48 hours</span>"
-                    f"<span class='caps'>{n_fail} failed · {n_rec} recovered on retry</span>"
-                    f"</div>{''.join(rows)}</section>")
+    COLS = [
+        ("queued",  "Queued",  "Empty. Runs wait here for a runner slot before an agent picks them up."),
+        ("running", "Running", "No agent is working right now. A ticket moves here when a daemon claims it."),
+        ("blocked", "Blocked", "Nothing has failed."),
+        ("review",  "Review",  "Nothing needs you. When a stage finishes behind a gate, its ticket lands here."),
+        ("done",    "Done",    "Nothing closed in the last 48 hours."),
+    ]
+    kb = []
+    for key, name, empty in COLS:
+        hot = key == "review" and bool(cols[key])
+        head = (f"<div class='kbhead{' hot' if hot else ''}'>"
+                f"<span class='n'>{H(name)}</span><span class='c'>{len(cols[key])}</span></div>")
+        content = "".join(cols[key]) if cols[key] else f"<p class='kbempty'>{H(empty)}</p>"
+        kb.append(f"<div class='kbcol'>{head}{content}</div>")
 
-    return page("Board — Lantern Mission Control", "".join(body), user, "/", now)
+    return page("Board — Lantern Mission Control",
+                statusline + f"<section class='kb'>{''.join(kb)}</section>",
+                user, "/", now)
 
 
 @app.get("/gates", response_class=HTMLResponse)
@@ -683,11 +706,9 @@ async def gates(request: Request):
         """SELECT * FROM approvals WHERE status != 'pending'
            ORDER BY decided_at DESC NULLS LAST LIMIT 12""")
 
-    body = [f"<section class='saidrow noages'><div class='said'>"
-            f"<h1>{len(pend)} gate{'s' if len(pend) != 1 else ''} waiting, oldest first</h1>"
-            f"<p>Approving writes the decision server-side and advances the run; "
-            f"rejecting stops it for rework. Every decision lands in the audit log "
-            f"with your name on it.</p></div></section>"]
+    body = [f"<h2 class='sect'>{len(pend)} gate{'s' if len(pend) != 1 else ''} waiting, oldest first</h2>",
+            "<p class='sub'>Approving advances the run; rejecting stops it for rework. "
+            "Every decision lands in the audit log with your name on it.</p>"]
     if pend:
         for a in pend:
             body.append(gate_card(a, runs.get(a["run_id"]), now))
@@ -713,7 +734,8 @@ async def gates(request: Request):
                     f"<span class='caps'>Decided · most recent</span>"
                     f"<span class='caps'>{len(history)} shown</span></div>{''.join(rows)}</section>")
 
-    return page("Gates — Lantern Mission Control", "".join(body), user, "/gates", now)
+    return page("Gates — Lantern Mission Control",
+                f"<main class='page'>{''.join(body)}</main>", user, "/gates", now)
 
 
 @app.get("/runs", response_class=HTMLResponse)
@@ -736,7 +758,8 @@ async def runs_index(request: Request):
             group_head("Closed", len(closed_s), "full history"),
             f"<div class='stripwrap'>{''.join(closed_s)}</div>" if closed_s
             else "<p class='empty'><b>Nothing has closed yet.</b></p>"]
-    return page("Runs — Lantern Mission Control", "".join(body), user, "/runs", now)
+    return page("Runs — Lantern Mission Control",
+                f"<main class='page'>{''.join(body)}</main>", user, "/runs", now)
 
 
 @app.get("/spend", response_class=HTMLResponse)
@@ -836,7 +859,8 @@ async def spend(request: Request):
                 f"crashed before reporting usage have no token counts and are flagged "
                 f"unmetered — real spend is higher than shown.</p>")
 
-    return page("Spend — Lantern Mission Control", "".join(body), user, "/spend", now)
+    return page("Spend — Lantern Mission Control",
+                f"<main class='page'>{''.join(body)}</main>", user, "/spend", now)
 
 
 @app.get("/run/{run_id}", response_class=HTMLResponse)
@@ -974,7 +998,8 @@ async def run_page(run_id: str, request: Request):
                     f"this run, newest first — {len(events)} shown.</p>"
                     f"<div>{''.join(rows)}</div>")
 
-    return page(f"{run_id} — Lantern Mission Control", "".join(body), user, "/runs", now)
+    return page(f"{run_id} — Lantern Mission Control",
+                f"<main class='page'>{''.join(body)}</main>", user, "/runs", now)
 
 
 @app.get("/file/{rel:path}")
