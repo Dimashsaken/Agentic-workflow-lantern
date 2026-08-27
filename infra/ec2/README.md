@@ -126,6 +126,19 @@ GITHUB_LANTERN_BOT_TOKEN=          # HOST-ONLY — authenticates the mirror fetc
                                    #   allowlisted into a sandbox, never in the mirror config
 ```
 
+**Before stage 4's first run, preflight the target:**
+
+```bash
+cd ~/Agentic-workflow-lantern/tools/azure-runner && .venv/bin/python pipeline.py qa-preflight
+```
+
+It fills `LANTERN_QA_DEV_*` from SSM (`/lantern/qa/dev/{base_url,user,pass}` — the
+daemon does the same at startup, so the documented SSM path no longer needs a
+hand-copied `.env`), then checks reachability **from a sandbox container**, not just
+from the host. That last check is the one that decides whether stage 4 works: a dev
+environment on localhost, behind Tailscale only, or inside a VPC the container network
+cannot see will pass a host curl and still fail the stage.
+
 **QA stages (image v2, P0.1):** the sandbox image bakes `tools/qa-recorder`'s deps;
 video recording is configured by the ORCHESTRATOR itself — for QA stages it reads the
 `infra/sandbox/qa-mcp-config.json` template, injects the run's mounted `media/` dir as

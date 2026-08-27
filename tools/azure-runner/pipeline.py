@@ -840,6 +840,13 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
 
 
 async def cmd_daemon(runner: str) -> None:
+    if runner == "ec2":
+        loaded, missing = await asyncio.to_thread(load_ssm_qa_env)
+        if loaded:
+            print(f"QA targets loaded from SSM: {', '.join(loaded)}")
+        if missing:
+            print(f"QA targets not configured: {', '.join(missing)} — QA stages will run "
+                  f"against no target until these exist (see `pipeline.py qa-preflight`)")
     conn = await connect()
     if runner == "workstation" and not await paper_reachable():
         sys.exit(PAPER_PREFLIGHT_HINT)  # fail fast at startup, never mid-run
@@ -993,6 +1000,111 @@ async def cmd_set_product(run_id: str, repo: str, branch: str) -> None:
     print(f"[{run_id}] product target set: {repo} @ {branch} ({r.stdout.strip()[:12]})\n"
           f"  mirror: {mirror}\n"
           f"  stages from here on get it read-only at the `product/` prefix.")
+
+
+# ── QA target credentials from SSM (P0.1's documented path, made real) ───────
+# infra/ec2/README.md has always said these come from /lantern/qa/{dev,staging}/*,
+# but nothing read them at runtime: the daemon loads a hand-written .env, so the
+# documented mechanism only worked if a human copied the values by hand. Fill the
+# gap here — env/.env still wins, so laptops and the workstation are unaffected.
+QA_SSM_PARAMS = {
+    "LANTERN_QA_DEV_BASE_URL": "/lantern/qa/dev/base_url",
+    "LANTERN_QA_DEV_USER": "/lantern/qa/dev/user",
+    "LANTERN_QA_DEV_PASS": "/lantern/qa/dev/pass",
+    "LANTERN_QA_STAGING_BASE_URL": "/lantern/qa/staging/base_url",
+    "LANTERN_QA_STAGING_USER": "/lantern/qa/staging/user",
+    "LANTERN_QA_STAGING_PASS": "/lantern/qa/staging/pass",
+}
+
+
+def load_ssm_qa_env() -> tuple[list[str], list[str]]:
+    """Fill unset LANTERN_QA_* from SSM. Returns (loaded_names, missing_names).
+
+    Values are never printed or logged — only names. A missing parameter is normal
+    (no staging target yet) and is not an error; an unusable aws CLI is reported once.
+    """
+    loaded, missing = [], []
+    for var, path in QA_SSM_PARAMS.items():
+        if os.environ.get(var):
+            continue
+        try:
+            r = subprocess.run(
+                ["aws", "ssm", "get-parameter", "--name", path, "--with-decryption",
+                 "--query", "Parameter.Value", "--output", "text"],
+                capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired):
+            return loaded, list(QA_SSM_PARAMS)      # no aws CLI / no route: all missing
+        value = r.stdout.strip()
+        if r.returncode == 0 and value and value != "None":
+            os.environ[var] = value
+            loaded.append(var)
+        else:
+            missing.append(var)
+    return loaded, missing
+
+
+async def cmd_qa_preflight(role: str) -> None:
+    """Can a QA stage actually reach its target? Answer before burning a stage run.
+
+    Checks the three things that each fail differently: the credentials are
+    configured, the HOST can reach the target, and — the one that actually decides
+    whether stage 4 works — a SANDBOX CONTAINER can reach it. A dev environment on
+    localhost, behind Tailscale, or inside a VPC the container's network namespace
+    cannot see passes the first two checks and fails the third.
+    """
+    prefix = QA_TARGET_PREFIX[role]
+    # qa_stage_env keys off the STAGE ('04-qa-dev'), not the role — resolve it from the
+    # feature pipeline so this cannot drift from what the dispatcher actually maps.
+    # (ROLE_FOR_STAGE also maps the debug lifecycle's '05-regression' to qa-dev; both
+    # resolve to the same env prefix, but the feature stage is the one being previewed.)
+    stage = next(k for k, *_ in FEATURE_STAGES if ROLE_FOR_STAGE.get(k) == role)
+    loaded, _ = load_ssm_qa_env()
+    if loaded:
+        print(f"loaded from SSM: {', '.join(loaded)}")
+    base = os.environ.get(prefix + "_BASE_URL", "")
+    user = os.environ.get(prefix + "_USER", "")
+    pw = os.environ.get(prefix + "_PASS", "")
+
+    print(f"\n{stage} target")
+    print(f"  {prefix}_BASE_URL  {base or '(unset)'}")
+    print(f"  {prefix}_USER      {'set' if user else '(unset)'}")
+    print(f"  {prefix}_PASS      {'set' if pw else '(unset)'}")
+    if not base:
+        sys.exit(f"\nNOT CONFIGURED. Put the values in SSM ({QA_SSM_PARAMS[prefix + '_BASE_URL']} "
+                 f"and _user/_pass as SecureString), or set them in .env, then re-run this.")
+
+    def curl(argv: list[str]) -> tuple[str, str]:
+        try:
+            r = subprocess.run(argv, capture_output=True, text=True, timeout=45)
+            return r.stdout.strip(), r.stderr.strip()[-200:]
+        except (OSError, subprocess.TimeoutExpired) as e:
+            return "", str(e)[-200:]
+
+    print("\nreachability")
+    code, err = curl(["curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}",
+                      "--max-time", "30", base])
+    print(f"  host      HTTP {code or 'FAILED'}{'  ' + err if err else ''}")
+
+    # The sandbox check uses the real image and the real per-stage env mapping, so a
+    # pass here means stage 4's container sees exactly this.
+    if EXECUTOR == "docker":
+        cmd = ["docker", "run", "--rm", "--add-host=host.docker.internal:host-gateway",
+               "--entrypoint", "curl"]
+        for inner, value in qa_stage_env(stage).items():
+            if inner != "QA_PASS":
+                cmd += ["-e", f"{inner}={value}"]
+        cmd += [SANDBOX_IMAGE, "-sS", "-o", "/dev/null", "-w", "%{http_code}",
+                "--max-time", "30", base]
+        code2, err2 = curl(cmd)
+        print(f"  sandbox   HTTP {code2 or 'FAILED'}{'  ' + err2 if err2 else ''}")
+        ok = code2.startswith(("2", "3", "401", "403"))
+        print("\n" + ("READY — a QA stage can reach this target." if ok else
+                      "NOT REACHABLE FROM A SANDBOX. The host result above does not matter: "
+                      "stage 4 runs in a container. A localhost-only, Tailscale-only, or "
+                      "VPC-internal dev environment needs a route into the container network "
+                      "(host.docker.internal, a published port, or a reachable hostname)."))
+    else:
+        print("  sandbox   (skipped — LANTERN_EXECUTOR is not 'docker' here)")
 
 
 async def cmd_retry(run_id: str) -> None:
@@ -1268,6 +1380,8 @@ def main() -> None:
         p = sub.add_parser(name); p.add_argument("run_id"); p.add_argument("gate")
         p.add_argument("--by", required=True); p.add_argument("--note", default="")
     p = sub.add_parser("retry"); p.add_argument("run_id")
+    p = sub.add_parser("qa-preflight", help="can a QA stage reach its target, from the sandbox?")
+    p.add_argument("--stage", choices=sorted(QA_TARGET_PREFIX), default="qa-dev")
     sub.add_parser("status")
     sub.add_parser("agents")
     p = sub.add_parser("ask"); p.add_argument("role"); p.add_argument("prompt")
@@ -1296,6 +1410,7 @@ def main() -> None:
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))
         case "retry":   asyncio.run(cmd_retry(a.run_id))
         case "status":  asyncio.run(cmd_status())
+        case "qa-preflight":  asyncio.run(cmd_qa_preflight(a.stage))
         case "agents":  asyncio.run(cmd_agents())
         case "ask":     asyncio.run(cmd_ask(a.role, a.prompt, a.session, a.by,
                                             a.new, a.interactive, a.no_browser))
