@@ -782,6 +782,15 @@ async def spend(request: Request):
     if daily:
         rows = []
         for r in daily:
+            # A model-less bucket is the unmetered pile (crashed before the usage
+            # line): printing 0 tokens / $0.00 for it would be a lie.
+            if r["model"] is None and not r["inp"]:
+                rows.append(
+                    f"<tr><td class='d'>{r['day']:%b %d}</td>"
+                    f"<td>— unmetered</td><td class='r'>{r['n']}</td>"
+                    f"<td class='r'>—</td><td class='r'>—</td><td class='r'>—</td>"
+                    f"<td class='r'>—</td><td></td></tr>")
+                continue
             cost = est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
             w = min(cost / tripwire * 100, 100)
             over = " over" if cost > tripwire else ""
@@ -806,9 +815,12 @@ async def spend(request: Request):
     if top:
         rows = "".join(
             f"<tr><td class='d'><a href='/run/{H(r['run_id'])}'>{H(r['run_id'])}</a></td>"
-            f"<td>{H(r['model'] or '—')}</td><td class='r'>{r['n']}</td>"
-            f"<td class='r'>{fmt_int(r['inp'])}</td><td class='r'>{fmt_int(r['outp'])}</td>"
-            f"<td class='r'>{H(fmt_money(est_cost_usd(r['inp'], r['cached'], r['outp'], r['model'])))}</td></tr>"
+            + (f"<td>— unmetered</td><td class='r'>{r['n']}</td>"
+               f"<td class='r'>—</td><td class='r'>—</td><td class='r'>—</td></tr>"
+               if r["model"] is None and not r["inp"] else
+               f"<td>{H(r['model'] or '—')}</td><td class='r'>{r['n']}</td>"
+               f"<td class='r'>{fmt_int(r['inp'])}</td><td class='r'>{fmt_int(r['outp'])}</td>"
+               f"<td class='r'>{H(fmt_money(est_cost_usd(r['inp'], r['cached'], r['outp'], r['model'])))}</td></tr>")
             for r in top)
         body.append(f"""<h2 class='sect'>By run, last 14 days</h2>
           <div class='stripwrap'><table class='spendtbl'>
