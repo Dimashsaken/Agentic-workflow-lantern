@@ -16,3 +16,5 @@ customer data. Target: under ~200 lines after consolidation.
 
 <!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
 
+- 2026-08-27 [feat-20260825-candidate-compare · 02-pre-coding] 2026-08-27: A feature brief must identify the product repository and base branch before pre-coding, because otherwise exact blast radius, consumer tracing, schema impact, and executable task paths cannot be established without guessing.
+- 2026-08-27 [feat-20260825-role-health · 02-pre-coding] 2026-08-27: A brief saying “no new data collection” does not prove “no schema change”; derived-health materialization and dismissal/action state can still require storage, so inspect the actual schema and query cost before declaring a schema-free plan.
