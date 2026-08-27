@@ -97,6 +97,16 @@ bash infra/sandbox/prove_isolation.sh     # the D12 proof battery — run after 
 bash infra/sandbox/prove_video.sh         # P0.1: proves an MCP session really records a .webm
 ```
 
+**After ANY code deploy, restart the daemon** — it is a long-lived Python process
+that loaded `pipeline.py` at startup, so a `git pull` alone changes nothing it
+executes (sandboxes rsync the checkout fresh, so *they* get new code immediately —
+which makes the mismatch silent and confusing: new agent behavior, old dispatcher).
+Bit us 2026-08-27, when two stages ran with a ledger-less dispatcher:
+
+```bash
+sudo systemctl restart lantern-orchestrator
+```
+
 Dispatcher knobs (environment of the daemon):
 
 ```

@@ -748,6 +748,34 @@ async def cmd_daemon(runner: str) -> None:
         hb_task.cancel()
 
 
+def record_gate_decision(run_id: str, gate: str, status: str, by: str, note: str) -> None:
+    """Write a gate decision into the RUN FOLDER, not just the approvals table.
+
+    D4 makes the run folder the only handoff channel, and agents have no read path
+    to Postgres — so a decision that lives only in `approvals` is invisible to every
+    downstream stage. Found by a real run 2026-08-27: pre-coding reported that "a
+    recommendation is not approval" and had to treat the chosen UX option as unknown
+    while the approval sat in the database. Append-only; the table remains the source
+    of truth for authority, this file is the readable trail agents orient on.
+    """
+    f = REPO / "workflow" / "runs" / run_id / "gate-decisions.md"
+    stamp = f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC"
+    try:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        new = not f.exists()
+        with f.open("a", encoding="utf-8") as fh:
+            if new:
+                fh.write("# Gate decisions\n\nRendered by the orchestrator when a gate is "
+                         "decided. The `approvals` table is the source of truth for "
+                         "authority; this file is what downstream agents read (D4).\n")
+            fh.write(f"\n## {gate} — {status.upper()}\n\n"
+                     f"- **Decided by:** {by}\n"
+                     f"- **When:** {stamp}\n"
+                     f"- **Note:** {note or '(none)'}\n")
+    except OSError as e:   # never fail a gate decision over a file write
+        print(f"[{run_id}] warning: could not write gate-decisions.md: {e}", file=sys.stderr)
+
+
 async def cmd_decide(run_id: str, gate: str, by: str, note: str, approved: bool) -> None:
     # NOTE (fail-closed): CLI access to this box == approval authority for now.
     # The Slack/GitHub front-ends MUST verify actor allowlists + webhook signatures.
@@ -760,6 +788,7 @@ async def cmd_decide(run_id: str, gate: str, by: str, note: str, approved: bool)
     if not updated:
         sys.exit(f"no pending approval for run {run_id} gate {gate}")
     await log_event(conn, run_id, f"human:{by}", f"gate_{status}", {"gate": gate, "note": note})
+    record_gate_decision(run_id, gate, status, by, note)
     if approved:
         stage = await conn.fetchval("SELECT current_stage FROM runs WHERE id = $1", run_id)
         await advance(conn, run_id, stage)
