@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Board B — obligation lanes · Lantern Mission Control</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ── Direction B: the house shell kept intact — Lantern narrates on the left,
+      the working surface is on the right. Lanes are WHO OWES THE NEXT MOVE,
+      not which stage the run is in; stage becomes a rail on the card.
+      This is the Fredrin / Symphony read: "what needs me?" first. ───────── */
+.body2{display:grid;grid-template-columns:400px 1fr;min-height:calc(100vh - 56px)}
+
+/* left: Lantern speaks */
+.narr{border-right:1px solid var(--edge);padding:26px 30px 20px;
+  display:flex;flex-direction:column}
+.narr .said{font-size:var(--text-md);line-height:1.62;margin:10px 0 0}
+.narr .said em{font-style:normal;color:var(--dawn-4)}
+.narr .said em.v{color:var(--danger)}   /* a verdict is semantic, never on the ramp */
+.narr .you{margin-top:26px}
+.narr .you p{font-size:var(--text-sm);line-height:1.6;color:var(--text);
+  font-weight:600;margin:8px 0 0}
+.saved{border-left:2px solid var(--success);padding-left:11px;margin-top:20px;
+  font-size:var(--text-xs);color:var(--success);line-height:1.5}
+.watch{margin-top:30px;border-top:1px solid var(--edge);padding-top:18px}
+.watch li{list-style:none;font-size:var(--text-sm);color:var(--text-muted);
+  padding:7px 0;display:flex;gap:9px;align-items:flex-start}
+.watch ul{margin:8px 0 0;padding:0}
+.watch li .dot{margin-top:8px}
+.narr .spacer{flex:1;min-height:20px}
+.ask{background:var(--surface-2);border:1px solid var(--edge);
+  border-radius:var(--r-md);padding:11px 13px;font-size:var(--text-sm);
+  color:var(--text-dim);display:flex;justify-content:space-between}
+.footline{margin-top:14px;font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.13em;font-size:var(--text-caps);color:var(--text-dim)}
+
+/* right: the board */
+.surface{padding:26px 32px 40px;min-width:0}
+.shead{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px}
+.shead h1{font-size:var(--text-xl);font-weight:600;margin:6px 0 0;letter-spacing:-.01em}
+.shead .meta{text-align:right;line-height:1.7}
+
+.lanes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;
+  align-items:start}
+.lanehead{display:flex;align-items:baseline;justify-content:space-between;
+  border-top:1px solid var(--edge);padding:11px 0 14px}
+.lanehead.hot{border-top-color:var(--accent)}
+.lanehead .n{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.13em;font-size:var(--text-caps);color:var(--text-muted)}
+.lanehead.hot .n{color:var(--text)}
+.lanehead .c{font-family:var(--font-mono);font-size:var(--text-sm);
+  color:var(--text-dim);font-variant-numeric:tabular-nums}
+.lanehead.hot .c{color:var(--accent)}
+
+.card{display:block;background:var(--surface-1);border:1px solid var(--edge);
+  border-top:1px solid var(--edge-top);border-radius:var(--r-md);
+  padding:14px;margin-bottom:11px}
+.card.hot{background:var(--surface-2);border-color:#2E2A22}
+.card .id{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text);
+  line-height:1.4;display:flex;gap:8px;align-items:flex-start;word-break:break-word}
+.card .chips{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}
+.card .line{font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;
+  margin:0 0 2px}
+.card .line b{color:var(--text);font-weight:600}
+.card .stage{display:flex;align-items:center;justify-content:space-between;
+  gap:8px;margin:12px 0 5px}
+.card .stage .lab{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.1em;font-size:var(--text-caps);color:var(--text-dim)}
+.card .stage .t{font-family:var(--font-mono);font-size:var(--text-caps);
+  color:var(--dawn-3);font-variant-numeric:tabular-nums}
+.card .foot{display:flex;align-items:baseline;justify-content:space-between;
+  gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--edge)}
+.card .foot .m{font-family:var(--font-mono);font-size:var(--text-sm);
+  font-variant-numeric:tabular-nums}
+.card .foot .t{font-family:var(--font-mono);font-size:var(--text-caps);
+  color:var(--text-dim);text-align:right;line-height:1.4}
+.card.slim{padding:11px 13px}
+.card.slim .id{font-size:var(--text-caps)}
+.card.slim .line{margin-top:7px}
+.act{margin-top:11px}
+.act .btn{width:100%;text-align:center}
+
+.empty{border:1px dashed var(--edge);border-radius:var(--r-md);
+  padding:14px;font-size:var(--text-xs);color:var(--text-dim);line-height:1.55}
+.empty b{color:var(--text-muted);font-weight:600;display:block;margin-bottom:4px}
+</style></head>
+<body>
+<div class="shell">
+  <nav class="rail">
+    <div class="logo"></div>
+    <div class="ico on">▦</div><div class="ico">◵</div><div class="ico">◫</div><div class="ico">⌁</div>
+    <div class="spacer"></div><div class="me">D</div>
+  </nav>
+
+  <div>
+    <nav class="topnav">
+      <a href="#" class="on">Board</a><a href="#">Gates</a><a href="#">Spend</a><a href="#">Runs</a>
+      <span class="grow"></span>
+      <span class="live"><span class="dot live"></span>Live · 12:45 UTC</span>
+    </nav>
+
+    <div class="body2">
+      <!-- Lantern narrates: the house shell's left column, kept. -->
+      <aside class="narr">
+        <div class="caps">Lantern</div>
+        <p class="said">Two runs are waiting on you, both since <em>02:06 this morning</em>.
+          Neither is really ready. Both planners finished in about ninety seconds and both
+          reports came back <em class="v">BLOCKED</em> — no product repository was ever set on these
+          runs, so neither could name a single file. Approving them approves a plan that
+          says there is no plan.</p>
+
+        <div class="you">
+          <div class="caps">What I'd do</div>
+          <p>Set the product repo on both runs, then re-run planning. It costs about a
+            dollar and takes three minutes.</p>
+        </div>
+
+        <div class="saved">Fixed Aug 27 — a BLOCKED stage no longer opens its gate.
+          These two gates opened before that shipped.</div>
+
+        <div class="watch">
+          <div class="caps">What I'm watching</div>
+          <ul>
+            <li><span class="dot gate"></span>Whether either plan gate gets a decision today</li>
+            <li><span class="dot fail"></span>The design workstation — offline, so stage 1 can't start</li>
+            <li><span class="dot idle"></span>Spend against the new $50/day tripwire</li>
+          </ul>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="ask"><span>Ask about a run…</span><span>⏎</span></div>
+        <div class="footline">— 2 runs open · 1 of 2 runners · $0.98 today</div>
+      </aside>
+
+      <!-- The working surface: four lanes by who owes the next move. -->
+      <main class="surface">
+        <div class="shead">
+          <div>
+            <span class="caps">Live · fleet board · by obligation</span>
+            <h1>Everything is waiting on a person</h1>
+          </div>
+          <div class="meta">
+            <span class="caps">ec2 live 2s ago</span><br>
+            <span class="caps" style="color:var(--danger)">workstation never seen</span>
+          </div>
+        </div>
+
+        <section class="lanes">
+          <!-- 1 -->
+          <div>
+            <div class="lanehead hot"><span class="n">Needs you</span><span class="c">2</span></div>
+
+            <a class="card hot" href="#">
+              <div class="id"><span class="dot gate"></span>feat-20260825-role-health</div>
+              <div class="chips"><span class="chip blocked">Report: blocked</span></div>
+              <div class="line"><b>Plan sign-off</b> — approve the schema plan before code</div>
+              <div class="line">2 blockers · no product repo · no UX choice recorded</div>
+              <div class="stage"><span class="lab">Stage 2 of 7 · planning</span><span class="t">10h 39m</span></div>
+              <div class="srail tall"><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="foot"><span class="m">$0.58</span>
+                <span class="t">337,780 tok · 84% cached<br>gpt-5.6-sol · 11 requests</span></div>
+              <div class="act"><button class="btn primary">Read the plan, then decide</button></div>
+            </a>
+
+            <a class="card hot" href="#">
+              <div class="id"><span class="dot gate"></span>feat-20260825-candidate-compare</div>
+              <div class="chips"><span class="chip blocked">Report: blocked</span></div>
+              <div class="line"><b>Plan sign-off</b> — approve the schema plan before code</div>
+              <div class="line">2 blockers · no product repo · no UX choice recorded</div>
+              <div class="stage"><span class="lab">Stage 2 of 7 · planning</span><span class="t">10h 39m</span></div>
+              <div class="srail tall"><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="foot"><span class="m">$0.40</span>
+                <span class="t">240,784 tok · 88% cached<br>gpt-5.6-sol · 13 requests</span></div>
+            </a>
+          </div>
+
+          <!-- 2 -->
+          <div>
+            <div class="lanehead"><span class="n">Agents working</span><span class="c">0</span></div>
+            <div class="empty"><b>Nothing is executing.</b>
+              The ec2 daemon is alive and has both of its two slots free. It stays idle
+              until a gate is decided — agents never move a run past a human.</div>
+          </div>
+
+          <!-- 3 -->
+          <div>
+            <div class="lanehead"><span class="n">Stuck</span><span class="c">0</span></div>
+            <div class="empty"><b>Nothing has failed.</b>
+              Runs land here when a stage exhausts its retries, or when the runner it
+              needs is offline. The design workstation is offline now — the next stage-1
+              run will appear here rather than starting.</div>
+          </div>
+
+          <!-- 4 -->
+          <div>
+            <div class="lanehead"><span class="n">Closed · 48h</span><span class="c">8</span></div>
+
+            <div class="card slim">
+              <div class="id"><span class="dot idle"></span>feat-20260820-demo-sso</div>
+              <div class="srail" style="margin-top:9px"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="fail"></i><i></i></div>
+              <div class="line">Cancelled at stage 6 · Aug 26</div>
+            </div>
+            <div class="card slim">
+              <div class="id"><span class="dot idle"></span>feat-20260810-demo-onboarding</div>
+              <div class="srail" style="margin-top:9px"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="fail"></i></div>
+              <div class="line">Cancelled at stage 7 · Aug 26</div>
+            </div>
+            <div class="card slim">
+              <div class="id"><span class="dot idle"></span>feat-20260826-systemd-proof</div>
+              <div class="srail" style="margin-top:9px"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="line">Sandbox proof · 3 attempts · Aug 26</div>
+            </div>
+            <div class="card slim">
+              <div class="id"><span class="dot idle"></span>feat-20260826-kill-proof</div>
+              <div class="srail" style="margin-top:9px"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="line">Sandbox proof · 2 attempts · Aug 26</div>
+            </div>
+            <div class="card slim">
+              <div class="id"><span class="dot idle"></span>feat-20260826-sandbox-proof</div>
+              <div class="srail" style="margin-top:9px"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="line">Sandbox proof · 2 attempts · Aug 26</div>
+            </div>
+            <div class="card slim">
+              <div class="id"><span class="dot idle"></span>feat-20260826-conc-a</div>
+              <div class="srail" style="margin-top:9px"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="line">Killed at the concurrency cap · Aug 26</div>
+            </div>
+            <div class="card slim">
+              <div class="id"><span class="dot idle"></span>feat-20260826-conc-b</div>
+              <div class="srail" style="margin-top:9px"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="line">Killed at the concurrency cap · Aug 26</div>
+            </div>
+            <div class="card slim">
+              <div class="id"><span class="dot idle"></span>feat-20260825-demo-export</div>
+              <div class="srail" style="margin-top:9px"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="line">Seed data, cleaned up · Aug 26</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</div>
+</body></html>

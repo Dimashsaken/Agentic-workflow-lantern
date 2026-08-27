@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Board C — flight strips · Lantern Mission Control</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ── Direction C: one run, one strip. The board is a single dense table
+      grouped by who owes the next move, with the 7-stage pipeline compressed
+      into a rail inside each row. This is Symphony's real dashboard IA
+      (running / blocked / retrying tables) rendered in the house style —
+      and the only one of the three that still reads at forty runs. ─────── */
+.page{padding:0 32px 40px}
+
+.readout{display:grid;grid-template-columns:repeat(5,1fr) auto;gap:1px;
+  background:var(--edge);border-bottom:1px solid var(--edge);margin:0 -32px 0}
+.readout>div{background:var(--surface-0);padding:18px 26px 16px}
+.readout .v{font-family:var(--font-mono);font-size:var(--text-xl);line-height:1;
+  font-variant-numeric:tabular-nums;margin:7px 0 5px}
+.readout .v small{font-size:var(--text-sm);color:var(--text-dim)}
+.readout .d{font-size:var(--text-xs);color:var(--text-muted)}
+.readout .v.act{color:var(--accent)} .readout .v.bad{color:var(--danger)}
+.readout .cta{display:flex;align-items:center;padding:18px 32px 16px}
+
+/* the sentence that explains the numbers above it, paired with the ages that
+   make it urgent — so the full width carries content, not just the left half */
+.saidrow{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:52px;
+  padding:22px 0 20px;border-bottom:1px solid var(--edge);align-items:start}
+.said{font-size:var(--text-md);line-height:1.6;color:var(--text-muted);margin:0}
+.said b{color:var(--text);font-weight:600}
+.said em{font-style:normal;color:var(--danger)}   /* a verdict is semantic, never on the ramp */
+.ages{border-left:1px solid var(--edge);padding-left:24px}
+.ages .row{display:flex;justify-content:space-between;align-items:baseline;
+  gap:12px;padding:6px 0;font-size:var(--text-xs);color:var(--text-muted)}
+.ages .row b{font-family:var(--font-mono);font-weight:400;color:var(--text);
+  font-variant-numeric:tabular-nums}
+.ages .bar{height:3px;background:var(--surface-3);border-radius:var(--r-pill);
+  margin:9px 0 4px;overflow:hidden}
+.ages .bar i{display:block;height:100%;background:var(--dawn-2)}
+
+/* ── the strips ─────────────────────────────────────────────────────────── */
+.grp{display:flex;align-items:baseline;gap:12px;padding:26px 0 9px}
+.grp .n{font-family:var(--font-label);text-transform:uppercase;letter-spacing:.14em;
+  font-size:var(--text-caps);color:var(--text)}
+.grp .c{font-family:var(--font-mono);font-size:var(--text-caps);color:var(--text-dim)}
+.grp .rule{flex:1;height:1px;background:var(--edge)}
+.grp .note{font-size:var(--text-xs);color:var(--text-dim)}
+.grp.hot .n{color:var(--accent)}
+
+.hdr,.strip{display:grid;
+  grid-template-columns:14px minmax(230px,1.5fr) 132px 118px minmax(190px,1.4fr) 74px 96px 128px 62px 16px;
+  gap:14px;align-items:center}
+.hdr{padding:0 12px 8px;font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.12em;font-size:var(--text-caps);color:var(--text-dim)}
+.hdr .r{text-align:right}
+
+.strip{padding:13px 12px;border-radius:var(--r-sm);border:1px solid transparent;
+  border-bottom:1px solid var(--edge)}
+.strip:hover{background:var(--surface-1)}
+.strip.hot{background:var(--surface-2);border-color:#2E2A22;border-radius:var(--r-md);
+  margin-bottom:6px}
+.strip.dim{opacity:.62}
+
+.strip .id{display:block;font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strip .sub{display:block;font-size:var(--text-caps);color:var(--text-dim);
+  margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strip .st .lab{font-size:var(--text-caps);color:var(--text-muted);
+  display:block;margin-bottom:6px;white-space:nowrap}
+.strip .wait{font-size:var(--text-xs);color:var(--text-muted);line-height:1.45;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strip .wait b{color:var(--text);font-weight:600}
+.strip .wait .why{display:block;font-size:var(--text-caps);color:var(--text-dim);
+  margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strip .t{font-family:var(--font-mono);font-size:var(--text-xs);text-align:right;
+  font-variant-numeric:tabular-nums;color:var(--dawn-3)}
+.strip .t.cold{color:var(--text-dim)}
+.strip .mdl{font-family:var(--font-mono);font-size:var(--text-caps);
+  color:var(--text-muted);text-align:right;line-height:1.45}
+.strip .mdl span{color:var(--text-dim);display:block}
+.strip .tok{font-family:var(--font-mono);font-size:var(--text-caps);text-align:right;
+  color:var(--text-muted);font-variant-numeric:tabular-nums;line-height:1.45}
+.strip .tok span{color:var(--text-dim);display:block}
+.strip .money{font-family:var(--font-mono);font-size:var(--text-sm);text-align:right;
+  font-variant-numeric:tabular-nums}
+.strip .go{color:var(--text-dim);text-align:right;font-size:var(--text-xs)}
+.strip.hot .go{color:var(--accent)}
+
+/* an empty lane states its case in one line and gets out of the way — a tall
+   empty band in the middle of a board reads as broken, not as calm */
+.empty{padding:11px 12px 12px;font-size:var(--text-xs);color:var(--text-dim);
+  border-bottom:1px solid var(--edge);line-height:1.55;max-width:none}
+.empty b{color:var(--text-muted);font-weight:600}
+
+/* bottom third: the retry record, which is where the fleet's real failures live */
+.tail{margin-top:34px;border-top:1px solid var(--edge);padding-top:20px}
+.tail .th{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.att{display:grid;grid-template-columns:70px 200px 1fr 90px;gap:16px;
+  padding:11px 12px;border-bottom:1px solid var(--edge);font-size:var(--text-xs);
+  align-items:center}
+.att:last-child{border-bottom:0}
+.att .tm{font-family:var(--font-mono);color:var(--text-dim)}
+.att .rn{font-family:var(--font-mono);color:var(--text-muted)}
+.att .er{font-family:var(--font-mono);font-size:var(--text-caps);color:var(--danger);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att .er.ok{color:var(--success)}
+.att .at{text-align:right;font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.11em;font-size:var(--text-caps);color:var(--text-dim)}
+</style></head>
+<body>
+<div class="shell">
+  <nav class="rail">
+    <div class="logo"></div>
+    <div class="ico on">▦</div><div class="ico">◵</div><div class="ico">◫</div><div class="ico">⌁</div>
+    <div class="spacer"></div><div class="me">D</div>
+  </nav>
+
+  <div>
+    <nav class="topnav">
+      <a href="#" class="on">Board</a><a href="#">Gates</a><a href="#">Spend</a><a href="#">Runs</a>
+      <span class="grow"></span>
+      <span class="live"><span class="dot live"></span>Live · 12:45 UTC</span>
+    </nav>
+
+    <div class="page">
+      <section class="readout">
+        <div><div class="caps">Waiting on you</div><div class="v act">2</div>
+          <div class="d">Oldest 10h 39m</div></div>
+        <div><div class="caps">Agents working</div><div class="v">0</div>
+          <div class="d">2 ec2 slots free</div></div>
+        <div><div class="caps">Reports say blocked</div><div class="v bad">2</div>
+          <div class="d">Stage passed, verdict didn't</div></div>
+        <div><div class="caps">Spent today</div><div class="v">$0.98<small> / 50</small></div>
+          <div class="d">2% of the daily tripwire</div></div>
+        <div><div class="caps">Runners</div><div class="v">1<small> / 2</small></div>
+          <div class="d">workstation never seen</div></div>
+        <div class="cta"><button class="btn primary">Open both plan gates</button></div>
+      </section>
+
+      <div class="saidrow">
+        <p class="said">Both open runs are parked at the same gate and both of their plans came
+          back <em>BLOCKED</em>. The planner ran fine — ninety seconds, about a dollar between
+          them — but <b>neither run has a product repository set</b>, so it had no files to plan
+          against. The gates opened anyway; that was fixed this morning, after these two.</p>
+        <div class="ages">
+          <div class="caps">Gate age</div>
+          <div class="bar"><i style="width:53%"></i></div>
+          <div class="row"><span>role-health · plan sign-off</span><b>10h 39m</b></div>
+          <div class="row"><span>candidate-compare · plan sign-off</span><b>10h 39m</b></div>
+          <div class="row" style="border-top:1px solid var(--edge);margin-top:6px;padding-top:10px">
+            <span>The only 2 gates ever decided took</span><b>20h 16m</b></div>
+        </div>
+      </div>
+
+      <!-- ── needs you ── -->
+      <div class="grp hot"><span class="n">Needs you</span><span class="c">2</span>
+        <span class="rule"></span><span class="note">oldest first</span></div>
+      <div class="hdr">
+        <span></span><span>Run</span><span>Stage</span><span>Verdict</span>
+        <span>Waiting on</span><span class="r">Elapsed</span><span class="r">Model</span>
+        <span class="r">Tokens</span><span class="r">Est. $</span><span></span>
+      </div>
+
+      <a class="strip hot" href="#">
+        <span class="dot gate"></span>
+        <span><span class="id">feat-20260825-role-health</span>
+          <span class="sub">justin · opened Aug 26</span></span>
+        <span class="st"><span class="lab">2 of 7 · planning</span>
+          <span class="srail"><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i></span></span>
+        <span><span class="chip blocked">Blocked</span></span>
+        <span class="wait"><b>You</b> — plan sign-off
+          <span class="why">2 blockers · no product repo set</span></span>
+        <span class="t">10h 39m</span>
+        <span class="mdl">gpt-5.6-sol<span>11 requests</span></span>
+        <span class="tok">337,780<span>84% cached</span></span>
+        <span class="money">$0.58</span>
+        <span class="go">→</span>
+      </a>
+
+      <a class="strip hot" href="#">
+        <span class="dot gate"></span>
+        <span><span class="id">feat-20260825-candidate-compare</span>
+          <span class="sub">justin · opened Aug 26</span></span>
+        <span class="st"><span class="lab">2 of 7 · planning</span>
+          <span class="srail"><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i></span></span>
+        <span><span class="chip blocked">Blocked</span></span>
+        <span class="wait"><b>You</b> — plan sign-off
+          <span class="why">2 blockers · no product repo set</span></span>
+        <span class="t">10h 39m</span>
+        <span class="mdl">gpt-5.6-sol<span>13 requests</span></span>
+        <span class="tok">240,784<span>88% cached</span></span>
+        <span class="money">$0.40</span>
+        <span class="go">→</span>
+      </a>
+
+      <!-- ── working ── -->
+      <div class="grp"><span class="n">Agents working</span><span class="c">0</span>
+        <span class="rule"></span></div>
+      <p class="empty"><b>Nothing is executing.</b> The ec2 daemon answered 2 seconds ago and
+        both of its slots are free. It will stay idle until a gate is decided — an agent never
+        moves a run past a human.</p>
+
+      <!-- ── stuck ── -->
+      <div class="grp"><span class="n">Stuck</span><span class="c">0</span>
+        <span class="rule"></span><span class="note">retries exhausted, or no runner</span></div>
+      <p class="empty"><b>Nothing has failed.</b> The design workstation has never checked in,
+        so the next stage-1 run will land here instead of starting — open Paper Desktop on the
+        Lantern file and start <span class="mono" style="color:var(--text-muted)">pipeline.py daemon --runner workstation</span>.</p>
+
+      <!-- ── closed ── -->
+      <div class="grp"><span class="n">Closed</span><span class="c">8</span>
+        <span class="rule"></span><span class="note">last 48 hours · none shipped</span></div>
+
+      <a class="strip dim" href="#"><span class="dot idle"></span>
+        <span><span class="id">feat-20260820-demo-sso</span><span class="sub">dev-anna · seed data</span></span>
+        <span class="st"><span class="lab">6 of 7 · security</span>
+          <span class="srail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="fail"></i><i></i></span></span>
+        <span><span class="chip">Cancelled</span></span>
+        <span class="wait">Nobody — closed Aug 26<span class="why">staging_deploy gate expired</span></span>
+        <span class="t cold">Aug 26</span><span class="mdl">—<span>unmetered</span></span>
+        <span class="tok">—<span>no ledger</span></span><span class="money">—</span><span class="go">→</span></a>
+
+      <a class="strip dim" href="#"><span class="dot idle"></span>
+        <span><span class="id">feat-20260810-demo-onboarding</span><span class="sub">justin · seed data</span></span>
+        <span class="st"><span class="lab">7 of 7 · QA staging</span>
+          <span class="srail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="fail"></i></span></span>
+        <span><span class="chip">Cancelled</span></span>
+        <span class="wait">Nobody — closed Aug 26<span class="why">video link points at a dead bucket</span></span>
+        <span class="t cold">Aug 26</span><span class="mdl">—<span>unmetered</span></span>
+        <span class="tok">—<span>no ledger</span></span><span class="money">—</span><span class="go">→</span></a>
+
+      <a class="strip dim" href="#"><span class="dot idle"></span>
+        <span><span class="id">feat-20260826-systemd-proof</span><span class="sub">justin · sandbox proof</span></span>
+        <span class="st"><span class="lab">1 of 7 · ui-ux design</span>
+          <span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+        <span><span class="chip warn">3 attempts</span></span>
+        <span class="wait">Nobody — closed Aug 26<span class="why">recovered on attempt 3, then cancelled</span></span>
+        <span class="t cold">Aug 26</span><span class="mdl">—<span>unmetered</span></span>
+        <span class="tok">—<span>no ledger</span></span><span class="money">—</span><span class="go">→</span></a>
+
+      <a class="strip dim" href="#"><span class="dot idle"></span>
+        <span><span class="id">feat-20260826-kill-proof</span><span class="sub">justin · sandbox proof</span></span>
+        <span class="st"><span class="lab">1 of 7 · ui-ux design</span>
+          <span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+        <span><span class="chip warn">2 attempts</span></span>
+        <span class="wait">Nobody — closed Aug 26<span class="why">sandbox killed, then recovered</span></span>
+        <span class="t cold">Aug 26</span><span class="mdl">—<span>unmetered</span></span>
+        <span class="tok">—<span>no ledger</span></span><span class="money">—</span><span class="go">→</span></a>
+
+      <a class="strip dim" href="#"><span class="dot idle"></span>
+        <span><span class="id">feat-20260826-sandbox-proof</span><span class="sub">justin · sandbox proof</span></span>
+        <span class="st"><span class="lab">1 of 7 · ui-ux design</span>
+          <span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+        <span><span class="chip warn">2 attempts</span></span>
+        <span class="wait">Nobody — closed Aug 26<span class="why">venv import error, then recovered</span></span>
+        <span class="t cold">Aug 26</span><span class="mdl">—<span>unmetered</span></span>
+        <span class="tok">—<span>no ledger</span></span><span class="money">—</span><span class="go">→</span></a>
+
+      <a class="strip dim" href="#"><span class="dot idle"></span>
+        <span><span class="id">feat-20260826-conc-a</span><span class="sub">justin · concurrency proof</span></span>
+        <span class="st"><span class="lab">1 of 7 · ui-ux diverge</span>
+          <span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+        <span><span class="chip blocked">Killed</span></span>
+        <span class="wait">Nobody — closed Aug 26<span class="why">exit 137 at the concurrency cap of 2</span></span>
+        <span class="t cold">Aug 26</span><span class="mdl">—<span>unmetered</span></span>
+        <span class="tok">—<span>no ledger</span></span><span class="money">—</span><span class="go">→</span></a>
+
+      <a class="strip dim" href="#"><span class="dot idle"></span>
+        <span><span class="id">feat-20260826-conc-b</span><span class="sub">justin · concurrency proof</span></span>
+        <span class="st"><span class="lab">1 of 7 · ui-ux diverge</span>
+          <span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+        <span><span class="chip blocked">Killed</span></span>
+        <span class="wait">Nobody — closed Aug 26<span class="why">exit 137 at the concurrency cap of 2</span></span>
+        <span class="t cold">Aug 26</span><span class="mdl">—<span>unmetered</span></span>
+        <span class="tok">—<span>no ledger</span></span><span class="money">—</span><span class="go">→</span></a>
+
+      <a class="strip dim" href="#"><span class="dot idle"></span>
+        <span><span class="id">feat-20260825-demo-export</span><span class="sub">justin · seed data</span></span>
+        <span class="st"><span class="lab">1 of 7 · ui-ux</span>
+          <span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+        <span><span class="chip">Cancelled</span></span>
+        <span class="wait">Nobody — closed Aug 26<span class="why">ux_signoff gate expired</span></span>
+        <span class="t cold">Aug 26</span><span class="mdl">—<span>unmetered</span></span>
+        <span class="tok">—<span>no ledger</span></span><span class="money">—</span><span class="go">→</span></a>
+
+      <!-- bottom third: the retry record -->
+      <section class="tail">
+        <div class="th"><span class="caps">Sandbox attempts · Aug 26</span>
+          <span class="caps">5 failed · 3 recovered on retry</span></div>
+        <div class="att"><span class="tm">06:17</span><span class="rn">systemd-proof</span>
+          <span class="er ok">succeeded — sandbox mounted, agent ran to completion</span>
+          <span class="at">attempt 3</span></div>
+        <div class="att"><span class="tm">06:16</span><span class="rn">systemd-proof</span>
+          <span class="er">sandbox exited 23: dir "/work/lantern/tools" failed: Permission denied</span>
+          <span class="at">attempt 2</span></div>
+        <div class="att"><span class="tm">06:13</span><span class="rn">systemd-proof</span>
+          <span class="er">sandbox exited 23: dir "/work/lantern/tools" failed: Permission denied</span>
+          <span class="at">attempt 1</span></div>
+        <div class="att"><span class="tm">06:05</span><span class="rn">conc-b</span>
+          <span class="er">sandbox exited 137 — killed at the concurrency cap</span>
+          <span class="at">attempt 1</span></div>
+        <div class="att"><span class="tm">06:05</span><span class="rn">conc-a</span>
+          <span class="er">sandbox exited 137 — killed at the concurrency cap</span>
+          <span class="at">attempt 1</span></div>
+        <div class="att"><span class="tm">05:59</span><span class="rn">sandbox-proof</span>
+          <span class="er ok">succeeded — 90s, no permission error</span>
+          <span class="at">attempt 2</span></div>
+        <div class="att"><span class="tm">05:56</span><span class="rn">sandbox-proof</span>
+          <span class="er">sandbox exited 1: File "/opt/lantern/venv/lib/python3.12/site-packages/…"</span>
+          <span class="at">attempt 1</span></div>
+      </section>
+    </div>
+  </div>
+</div>
+</body></html>

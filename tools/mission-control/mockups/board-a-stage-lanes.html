@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Board A — stage lanes · Lantern Mission Control</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ── Direction A: seven stage lanes, edge to edge, no narration column.
+      Every run sits in the lane it is physically in. Reading is left→right
+      through the pipeline, exactly as the pipeline runs. ───────────────── */
+.page{padding:0 32px 40px}
+.readout{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;
+  background:var(--edge);border-bottom:1px solid var(--edge);margin:0 -32px 26px}
+.readout>div{background:var(--surface-0);padding:20px 32px 18px}
+.readout .v{font-family:var(--font-mono);font-size:var(--text-xl);line-height:1;
+  font-variant-numeric:tabular-nums;margin:8px 0 6px}
+.readout .v small{font-size:var(--text-sm);color:var(--text-dim)}
+.readout .d{font-size:var(--text-xs);color:var(--text-muted)}
+.readout .v.act{color:var(--accent)}
+.readout .v.bad{color:var(--danger)}
+
+.boardhead{display:flex;align-items:flex-end;justify-content:space-between;
+  margin:0 0 18px}
+.boardhead h2{font-size:var(--text-lg);font-weight:600;margin:0}
+.boardhead p{margin:4px 0 0;font-size:var(--text-xs);color:var(--text-muted)}
+
+.lanes{display:grid;grid-template-columns:repeat(7,minmax(178px,1fr));
+  gap:12px;align-items:start}
+.lane{min-width:0}
+.lanehead{border-top:1px solid var(--edge);padding:10px 0 12px;margin-bottom:10px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+.lanehead.hot{border-top-color:var(--dawn-4)}
+.lanehead .n{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.11em;font-size:var(--text-caps);color:var(--text-muted);
+  line-height:1.35}
+.lanehead.hot .n{color:var(--text)}
+.lanehead .c{font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--text-dim);font-variant-numeric:tabular-nums}
+.lanehead .c.on{color:var(--dawn-4)}
+.who{font-size:var(--text-caps);color:var(--text-dim);margin:-6px 0 12px;
+  letter-spacing:.04em}
+
+.card{background:var(--surface-1);border:1px solid var(--edge);
+  border-top:1px solid var(--edge-top);border-radius:var(--r-md);
+  padding:12px 12px 11px;margin-bottom:10px;display:block}
+.card.act{background:var(--surface-2)}
+.card .id{font-family:var(--font-mono);font-size:var(--text-xs);
+  line-height:1.35;word-break:break-word;display:flex;gap:7px;align-items:flex-start}
+.card .id b{font-weight:400;color:var(--text)}
+.card .chips{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0 10px}
+.card .wait{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 3px}
+.card .wait b{color:var(--text);font-weight:600}
+.card .elapsed{font-family:var(--font-mono);font-size:var(--text-xs);
+  color:var(--dawn-3);font-variant-numeric:tabular-nums}
+.card .foot{display:flex;align-items:flex-end;justify-content:space-between;
+  gap:8px;margin-top:11px;padding-top:9px;border-top:1px solid var(--edge)}
+.card .foot .money{font-family:var(--font-mono);font-size:var(--text-sm);
+  font-variant-numeric:tabular-nums}
+.card .foot .tok{font-size:var(--text-caps);color:var(--text-dim);
+  font-family:var(--font-mono);text-align:right;line-height:1.4}
+.card .srail{margin:10px 0 0}
+
+.empty{font-size:var(--text-xs);color:var(--text-dim);padding:2px 0 0;line-height:1.5}
+
+/* the bottom third earns its space: closed runs + what the fleet did last night */
+.tail{display:grid;grid-template-columns:1fr 400px;gap:40px;margin-top:38px;
+  border-top:1px solid var(--edge);padding-top:22px}
+.tailhead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+table.closed{width:100%;border-collapse:collapse}
+table.closed td{padding:9px 10px 9px 0;border-bottom:1px solid var(--edge);
+  font-size:var(--text-xs);color:var(--text-muted);vertical-align:middle}
+table.closed td.id{font-family:var(--font-mono);color:var(--text);width:255px}
+table.closed td.rail{width:96px}
+table.closed td.r{text-align:right;font-family:var(--font-mono);color:var(--text-dim);
+  width:104px}
+table.closed tr:last-child td{border-bottom:0}
+.att{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--edge);
+  font-size:var(--text-xs);align-items:flex-start}
+.att:last-child{border-bottom:0}
+.att .t{font-family:var(--font-mono);color:var(--text-dim);flex:0 0 42px}
+.att .m{color:var(--text-muted);min-width:0}
+.att .m b{color:var(--text);font-weight:600;font-family:var(--font-mono);font-weight:400}
+.att code{font-family:var(--font-mono);color:var(--danger);font-size:var(--text-caps);
+  display:block;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style></head>
+<body>
+<div class="shell">
+  <nav class="rail">
+    <div class="logo"></div>
+    <div class="ico on">▦</div><div class="ico">◵</div><div class="ico">◫</div><div class="ico">⌁</div>
+    <div class="spacer"></div><div class="me">D</div>
+  </nav>
+
+  <div>
+    <nav class="topnav">
+      <a href="#" class="on">Board</a><a href="#">Gates</a><a href="#">Spend</a><a href="#">Runs</a>
+      <span class="grow"></span>
+      <span class="live"><span class="dot live"></span>Live · 12:45 UTC</span>
+    </nav>
+
+    <div class="page">
+      <!-- Readout: the five numbers someone crossing the room needs. -->
+      <section class="readout">
+        <div><div class="caps">Waiting on you</div>
+          <div class="v act">2</div>
+          <div class="d">Both since 02:06 — oldest 10h 39m</div></div>
+        <div><div class="caps">Agents working</div>
+          <div class="v">0</div>
+          <div class="d">Nothing is executing right now</div></div>
+        <div><div class="caps">Reports say blocked</div>
+          <div class="v bad">2</div>
+          <div class="d">Stage passed, verdict did not</div></div>
+        <div><div class="caps">Spent today</div>
+          <div class="v">$0.98<small> / 50</small></div>
+          <div class="d">2 stage runs · gpt-5.6-sol · est.</div></div>
+        <div><div class="caps">Runners</div>
+          <div class="v">1<small> / 2</small></div>
+          <div class="d">ec2 live 2s ago · workstation never seen</div></div>
+      </section>
+
+      <div class="boardhead">
+        <div>
+          <h2>Two runs are parked at the same gate</h2>
+          <p>Both finished planning in about 90 seconds and both plans came back BLOCKED — no product repo was set, so neither planner could name a file. Approving either one approves a plan that says there is no plan.</p>
+        </div>
+        <button class="btn primary">Open both plan gates</button>
+      </div>
+
+      <!-- Seven lanes, one per pipeline stage. Stage 1's two phases share a lane. -->
+      <section class="lanes">
+        <div class="lane">
+          <div class="lanehead"><span class="n">1 · UI/UX<br>design</span><span class="c">0</span></div>
+          <div class="who">🤖 agent · workstation</div>
+          <p class="empty">Empty. Next run to enter lands here — but the design workstation is offline, so it would sit unclaimed.</p>
+        </div>
+
+        <div class="lane">
+          <div class="lanehead hot"><span class="n">2 · Planning</span><span class="c on">2</span></div>
+          <div class="who">🤖 agent · ec2</div>
+
+          <a class="card act" href="#">
+            <div class="id"><span class="dot gate"></span><b>feat-20260825-<br>role-health</b></div>
+            <div class="chips"><span class="chip blocked">Blocked</span><span class="chip gate">Plan gate</span></div>
+            <div class="wait">Waiting on <b>you</b> — 2 blockers</div>
+            <div class="elapsed">10h 39m</div>
+            <div class="srail"><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="foot">
+              <span class="money">$0.58</span>
+              <span class="tok">337.8k tok<br>84% cached</span>
+            </div>
+          </a>
+
+          <a class="card act" href="#">
+            <div class="id"><span class="dot gate"></span><b>feat-20260825-<br>candidate-compare</b></div>
+            <div class="chips"><span class="chip blocked">Blocked</span><span class="chip gate">Plan gate</span></div>
+            <div class="wait">Waiting on <b>you</b> — 2 blockers</div>
+            <div class="elapsed">10h 39m</div>
+            <div class="srail"><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="foot">
+              <span class="money">$0.40</span>
+              <span class="tok">240.8k tok<br>88% cached</span>
+            </div>
+          </a>
+        </div>
+
+        <div class="lane">
+          <div class="lanehead"><span class="n">3 · Coding</span><span class="c">0</span></div>
+          <div class="who">👤 human · Codex CLI</div>
+          <p class="empty">Empty. Nothing has cleared a plan gate yet, so no work has reached a developer.</p>
+        </div>
+
+        <div class="lane">
+          <div class="lanehead"><span class="n">4 · QA in dev</span><span class="c">0</span></div>
+          <div class="who">🤖 agent · ec2</div>
+          <p class="empty">Empty.</p>
+        </div>
+
+        <div class="lane">
+          <div class="lanehead"><span class="n">5 · Code review</span><span class="c">0</span></div>
+          <div class="who">🤖 agent · ec2</div>
+          <p class="empty">Empty.</p>
+        </div>
+
+        <div class="lane">
+          <div class="lanehead"><span class="n">6 · Security</span><span class="c">0</span></div>
+          <div class="who">🤖 agent · ec2</div>
+          <p class="empty">Empty.</p>
+        </div>
+
+        <div class="lane">
+          <div class="lanehead"><span class="n">7 · QA in staging</span><span class="c">0</span></div>
+          <div class="who">🤖 agent · ec2</div>
+          <p class="empty">Empty. Last run to reach staging was cancelled on Aug 26.</p>
+        </div>
+      </section>
+
+      <!-- Bottom third: closed runs and last night's retry record. -->
+      <section class="tail">
+        <div>
+          <div class="tailhead">
+            <span class="caps">Closed · last 48 hours</span>
+            <span class="caps">8 runs · none shipped</span>
+          </div>
+          <table class="closed">
+            <tr><td class="id">feat-20260826-systemd-proof</td>
+              <td class="rail"><span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></td>
+              <td>cancelled at 1 · ui-ux design</td><td class="r">Aug 26 06:20</td></tr>
+            <tr><td class="id">feat-20260826-kill-proof</td>
+              <td class="rail"><span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></td>
+              <td>cancelled at 1 · ui-ux design</td><td class="r">Aug 26 06:08</td></tr>
+            <tr><td class="id">feat-20260826-sandbox-proof</td>
+              <td class="rail"><span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></td>
+              <td>cancelled at 1 · ui-ux design</td><td class="r">Aug 26 06:08</td></tr>
+            <tr><td class="id">feat-20260826-conc-a</td>
+              <td class="rail"><span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></td>
+              <td>cancelled at 1 · ui-ux diverge</td><td class="r">Aug 26 06:08</td></tr>
+            <tr><td class="id">feat-20260826-conc-b</td>
+              <td class="rail"><span class="srail"><i class="fail"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></td>
+              <td>cancelled at 1 · ui-ux diverge</td><td class="r">Aug 26 06:08</td></tr>
+            <tr><td class="id">feat-20260820-demo-sso</td>
+              <td class="rail"><span class="srail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i></span></td>
+              <td>cancelled at 6 · security</td><td class="r">Aug 26 06:23</td></tr>
+            <tr><td class="id">feat-20260810-demo-onboarding</td>
+              <td class="rail"><span class="srail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i></span></td>
+              <td>cancelled at 7 · QA staging</td><td class="r">Aug 26 06:23</td></tr>
+            <tr><td class="id">feat-20260825-demo-export</td>
+              <td class="rail"><span class="srail"><i class="now"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></td>
+              <td>cancelled at 1 · ui-ux</td><td class="r">Aug 26 06:23</td></tr>
+          </table>
+        </div>
+
+        <div>
+          <div class="tailhead">
+            <span class="caps">Retries · Aug 26 sandbox run</span>
+            <span class="caps">5 failed · 3 recovered</span>
+          </div>
+          <div class="att"><span class="t">06:19</span><span class="m">
+            <b>systemd-proof</b> succeeded on attempt 3</span></div>
+          <div class="att"><span class="t">06:16</span><span class="m">
+            <b>systemd-proof</b> attempt 2 failed
+            <code>sandbox exited 23: dir "/work/lantern/tools" failed: Permission denied</code></span></div>
+          <div class="att"><span class="t">06:13</span><span class="m">
+            <b>systemd-proof</b> attempt 1 failed
+            <code>sandbox exited 23: dir "/work/lantern/tools" failed: Permission denied</code></span></div>
+          <div class="att"><span class="t">06:05</span><span class="m">
+            <b>conc-a</b> and <b>conc-b</b> attempt 1 failed
+            <code>sandbox exited 137 — killed, concurrency cap 2</code></span></div>
+          <div class="att"><span class="t">05:56</span><span class="m">
+            <b>sandbox-proof</b> attempt 1 failed, attempt 2 succeeded
+            <code>sandbox exited 1: File "/opt/lantern/venv/lib/python3.12/…"</code></span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</body></html>

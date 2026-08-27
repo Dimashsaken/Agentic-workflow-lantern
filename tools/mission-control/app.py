@@ -1,10 +1,23 @@
-"""Lantern Mission Control — verification-first web UI over the pipeline DB.
+"""Lantern Mission Control v2 — the board is the control plane.
 
     uvicorn app:app --host 0.0.0.0 --port 8080     (or: python app.py)
 
-Design: docs/MISSION-CONTROL.md. Auth: cookie session behind a login page — no data
-is served unauthenticated. Users from LANTERN_WEB_USERS ("name:pw,name:pw"); cookie
-signing key from LANTERN_WEB_SECRET (falls back to a hash of LANTERN_WEB_USERS).
+One run, one strip, grouped by who owes the next move (NEEDS YOU · AGENTS
+WORKING · STUCK · CLOSED) with the 7-stage pipeline compressed into a rail per
+row — the "flight strips" direction from tools/mission-control/mockups/.
+
+Two hard rules carried over unchanged from v1:
+  * Gate integrity: approvals are written server-side via
+    POST /gate/{approval_id}/{decision}, fail-closed, against LANTERN_WEB_USERS.
+    Nothing client-side can approve anything.
+  * Honesty: the board renders what the database and the stage reports actually
+    say — including when they disagree. A stage execution can be 'succeeded'
+    while its own report's Status: line says BLOCKED (the vacuous-gate failure,
+    fixed for new runs in 5f3f653); that disagreement is a first-class column.
+
+Auth: HMAC cookie sessions behind a login page — no data is served
+unauthenticated. Users from LANTERN_WEB_USERS ("name:pw,name:pw"); signing key
+from LANTERN_WEB_SECRET (falls back to a hash of LANTERN_WEB_USERS).
 """
 
 import hashlib
@@ -12,25 +25,36 @@ import hmac
 import html
 import json
 import os
+import re
 import secrets
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import asyncpg
 import markdown as md
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 AZURE_RUNNER = Path(__file__).resolve().parents[1] / "azure-runner"
 sys.path.insert(0, str(AZURE_RUNNER))
 load_dotenv(AZURE_RUNNER / ".env")
 
-from pipeline import FEATURE_STAGES, STAGE_DIR, STAGE_RUNNER, advance, db_urls, log_event  # noqa: E402
+from pipeline import (  # noqa: E402
+    FEATURE_STAGES, STAGE_DIR, STAGE_RUNNER, advance, db_urls, est_cost_usd,
+    log_event,
+)
+import ui  # noqa: E402
+from ui import H, ago, chip, fmt_int, fmt_money, group_head, strip, strip_header  # noqa: E402
 
 # Board columns = run-folder dirs; split stage-1 executions share one column.
 BOARD_DIRS = list(dict.fromkeys(d for _, d, *_ in FEATURE_STAGES))
+STAGE_SEQ = [s for s, *_ in FEATURE_STAGES]           # full stage names, in order
+DIR_RUNNER = {}                                       # dir -> runner of its first stage
+for _s, _d, *_rest in FEATURE_STAGES:
+    DIR_RUNNER.setdefault(_d, STAGE_RUNNER.get(_s, "ec2"))
 
 REPO = Path(__file__).resolve().parents[2]
 app = FastAPI(title="Lantern Mission Control")
@@ -38,65 +62,34 @@ pool: asyncpg.Pool | None = None
 
 SESSION_COOKIE = "lantern_session"
 SESSION_TTL = 7 * 24 * 3600
+EC2_SLOTS = 2            # daemon concurrency cap (docs/ORCHESTRATION.md, D10)
 
-# Human-readable pipeline vocabulary — the UI must explain itself (docs/MISSION-CONTROL.md)
 STAGE_META = {
-    "01-ui-ux":       ("1 · UI/UX design",        "🤖 AI agent", "Explores 2–3 flow options, builds a prototype, records a walkthrough video."),
-    "02-pre-coding":  ("2 · Planning",             "🤖 AI agent", "Blast-radius analysis, schema plan, ordered task plan."),
-    "03-coding":      ("3 · Coding",               "👤 Human",    "The assigned developer implements the plan (Codex CLI on their laptop)."),
-    "04-qa-dev":      ("4 · QA in dev",            "🤖 AI agent", "Executes a test charter against the dev build — every session on video."),
-    "05-post-coding": ("5 · Code review",          "🤖 AI agent", "Cleanliness, hidden tech debt, backward compatibility."),
-    "06-security":    ("6 · Security & deploy risk","🤖 AI agent", "Vulnerabilities, dependency audit, go/no-go for staging."),
-    "07-qa-staging":  ("7 · QA in staging",        "🤖 AI agent", "Re-runs the charter on staging, verifies analytics events, videos for sign-off."),
+    "01-ui-ux":       ("1 · UI/UX design",         "agent",  "Explores 2–3 flow options, builds a prototype, records a walkthrough video."),
+    "02-pre-coding":  ("2 · Planning",              "agent",  "Blast-radius analysis, schema plan, ordered task plan."),
+    "03-coding":      ("3 · Coding",                "human",  "The assigned developer implements the plan (Codex CLI on their laptop)."),
+    "04-qa-dev":      ("4 · QA in dev",             "agent",  "Executes a test charter against the dev build — every session on video."),
+    "05-post-coding": ("5 · Code review",           "agent",  "Cleanliness, hidden tech debt, backward compatibility."),
+    "06-security":    ("6 · Security & deploy risk","agent",  "Vulnerabilities, dependency audit, go/no-go for staging."),
+    "07-qa-staging":  ("7 · QA in staging",         "agent",  "Re-runs the charter on staging, verifies analytics events, videos for sign-off."),
 }
 GATE_META = {
-    "ux_signoff":     ("Pick the UX option",       "Watch the walkthrough video, then approve the recommended flow (or reject with a note)."),
-    "plan_signoff":   ("Approve plan & schema",    "Schema changes always need a human yes before any code is written."),
-    "code_complete":  ("Code-complete?",           "The developer confirms every planned task is done and tests are green."),
-    "staging_deploy": ("Deploy to staging",        "Security said GO — a human performs the staging deploy, then approves here."),
-    "prod_signoff":   ("Ship to production",       "The final human decision. Review the staging QA videos first."),
+    "ux_signoff":     ("Pick the UX option",     "Watch the walkthrough, then approve the recommended flow (or reject with a note)."),
+    "plan_signoff":   ("Approve plan & schema",  "Schema changes always need a human yes before any code is written."),
+    "code_complete":  ("Code-complete?",         "The developer confirms every planned task is done and tests are green."),
+    "staging_deploy": ("Deploy to staging",      "Security said GO — a human performs the staging deploy, then approves here."),
+    "prod_signoff":   ("Ship to production",     "The final human decision. Review the staging QA videos first."),
 }
-STATUS_META = {
-    "running":      ("#3fb950", "an agent is working on it"),
-    "waiting_gate": ("#d29922", "paused — needs a human decision"),
-    "failed":       ("#f85149", "stopped — needs rework, then Retry"),
-    "done":         ("#8b949e", "shipped"),
-    "cancelled":    ("#8b949e", "cancelled"),
+GATE_SHORT = {
+    "ux_signoff": "UX sign-off", "plan_signoff": "plan sign-off",
+    "code_complete": "code-complete", "staging_deploy": "staging deploy",
+    "prod_signoff": "prod sign-off",
 }
-
-CSS = """
-body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0}
-main{padding:1.25rem;max-width:1400px;margin:0 auto}
-a{color:#58a6ff;text-decoration:none}
-nav{display:flex;align-items:center;gap:1rem;background:#161b22;border-bottom:1px solid #30363d;padding:.7rem 1.25rem}
-nav .spacer{flex:1} nav .who{color:#8b949e;font-size:.85rem}
-h1{font-size:1.15rem;margin:0} h2{font-weight:600;font-size:1rem;margin:1.4rem 0 .4rem}
-.sub{color:#8b949e;font-size:.85rem;margin:.1rem 0 .6rem}
-.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:.8rem;margin:.5rem 0}
-.badge{display:inline-block;padding:.1rem .55rem;border-radius:999px;font-size:.75rem;color:#0d1117;font-weight:700}
-.chip{display:inline-block;padding:.05rem .5rem;border:1px solid #30363d;border-radius:999px;font-size:.75rem;color:#8b949e}
-.board{display:flex;gap:.75rem;overflow-x:auto;padding-bottom:.5rem}
-.col{min-width:185px;flex:1}
-.col h3{font-size:.78rem;color:#8b949e;margin:.4rem 0} .col .desc{font-size:.7rem;color:#6e7681}
-button{background:#238636;color:#fff;border:0;border-radius:6px;padding:.42rem .9rem;cursor:pointer;font-weight:600}
-button.reject{background:#da3633}
-input{background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:.4rem}
-.report{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:1rem;margin:.5rem 0;overflow-x:auto}
-.evt{font-size:.8rem;color:#8b949e;font-family:monospace}
-.legend{display:flex;gap:1.1rem;flex-wrap:wrap;font-size:.78rem;color:#8b949e;margin:.4rem 0}
-.legend span b{color:#e6edf3}
-.login{max-width:340px;margin:14vh auto;text-align:center}
-.login input{width:100%;margin:.35rem 0;box-sizing:border-box}
-.err{color:#f85149;font-size:.85rem}
-.options{display:flex;gap:.6rem;overflow-x:auto;margin:.5rem 0}
-.option{min-width:200px;max-width:280px}
-.option img{width:100%;border:1px solid #30363d;border-radius:6px;background:#fff}
-.optname{font-size:.8rem;margin:.2rem 0}
-.warn{color:#d29922;border-color:#d29922}
-"""
+KIND_ICON = {"qa_video": "🎬 ", "design_png": "🖼 ", "paper_file": "🎨 ",
+             "flow_spec": "🗺 ", "design_handoff": "📦 ", "report": "📄 "}
 
 
-# ── auth: signed cookie sessions ─────────────────────────────────────────────
+# ── auth: signed cookie sessions (unchanged from v1) ─────────────────────────
 
 def _users() -> dict[str, str]:
     raw = os.environ.get("LANTERN_WEB_USERS", "")
@@ -140,33 +133,42 @@ async def get_pool() -> asyncpg.Pool:
     return pool
 
 
-# ── rendering helpers ────────────────────────────────────────────────────────
+# ── report honesty: what does the stage's own report say? ────────────────────
 
-def page(title: str, body: str, user: str | None = None, refresh: bool = True) -> HTMLResponse:
-    nav = ""
-    if user:
-        nav = (f"<nav><h1><a href='/'>🏮 Lantern Mission Control</a></h1>"
-               f"<a href='/#inbox'>Inbox</a><a href='/#board'>Board</a><span class='spacer'></span>"
-               f"<span class='who'>signed in as <b>{html.escape(user)}</b></span>"
-               f"<a href='/logout'>log out</a></nav>")
-    meta = "<meta http-equiv='refresh' content='20'>" if refresh else ""
-    return HTMLResponse(
-        f"<!doctype html><html><head><meta charset='utf-8'>{meta}"
-        f"<title>{html.escape(title)}</title><style>{CSS}</style></head>"
-        f"<body>{nav}<main>{body}</main></body></html>")
+VERDICT_RE = re.compile(r"\*\*Status:\*\*\s*([A-Z][A-Z-]*)")
+OPENQ_RE = re.compile(r"##\s*Open questions?[^\n]*\n+\s*-?\s*(.+)")
 
 
-def badge(status_: str) -> str:
-    color, _ = STATUS_META.get(status_, ("#8b949e", ""))
-    return f"<span class='badge' style='background:{color}'>{html.escape(status_.replace('_', ' '))}</span>"
+def report_path(run_id: str, dir_: str) -> Path:
+    return REPO / "workflow" / "runs" / run_id / dir_ / "report.md"
 
 
-def legend() -> str:
-    items = "".join(
-        f"<span><span class='badge' style='background:{c}'>&nbsp;</span> <b>{html.escape(s.replace('_',' '))}</b> — {html.escape(d)}</span>"
-        for s, (c, d) in STATUS_META.items() if s != "cancelled")
-    return f"<div class='legend'>{items}</div>"
+def report_text(run_id: str, dir_: str) -> str | None:
+    try:
+        return report_path(run_id, dir_).read_text(encoding="utf-8")
+    except OSError:
+        return None
 
+
+def report_verdict(text: str | None) -> str | None:
+    if not text:
+        return None
+    m = VERDICT_RE.search(text[:4000])
+    return m.group(1) if m else None
+
+
+def report_open_question(text: str | None) -> str | None:
+    if not text:
+        return None
+    m = OPENQ_RE.search(text)
+    return m.group(1).strip()[:240] if m else None
+
+
+def render_markdown(text: str) -> str:
+    return md.markdown(text, extensions=["tables", "fenced_code"])
+
+
+# ── data assembly ────────────────────────────────────────────────────────────
 
 def _payload(a) -> dict:
     p = a["payload"] if "payload" in dict(a) else None
@@ -178,60 +180,304 @@ def _payload(a) -> dict:
     return p or {}
 
 
-def handoff_html(payload: dict) -> str:
-    """Render a ui-ux handoff.json gate payload: Paper link + option PNGs side by side."""
-    h = payload.get("handoff") or {}
-    if not h:
-        return ""
-    bits = []
-    if h.get("paper_url"):
-        bits.append(f"<p><a href='{html.escape(h['paper_url'])}' target='_blank'>🎨 open the Paper canvas</a></p>")
-    cards = []
-    for o in h.get("options", []):
-        name = o.get("name", "?")
-        star = " ★ recommended" if name == h.get("recommended") else ""
-        imgs = "".join(
-            f"<a href='/file/{html.escape(png)}'><img src='/file/{html.escape(png)}' alt='{html.escape(name)}'></a>"
-            for png in o.get("pngs", []))
-        cards.append(f"<div class='option'><div class='optname'><b>{html.escape(name)}</b>{star}</div>{imgs}</div>")
-    if cards:
-        bits.append(f"<div class='options'>{''.join(cards)}</div>")
-    if h.get("video"):
-        bits.append(f"<p><a href='{html.escape(str(h['video']))}'>🎬 walkthrough video</a></p>")
-    return "".join(bits)
-
-
-def gate_form(a) -> str:
-    title, desc = GATE_META.get(a["gate"], (a["gate"], ""))
-    return (f"<b>{html.escape(title)}</b><div class='sub'>{html.escape(desc)}</div>"
-            f"{handoff_html(_payload(a))}"
-            f"<form method='post' action='/gate/{a['id']}/approve' style='display:inline'>"
-            f"<input name='note' placeholder='optional note'> <button>Approve</button></form> "
-            f"<form method='post' action='/gate/{a['id']}/reject' style='display:inline'>"
-            f"<button class='reject'>Reject</button></form>")
-
-
-KIND_ICON = {"qa_video": "🎬 ", "design_png": "🖼 ", "paper_file": "🎨 ", "flow_spec": "🗺 ", "design_handoff": "📦 "}
-
-
 def art_href(uri: str) -> str:
     return uri if uri.startswith(("http://", "https://", "s3://")) else f"/file/{uri}"
 
 
-async def runners_online(p) -> dict[str, bool]:
+async def snapshot(p) -> dict:
+    """Everything the board and runs pages need, in one batch of queries."""
+    runs = await p.fetch("SELECT * FROM runs ORDER BY updated_at DESC")
+    latest = await p.fetch(
+        """SELECT DISTINCT ON (run_id, stage) *
+           FROM stage_executions ORDER BY run_id, stage, attempt DESC, started_at DESC""")
+    agg = await p.fetch(
+        """SELECT run_id, model, sum(input_tokens)::bigint AS inp,
+                  sum(cached_input_tokens)::bigint AS cached,
+                  sum(output_tokens)::bigint AS outp, sum(total_tokens)::bigint AS tot,
+                  sum(requests)::bigint AS reqs, max(attempt) AS max_att,
+                  count(*) FILTER (WHERE total_tokens IS NULL)::int AS unmetered
+           FROM stage_executions GROUP BY run_id, model""")
+    pend = await p.fetch(
+        "SELECT * FROM approvals WHERE status='pending' ORDER BY requested_at")
+    decided = await p.fetchrow(
+        """SELECT count(*)::int AS n,
+                  percentile_cont(0.5) WITHIN GROUP
+                    (ORDER BY EXTRACT(EPOCH FROM decided_at - requested_at)) AS med
+           FROM approvals
+           WHERE status IN ('approved','rejected') AND decided_at IS NOT NULL""")
     try:
-        rows = await p.fetch("SELECT name, now() - last_seen < interval '90 seconds' AS online FROM runners")
-    except asyncpg.PostgresError:   # table not created yet (pre-v2 database)
-        return {}
-    return {r["name"]: r["online"] for r in rows}
+        runner_rows = await p.fetch(
+            "SELECT name, last_seen, EXTRACT(EPOCH FROM now()-last_seen) AS age FROM runners")
+    except asyncpg.PostgresError:           # pre-v2 database without the table
+        runner_rows = []
+    today = await p.fetch(
+        """SELECT model, sum(input_tokens)::bigint AS inp,
+                  sum(cached_input_tokens)::bigint AS cached,
+                  sum(output_tokens)::bigint AS outp, count(*)::int AS n
+           FROM stage_executions WHERE started_at >= date_trunc('day', now())
+           GROUP BY model""")
+    feed = await p.fetch(
+        """SELECT run_id, stage, attempt, status, error, started_at
+           FROM stage_executions
+           WHERE started_at >= now() - interval '48 hours'
+             AND (status = 'failed' OR attempt > 1)
+           ORDER BY started_at DESC LIMIT 14""")
+    latest_by_dir: dict[tuple[str, str], asyncpg.Record] = {}
+    for e in latest:
+        k = (e["run_id"], STAGE_DIR.get(e["stage"], e["stage"]))
+        cur = latest_by_dir.get(k)
+        if cur is None or e["started_at"] > cur["started_at"]:
+            latest_by_dir[k] = e
+    ledger: dict[str, dict] = {}
+    for r in agg:
+        led = ledger.setdefault(r["run_id"], {
+            "cost": 0.0, "tot": 0, "inp": 0, "cached": 0, "reqs": 0,
+            "models": set(), "max_att": 1, "unmetered": 0})
+        led["cost"] += est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+        led["tot"] += r["tot"] or 0
+        led["inp"] += r["inp"] or 0
+        led["cached"] += r["cached"] or 0
+        led["reqs"] += r["reqs"] or 0
+        led["max_att"] = max(led["max_att"], r["max_att"] or 1)
+        led["unmetered"] += r["unmetered"] or 0
+        if r["model"]:
+            led["models"].add(r["model"])
+    runners = {r["name"]: r for r in runner_rows}
+    online = {n: (r["age"] is not None and r["age"] < 90) for n, r in runners.items()}
+    return {"runs": runs, "latest_by_dir": latest_by_dir, "ledger": ledger,
+            "pend": pend, "decided": decided, "runners": runners, "online": online,
+            "today": today, "feed": feed}
 
 
-def needs_workstation_note(run_status: str, current_stage: str, online: dict[str, bool]) -> str:
-    if (run_status == "running" and STAGE_RUNNER.get(current_stage) == "workstation"
-            and not online.get("workstation")):
-        return ("<div class='chip warn'>⏸ needs the design workstation — open Paper Desktop on the "
-                "Lantern file and start <code>pipeline.py daemon --runner workstation</code></div>")
-    return ""
+def rail_segs(run, latest_by_dir) -> tuple[list[str], str, int]:
+    curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
+    curidx = BOARD_DIRS.index(curdir) if curdir in BOARD_DIRS else 0
+    segs = []
+    for i, d in enumerate(BOARD_DIRS):
+        e = latest_by_dir.get((run["id"], d))
+        if d == curdir:
+            segs.append("done" if run["status"] == "done" else
+                        "fail" if run["status"] in ("failed", "cancelled") else "now")
+        elif i < curidx or (e and e["status"] == "succeeded"):
+            segs.append("done")
+        elif e and e["status"] == "failed":
+            segs.append("fail")
+        else:
+            segs.append("")
+    return segs, curdir, curidx
+
+
+def run_short(run_id: str) -> str:
+    return re.sub(r"^(feat|bug)-\d{8}-", "", run_id)
+
+
+def workstation_blocked(run, online: dict) -> bool:
+    return (run["status"] in ("running", "executing")
+            and STAGE_RUNNER.get(run["current_stage"]) == "workstation"
+            and not online.get("workstation"))
+
+
+def build_strip(run, snap: dict, now: datetime) -> tuple[str, dict]:
+    """Classify one run into its board group and render its strip dict."""
+    lat = snap["latest_by_dir"]
+    led = snap["ledger"].get(run["id"], {})
+    pend_by_run = {a["run_id"]: a for a in snap["pend"]}
+    segs, curdir, curidx = rail_segs(run, lat)
+    meta = STAGE_META.get(curdir, (curdir, "agent", ""))
+    e = lat.get((run["id"], curdir))
+    phase = run["current_stage"].split(".", 1)[1] if "." in run["current_stage"] else ""
+    stage_label = f"{curidx + 1} of {len(BOARD_DIRS)} · {curdir.split('-', 1)[1]}" + \
+                  (f" {phase}" if phase else "")
+    a = pend_by_run.get(run["id"])
+    verdict = None
+    if run["status"] not in ("done", "cancelled"):
+        verdict = report_verdict(report_text(run["id"], curdir))
+
+    if a is not None:
+        group = "needs_you"
+        gate = GATE_SHORT.get(a["gate"], a["gate"])
+        d_chip = ("Blocked", "blocked") if verdict == "BLOCKED" else ("Waiting", "gate")
+        wait_main, why = ("You", f" — {gate}"), (
+            "report status: BLOCKED — read it before approving"
+            if verdict == "BLOCKED" else GATE_META.get(a["gate"], ("", ""))[1][:70])
+        elapsed, cold = ago((now - a["requested_at"]).total_seconds()), False
+        dot_kind = "gate"
+    elif run["status"] == "failed":
+        group, d_chip, dot_kind = "stuck", ("Failed", "blocked"), "fail"
+        err = (e["error"] or "").splitlines()[0][:70] if e and e["error"] else "see run page"
+        wait_main, why = ("Nobody", " — failed, needs rework"), err
+        elapsed, cold = ago((now - run["updated_at"]).total_seconds()), False
+    elif workstation_blocked(run, snap["online"]):
+        group, d_chip, dot_kind = "stuck", ("No runner", "warn"), "fail"
+        wait_main = ("Design workstation", " — offline")
+        why = "start pipeline.py daemon --runner workstation"
+        elapsed, cold = ago((now - run["updated_at"]).total_seconds()), False
+    elif run["status"] in ("running", "executing"):
+        group, dot_kind = "working", "live"
+        runner = STAGE_RUNNER.get(run["current_stage"], "ec2")
+        if run["status"] == "executing":
+            d_chip = ("Running", "ok")
+            hb = e["heartbeat_at"] if e and e["heartbeat_at"] else None
+            why = f"runner {runner}" + (f" · heartbeat {ago((now - hb).total_seconds())} ago" if hb else "")
+        else:
+            d_chip = ("Queued", "")
+            why = f"waiting for a {runner} daemon slot"
+        wait_main = ("Agent", f" — {meta[0].split('·', 1)[1].strip()}")
+        started = e["started_at"] if e and e["status"] in ("running",) else run["updated_at"]
+        elapsed, cold = ago((now - started).total_seconds()), False
+    elif run["status"] in ("done", "cancelled"):
+        group, dot_kind = "closed", "idle"
+        d_chip = ("Shipped", "ok") if run["status"] == "done" else \
+                 (f"{led.get('max_att', 1)} attempts", "warn") if led.get("max_att", 1) > 1 \
+                 else ("Cancelled", "")
+        when = (run["completed_at"] or run["updated_at"])
+        wait_main = ("Nobody", f" — closed {when:%b %d}")
+        why = f"{run['status']} at stage {curidx + 1} · {curdir}"
+        elapsed, cold = f"{when:%b %d}", True
+    else:                                    # waiting_gate but no approval row
+        group, d_chip, dot_kind = "stuck", ("No gate", "warn"), "fail"
+        wait_main = ("Nobody", " — gate open but no approval row")
+        why = "inconsistent state — check pipeline.py"
+        elapsed, cold = ago((now - run["updated_at"]).total_seconds()), False
+
+    models = led.get("models", set())
+    tot, inp, cached = led.get("tot", 0), led.get("inp", 0), led.get("cached", 0)
+    if tot:
+        tok_l1 = fmt_int(tot)
+        tok_l2 = f"{round(cached / inp * 100)}% cached" if inp else ""
+        model_l1 = next(iter(models)) if len(models) == 1 else ("mixed" if models else "—")
+        model_l2 = f"{fmt_int(led.get('reqs'))} requests" if led.get("reqs") else ""
+        money = fmt_money(led.get("cost"))
+    else:
+        tok_l1, tok_l2 = "—", "no ledger"
+        model_l1, model_l2 = "—", "unmetered"
+        money = "—"
+    return group, {
+        "href": f"/run/{run['id']}", "dot": dot_kind, "id": run["id"],
+        "sub": f"{run['created_by']} · opened {run['created_at']:%b %d}",
+        "stage_label": stage_label, "segs": segs, "chip": d_chip,
+        "wait_main": wait_main, "wait_why": why, "elapsed": elapsed,
+        "elapsed_cold": cold, "model_l1": model_l1, "model_l2": model_l2,
+        "tok_l1": tok_l1, "tok_l2": tok_l2, "money": money,
+    }
+
+
+# ── shared page fragments ────────────────────────────────────────────────────
+
+def page(title, body, user, active, now) -> HTMLResponse:
+    return HTMLResponse(ui.page(title, body, user, active, f"{now:%H:%M}"))
+
+
+def runner_sentence(snap) -> tuple[str, str]:
+    """(count 'n / m', description) for the runners readout cell."""
+    expected = sorted(set(STAGE_RUNNER.values()))
+    on = sum(1 for n in expected if snap["online"].get(n))
+    bits = []
+    for n in expected:
+        r = snap["runners"].get(n)
+        if r is None:
+            bits.append(f"{n} never seen")
+        elif snap["online"].get(n):
+            bits.append(f"{n} live {ago(r['age'])} ago")
+        else:
+            bits.append(f"{n} last seen {ago(r['age'])} ago")
+    return f"{on}<small> / {len(expected)}</small>", " · ".join(bits)
+
+
+def today_spend(snap) -> tuple[float, int, str]:
+    cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+               for r in snap["today"])
+    n = sum(r["n"] for r in snap["today"])
+    models = sorted({r["model"] for r in snap["today"] if r["model"]})
+    return cost, n, ", ".join(models) if models else "—"
+
+
+def gate_card(a, run, now, inline: bool = True) -> str:
+    """One pending approval, payload rendered inline. Same component on /gates
+    and /run/{id}. The decision itself stays a server-side POST."""
+    payload = _payload(a)
+    gate_title, gate_desc = GATE_META.get(a["gate"], (a["gate"], ""))
+    stage = payload.get("stage") or (run["current_stage"] if run else "")
+    dir_ = STAGE_DIR.get(stage, stage)
+    text = report_text(a["run_id"], dir_) if dir_ else None
+    verdict = report_verdict(text)
+    openq = report_open_question(text)
+    age = ago((now - a["requested_at"]).total_seconds())
+
+    bits = [f"""<div class='ghead'><div>
+        <div class='gid'><a href='/run/{H(a["run_id"])}'>{H(a["run_id"])}</a>
+          · after {H(dir_ or "?")}</div>
+        <h2>{H(gate_title)}</h2></div>
+        <div class='gage'>waiting {H(age)}<br>
+          <span style='color:var(--text-dim)'>opened {a["requested_at"]:%b %d %H:%M} UTC</span></div>
+      </div><p class='gdesc'>{H(gate_desc)}</p>"""]
+
+    if verdict == "BLOCKED":
+        q = f"<span class='q'>“{H(openq)}”</span>" if openq else ""
+        bits.append(
+            f"<div class='blockwarn'><b>This stage's own report says BLOCKED.</b> "
+            f"The database marked the execution succeeded, but the report's verdict "
+            f"did not — approving here approves a stage that says it isn't done. "
+            f"Its open question:{q}</div>")
+
+    h = payload.get("handoff") or {}
+    if h:                                        # ux_signoff: the rich handoff
+        cards = []
+        for o in h.get("options", []):
+            rec = o.get("name") == h.get("recommended")
+            imgs = "".join(
+                f"<a href='/file/{H(png)}' target='_blank'><img src='/file/{H(png)}' "
+                f"alt='{H(o.get('name', '?'))}' loading='lazy'></a>"
+                for png in o.get("pngs", []))
+            star = "<span class='chip gate'>Recommended</span>" if rec else ""
+            cards.append(
+                f"<div class='gopt{' rec' if rec else ''}'>"
+                f"<div class='on'><b>{H(o.get('name', '?'))}</b>{star}</div>"
+                f"<div class='axis'>{H(o.get('axis', ''))}</div>{imgs}</div>")
+        bits.append(f"<div class='gopts'>{''.join(cards)}</div>")
+        meta_bits = []
+        if h.get("paper_url"):
+            meta_bits.append(f"<a href='{H(h['paper_url'])}' target='_blank' "
+                             f"style='color:var(--dawn-3)'>open the Paper canvas ↗</a>")
+        m = h.get("metrics") or {}
+        if m.get("divergence_generated"):
+            meta_bits.append(f"<b>{m.get('divergence_kept', '?')}</b> of "
+                             f"<b>{m['divergence_generated']}</b> divergence options kept")
+        if m.get("png_scale"):
+            meta_bits.append(f"png {H(str(m['png_scale']))}")
+        meta_bits.append(
+            f"video: <b>{H(str(h['video']))}</b>" if h.get("video")
+            else "no walkthrough video recorded")
+        bits.append(f"<div class='gmeta'>{' · '.join(meta_bits)}</div>")
+    elif text and inline:                        # plan_signoff etc: the report IS the payload
+        bits.append(f"<details class='report' open><summary>The report being approved — "
+                    f"{H(dir_)}/report.md</summary>"
+                    f"<div class='prose'>{render_markdown(text)}</div></details>")
+    elif inline:
+        bits.append("<p class='gdesc'>No report found for this stage — the run "
+                    "folder has nothing to show. Decide from the run page evidence.</p>")
+
+    nxt = ""
+    if run:
+        try:
+            i = STAGE_SEQ.index(run["current_stage"])
+            if i + 1 < len(STAGE_SEQ):
+                nd = STAGE_DIR.get(STAGE_SEQ[i + 1], STAGE_SEQ[i + 1])
+                nxt = f" — starts {STAGE_META.get(nd, (nd,))[0]}"
+            else:
+                nxt = " — the run is complete"
+        except ValueError:
+            pass
+    confirm = (" onsubmit=\"return confirm('The report says BLOCKED — approve anyway?')\""
+               if verdict == "BLOCKED" else "")
+    bits.append(f"""<div class='gact'>
+      <form method='post' action='/gate/{a["id"]}/approve' style='display:flex;gap:10px;flex:1;min-width:300px'{confirm}>
+        <input type='text' name='note' placeholder='decision note — recorded in the audit log'>
+        <button class='btn primary'>Approve{H(nxt)}</button></form>
+      <form method='post' action='/gate/{a["id"]}/reject'>
+        <button class='btn danger'>Reject — stop for rework</button></form>
+    </div>""")
+    return f"<div class='gcard'>{''.join(bits)}</div>"
 
 
 # ── routes ───────────────────────────────────────────────────────────────────
@@ -240,17 +486,19 @@ def needs_workstation_note(run_status: str, current_stage: str, online: dict[str
 async def login_page(request: Request, error: str = ""):
     if current_user(request):
         return RedirectResponse("/", status_code=303)
-    warn = "" if _users() else "<p class='err'>No users configured — set LANTERN_WEB_USERS on the server.</p>"
-    err = f"<p class='err'>{html.escape(error)}</p>" if error else ""
-    return page("Sign in — Lantern", f"""
-      <div class='login card'><h1>🏮 Lantern Mission Control</h1>
-      <p class='sub'>The control room for the agent fleet. Sign in to see runs and decide gates.</p>
+    warn = "" if _users() else \
+        "<p class='err'>No users configured — set LANTERN_WEB_USERS on the server.</p>"
+    err = f"<p class='err'>{H(error)}</p>" if error else ""
+    return HTMLResponse(ui.page("Sign in — Lantern", f"""
+      <div class='login'><div class='logo'></div>
+      <h1>Mission Control</h1>
+      <p>The control room for the agent fleet. Sign in to see runs and decide gates.</p>
       {warn}{err}
       <form method='post' action='/login'>
-        <input name='username' placeholder='username' autofocus>
+        <input name='username' type='text' placeholder='username' autofocus>
         <input name='password' type='password' placeholder='password'>
-        <button style='width:100%;margin-top:.4rem'>Sign in</button>
-      </form></div>""", refresh=False)
+        <button class='btn primary'>Sign in</button>
+      </form></div>"""))
 
 
 @app.post("/login")
@@ -272,46 +520,311 @@ async def logout():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def board(request: Request):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
     p = await get_pool()
+    snap = await snapshot(p)
+    now = datetime.now(timezone.utc)
+
+    groups: dict[str, list] = {"needs_you": [], "working": [], "stuck": [], "closed": []}
+    strips: dict[str, list[str]] = {k: [] for k in groups}
+    cutoff = 48 * 3600
+    for run in snap["runs"]:
+        group, d = build_strip(run, snap, now)
+        if group == "closed" and (now - run["updated_at"]).total_seconds() > cutoff:
+            continue
+        groups[group].append((run, d))
+        strips[group].append(strip(d, hot=(group == "needs_you"),
+                                   dim=(group == "closed")))
+
+    n_pend = len(snap["pend"])
+    oldest = max(((now - a["requested_at"]).total_seconds() for a in snap["pend"]),
+                 default=0)
+    blocked_n = sum(1 for _, d in groups["needs_you"] if d["chip"][0] == "Blocked")
+    n_exec = sum(1 for r, _ in groups["working"] if r["status"] == "executing")
+    n_queued = len(groups["working"]) - n_exec
+    cost_today, n_today, models_today = today_spend(snap)
+    tripwire = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "50"))
+    runner_v, runner_d = runner_sentence(snap)
+    ws_offline = not snap["online"].get("workstation")
+
+    # readout — the five numbers someone crossing the room needs, plus the CTA
+    work_d = f"{n_queued} queued · " if n_queued else ""
+    work_d += f"{max(EC2_SLOTS - n_exec, 0)} of {EC2_SLOTS} ec2 slots free"
+    cta = (f"<a class='btn primary' href='/gates'>Decide {n_pend} "
+           f"gate{'s' if n_pend != 1 else ''}</a>") if n_pend else ""
+    readout = f"""<section class='readout'>
+      <div><div class='caps'>Waiting on you</div>
+        <div class='v{' act' if n_pend else ''}'>{n_pend}</div>
+        <div class='d'>{'Oldest ' + ago(oldest) if n_pend else 'Nothing needs a decision'}</div></div>
+      <div><div class='caps'>Agents working</div><div class='v'>{n_exec}</div>
+        <div class='d'>{H(work_d)}</div></div>
+      <div><div class='caps'>Reports say blocked</div>
+        <div class='v{' bad' if blocked_n else ''}'>{blocked_n}</div>
+        <div class='d'>{"Stage passed, verdict didn't" if blocked_n else 'No verdict disagreements'}</div></div>
+      <div><div class='caps'>Spent today</div>
+        <div class='v'>{H(fmt_money(cost_today))}<small> / {tripwire:.0f}</small></div>
+        <div class='d'>{n_today} stage run{'s' if n_today != 1 else ''} · {H(models_today)} · est.</div></div>
+      <div><div class='caps'>Runners</div><div class='v'>{runner_v}</div>
+        <div class='d'>{H(runner_d)}</div></div>
+      <div class='cta'>{cta}</div>
+    </section>"""
+
+    # headline — templated from facts only
+    if n_pend:
+        h1 = f"{n_pend} decision{'s are' if n_pend != 1 else ' is'} waiting on a human"
+        parts = [f"The oldest gate has been open <b>{ago(oldest)}</b>."]
+        if blocked_n:
+            parts.append(
+                f"<b>{blocked_n}</b> of the waiting runs sit on a stage whose own report "
+                f"says <em>BLOCKED</em> — the database alone says succeeded, so read the "
+                f"report before approving.")
+        if ws_offline:
+            parts.append("The design workstation has never checked in, so stage 1 "
+                         "cannot start until it does.")
+    elif groups["working"]:
+        h1 = f"{len(groups['working'])} run{'s' if len(groups['working']) != 1 else ''} in flight"
+        parts = ["No gate is waiting on a human right now."]
+    elif groups["stuck"]:
+        h1 = f"{len(groups['stuck'])} run{'s are' if len(groups['stuck']) != 1 else ' is'} stuck"
+        parts = ["Nothing is waiting on a human, but nothing can move either."]
+    else:
+        h1 = "The board is quiet"
+        parts = ["No open runs. Start one with <b>pipeline.py run</b>."]
+    ages_rows = "".join(
+        f"<div class='row'><span>{H(run_short(a['run_id']))} · "
+        f"{H(GATE_SHORT.get(a['gate'], a['gate']))}</span>"
+        f"<b>{ago((now - a['requested_at']).total_seconds())}</b></div>"
+        for a in snap["pend"])
+    med = snap["decided"]
+    med_row = (f"<div class='row split'><span>Median decision time "
+               f"({med['n']} decided)</span><b>{ago(med['med'])}</b></div>"
+               if med and med["n"] else "")
+    ages = (f"<div class='ages'><div class='caps'>Gate age</div>"
+            f"<div class='bar'><i style='width:{min(oldest / 86400, 1) * 100:.0f}%'></i></div>"
+            f"{ages_rows}{med_row}</div>") if n_pend else ""
+    saidrow = (f"<section class='saidrow{'' if ages else ' noages'}'>"
+               f"<div class='said'><h1>{h1}</h1><p>{' '.join(parts)}</p></div>"
+               f"{ages}</section>")
+
+    # groups
+    body = [readout, saidrow]
+    ec2 = snap["runners"].get("ec2")
+    ec2_s = (f"The ec2 daemon answered {ago(ec2['age'])} ago" if ec2 and snap["online"].get("ec2")
+             else f"The ec2 daemon was last seen {ago(ec2['age'])} ago" if ec2
+             else "The ec2 daemon has never checked in")
+    empties = {
+        "needs_you": "<b>No gate is waiting.</b> When a stage finishes behind a gate, "
+                     "the decision lands here.",
+        "working": f"<b>Nothing is executing.</b> {H(ec2_s)} and "
+                   f"{'both slots are' if n_exec == 0 else 'a slot is'} free. It stays "
+                   f"idle until a gate is decided — an agent never moves a run past a human.",
+        "stuck": "<b>Nothing has failed.</b>" + (
+            " The design workstation has never checked in, so the next stage-1 run "
+            "will land here instead of starting — open Paper Desktop on the Lantern "
+            "file and start <code>pipeline.py daemon --runner workstation</code>."
+            if ws_offline else ""),
+        "closed": "<b>Nothing closed in the last 48 hours.</b>",
+    }
+    titles = [("needs_you", "Needs you", "oldest first", True),
+              ("working", "Agents working", "", False),
+              ("stuck", "Stuck", "retries exhausted, or no runner", False),
+              ("closed", "Closed", "last 48 hours" +
+               (" · none shipped" if not any(r["status"] == "done" for r, _ in groups["closed"]) else ""),
+               False)]
+    for key, name, note, hot in titles:
+        body.append(group_head(name, len(groups[key]), note, hot=hot and bool(groups[key])))
+        if strips[key]:
+            hdr = strip_header() if key == "needs_you" else ""
+            body.append(f"<div class='stripwrap'>{hdr}{''.join(strips[key])}</div>")
+        else:
+            body.append(f"<p class='empty'>{empties[key]}</p>")
+
+    # retry / failure feed — where the fleet's real story lives
+    if snap["feed"]:
+        n_fail = sum(1 for f in snap["feed"] if f["status"] == "failed")
+        n_rec = sum(1 for f in snap["feed"] if f["status"] == "succeeded")
+        rows = []
+        for f in snap["feed"]:
+            if f["status"] == "failed":
+                msg = (f["error"] or "failed, no error recorded").splitlines()[0][:110]
+                cls = "er"
+            else:
+                msg, cls = f"succeeded on attempt {f['attempt']}", "er ok"
+            rows.append(
+                f"<div class='att'><span class='tm'>{f['started_at']:%b %d %H:%M}</span>"
+                f"<span class='rn'><a href='/run/{H(f['run_id'])}'>{H(run_short(f['run_id']))}</a>"
+                f" · {H(f['stage'])}</span>"
+                f"<span class='{cls}'>{H(msg)}</span>"
+                f"<span class='at'>attempt {f['attempt']}</span></div>")
+        body.append(f"<section class='feed'><div class='th'>"
+                    f"<span class='caps'>Attempts · last 48 hours</span>"
+                    f"<span class='caps'>{n_fail} failed · {n_rec} recovered on retry</span>"
+                    f"</div>{''.join(rows)}</section>")
+
+    return page("Board — Lantern Mission Control", "".join(body), user, "/", now)
+
+
+@app.get("/gates", response_class=HTMLResponse)
+async def gates(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
     pend = await p.fetch(
-        "SELECT id, run_id, gate, payload, requested_at FROM approvals WHERE status='pending' ORDER BY requested_at")
-    runs = await p.fetch(
-        "SELECT id, status, current_stage, created_by, updated_at FROM runs WHERE status != 'done' ORDER BY updated_at DESC")
-    done = await p.fetch(
-        "SELECT id, completed_at FROM runs WHERE status='done' ORDER BY completed_at DESC LIMIT 5")
-    online = await runners_online(p)
+        "SELECT * FROM approvals WHERE status='pending' ORDER BY requested_at")
+    runs = {r["id"]: r for r in await p.fetch(
+        "SELECT * FROM runs WHERE id = ANY($1)",
+        list({a["run_id"] for a in pend}))}
+    history = await p.fetch(
+        """SELECT * FROM approvals WHERE status != 'pending'
+           ORDER BY decided_at DESC NULLS LAST LIMIT 12""")
 
-    inbox = "".join(
-        f"<div class='card'><a href='/run/{html.escape(a['run_id'])}'>{html.escape(a['run_id'])}</a>"
-        f" <span class='chip'>waiting since {a['requested_at']:%b %d %H:%M}</span><br>{gate_form(a)}</div>"
-        for a in pend) or "<div class='card'>Nothing is waiting on a human right now 🎉</div>"
+    body = [f"<section class='saidrow noages'><div class='said'>"
+            f"<h1>{len(pend)} gate{'s' if len(pend) != 1 else ''} waiting, oldest first</h1>"
+            f"<p>Approving writes the decision server-side and advances the run; "
+            f"rejecting stops it for rework. Every decision lands in the audit log "
+            f"with your name on it.</p></div></section>"]
+    if pend:
+        for a in pend:
+            body.append(gate_card(a, runs.get(a["run_id"]), now))
+    else:
+        body.append("<p class='empty' style='margin-top:16px'><b>Nothing is waiting "
+                    "on a human.</b> When a stage finishes behind a gate, it appears "
+                    "here with its evidence.</p>")
 
-    cols = []
-    for dir_ in BOARD_DIRS:
-        name, actor, _ = STAGE_META[dir_]
-        cards = "".join(
-            f"<div class='card'><a href='/run/{html.escape(r['id'])}'>{html.escape(r['id'])}</a><br>"
-            f"{badge(r['status'])}<div class='sub'>by {html.escape(r['created_by'])} · {r['updated_at']:%b %d}</div>"
-            f"{needs_workstation_note(r['status'], r['current_stage'], online)}</div>"
-            for r in runs if STAGE_DIR.get(r["current_stage"], r["current_stage"]) == dir_)
-        cols.append(f"<div class='col'><h3>{html.escape(name)}</h3>"
-                    f"<div class='desc'>{html.escape(actor)}</div>{cards}</div>")
+    if history:
+        rows = []
+        for a in history:
+            k = {"approved": "ok", "rejected": "blocked", "expired": ""}.get(a["status"], "")
+            note = " ".join((a["decision_note"] or "").split())[:150]
+            when = a["decided_at"] or a["requested_at"]
+            rows.append(
+                f"<div class='att'><span class='tm'>{when:%b %d %H:%M}</span>"
+                f"<span class='rn'><a href='/run/{H(a['run_id'])}'>"
+                f"{H(run_short(a['run_id']))}</a> · {H(GATE_SHORT.get(a['gate'], a['gate']))}</span>"
+                f"<span class='er ok' style='color:var(--text-muted)'>{H(note) or '—'}</span>"
+                f"<span class='at'>{chip(a['status'], k)}<br>"
+                f"<span style='letter-spacing:.04em'>{H(a['decided_by'] or '')}</span></span></div>")
+        body.append(f"<section class='feed decided'><div class='th'>"
+                    f"<span class='caps'>Decided · most recent</span>"
+                    f"<span class='caps'>{len(history)} shown</span></div>{''.join(rows)}</section>")
 
-    recent = "".join(f"<li><a href='/run/{html.escape(r['id'])}'>{html.escape(r['id'])}</a> "
-                     f"shipped {r['completed_at']:%b %d}</li>" for r in done) or "<li>none yet</li>"
+    return page("Gates — Lantern Mission Control", "".join(body), user, "/gates", now)
 
-    return page("Mission Control", f"""
-      <h2 id='inbox'>📥 Inbox — decisions waiting on a human</h2>
-      <p class='sub'>The pipeline pauses here until someone approves. Approving moves the run to its next stage; rejecting stops it for rework.</p>
-      {inbox}
-      <h2 id='board'>🗺 Board — every active run, left to right through the pipeline</h2>
-      {legend()}
-      <div class='board'>{''.join(cols)}</div>
-      <h2>✅ Recently shipped</h2><ul>{recent}</ul>""", user=user)
+
+@app.get("/runs", response_class=HTMLResponse)
+async def runs_index(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    snap = await snapshot(p)
+    now = datetime.now(timezone.utc)
+    open_s, closed_s = [], []
+    for run in snap["runs"]:
+        group, d = build_strip(run, snap, now)
+        (closed_s if group == "closed" else open_s).append(
+            strip(d, hot=(group == "needs_you"), dim=(group == "closed")))
+    body = [group_head("Open", len(open_s)),
+            f"<div class='stripwrap'>{strip_header()}{''.join(open_s)}</div>" if open_s
+            else "<p class='empty'><b>No open runs.</b> Start one with "
+                 "<code>pipeline.py run</code>.</p>",
+            group_head("Closed", len(closed_s), "full history"),
+            f"<div class='stripwrap'>{''.join(closed_s)}</div>" if closed_s
+            else "<p class='empty'><b>Nothing has closed yet.</b></p>"]
+    return page("Runs — Lantern Mission Control", "".join(body), user, "/runs", now)
+
+
+@app.get("/spend", response_class=HTMLResponse)
+async def spend(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
+    cols = """model, coalesce(sum(input_tokens),0)::bigint AS inp,
+              coalesce(sum(cached_input_tokens),0)::bigint AS cached,
+              coalesce(sum(output_tokens),0)::bigint AS outp, count(*)::int AS n,
+              count(*) FILTER (WHERE total_tokens IS NULL)::int AS unmetered"""
+    daily = await p.fetch(
+        f"""SELECT date_trunc('day', started_at)::date AS day, {cols}
+            FROM stage_executions
+            WHERE started_at >= now() - interval '14 days'
+            GROUP BY 1, model ORDER BY 1 DESC""")
+    top = await p.fetch(
+        f"""SELECT run_id, {cols} FROM stage_executions
+            WHERE started_at >= now() - interval '14 days'
+            GROUP BY run_id, model
+            ORDER BY coalesce(sum(total_tokens),0) DESC LIMIT 15""")
+    alltime = await p.fetch(f"SELECT {cols} FROM stage_executions GROUP BY model")
+    tripwire = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "50"))
+
+    total_cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"]) for r in alltime)
+    total_unmetered = sum(r["unmetered"] for r in alltime)
+    today_rows = [r for r in daily if r["day"] == now.date()]
+    today_cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"]) for r in today_rows)
+
+    body = [f"""<section class='readout' style='grid-template-columns:repeat(3,1fr) auto'>
+      <div><div class='caps'>Spent today</div>
+        <div class='v'>{H(fmt_money(today_cost))}<small> / {tripwire:.0f}</small></div>
+        <div class='d'>{min(today_cost / tripwire * 100, 999):.0f}% of the daily tripwire</div></div>
+      <div><div class='caps'>Ledger total</div><div class='v'>{H(fmt_money(total_cost))}</div>
+        <div class='d'>every metered execution, all time · est.</div></div>
+      <div><div class='caps'>Unmetered</div>
+        <div class='v{' bad' if total_unmetered else ''}'>{total_unmetered}</div>
+        <div class='d'>executions with no token counts — real spend is higher</div></div>
+      <div class='cta'></div></section>"""]
+
+    if daily:
+        rows = []
+        for r in daily:
+            cost = est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+            w = min(cost / tripwire * 100, 100)
+            over = " over" if cost > tripwire else ""
+            cpct = f"{round(r['cached'] / r['inp'] * 100)}%" if r["inp"] else "—"
+            rows.append(
+                f"<tr><td class='d'>{r['day']:%b %d}</td><td>{H(r['model'] or '—')}</td>"
+                f"<td class='r'>{r['n']}</td><td class='r'>{fmt_int(r['inp'])}</td>"
+                f"<td class='r'>{fmt_int(r['cached'])} · {cpct}</td>"
+                f"<td class='r'>{fmt_int(r['outp'])}</td>"
+                f"<td class='r'>{H(fmt_money(cost))}</td>"
+                f"<td><span class='bar'><i class='{over.strip()}' style='width:{w:.0f}%'></i></span></td></tr>")
+        body.append(f"""<h2 class='sect'>By day, last 14</h2>
+          <p class='sub'>The bar is the day against the ${tripwire:.0f} tripwire.</p>
+          <div class='stripwrap'><table class='spendtbl'>
+          <tr><th>Day</th><th>Model</th><th class='r'>Stages</th><th class='r'>Input</th>
+          <th class='r'>Cached</th><th class='r'>Output</th><th class='r'>Est. $</th><th></th></tr>
+          {''.join(rows)}</table></div>""")
+    else:
+        body.append("<p class='empty' style='margin-top:20px'><b>No metered executions "
+                    "in the last 14 days.</b></p>")
+
+    if top:
+        rows = "".join(
+            f"<tr><td class='d'><a href='/run/{H(r['run_id'])}'>{H(r['run_id'])}</a></td>"
+            f"<td>{H(r['model'] or '—')}</td><td class='r'>{r['n']}</td>"
+            f"<td class='r'>{fmt_int(r['inp'])}</td><td class='r'>{fmt_int(r['outp'])}</td>"
+            f"<td class='r'>{H(fmt_money(est_cost_usd(r['inp'], r['cached'], r['outp'], r['model'])))}</td></tr>"
+            for r in top)
+        body.append(f"""<h2 class='sect'>By run, last 14 days</h2>
+          <div class='stripwrap'><table class='spendtbl'>
+          <tr><th>Run</th><th>Model</th><th class='r'>Stages</th><th class='r'>Input</th>
+          <th class='r'>Output</th><th class='r'>Est. $</th></tr>{rows}</table></div>""")
+
+    p_in = os.environ.get("LANTERN_PRICE_IN_PER_M", "4")
+    p_c = os.environ.get("LANTERN_PRICE_CACHED_IN_PER_M", "1")
+    p_out = os.environ.get("LANTERN_PRICE_OUT_PER_M", "20")
+    body.append(f"<p class='footnote'>Token counts are exact; dollars are estimates at "
+                f"${H(p_in)} / ${H(p_c)} cached / ${H(p_out)} per 1M tokens until Azure "
+                f"invoice lines confirm the rates (pipeline.py, P0.4). Executions that "
+                f"crashed before reporting usage have no token counts and are flagged "
+                f"unmetered — real spend is higher than shown.</p>")
+
+    return page("Spend — Lantern Mission Control", "".join(body), user, "/spend", now)
 
 
 @app.get("/run/{run_id}", response_class=HTMLResponse)
@@ -320,62 +833,136 @@ async def run_page(run_id: str, request: Request):
     if not user:
         return RedirectResponse("/login", status_code=303)
     p = await get_pool()
+    now = datetime.now(timezone.utc)
     run = await p.fetchrow("SELECT * FROM runs WHERE id = $1", run_id)
     if not run:
         raise HTTPException(404, "run not found")
     execs = await p.fetch(
-        """SELECT DISTINCT ON (stage) stage, status, attempt, error, started_at, finished_at
-           FROM stage_executions WHERE run_id = $1 ORDER BY stage, attempt DESC""", run_id)
-    by_dir: dict[str, asyncpg.Record] = {}   # latest execution per run-folder dir
-    for e in execs:
-        d = STAGE_DIR.get(e["stage"], e["stage"])
-        if d not in by_dir or e["started_at"] > by_dir[d]["started_at"]:
-            by_dir[d] = e
-    arts = await p.fetch("SELECT stage, kind, uri FROM artifacts WHERE run_id = $1", run_id)
+        "SELECT * FROM stage_executions WHERE run_id = $1 ORDER BY started_at", run_id)
+    arts = await p.fetch(
+        "SELECT stage, kind, uri FROM artifacts WHERE run_id = $1 ORDER BY created_at", run_id)
     events = await p.fetch(
-        "SELECT actor, type, at FROM events WHERE run_id = $1 ORDER BY at DESC LIMIT 30", run_id)
+        "SELECT actor, type, data, at FROM events WHERE run_id = $1 ORDER BY at DESC LIMIT 100",
+        run_id)
     pend = await p.fetch(
-        "SELECT id, gate, payload, requested_at FROM approvals WHERE run_id = $1 AND status='pending'", run_id)
-    online = await runners_online(p)
+        "SELECT * FROM approvals WHERE run_id = $1 AND status='pending'", run_id)
 
-    _, sdesc = STATUS_META.get(run["status"], ("", ""))
-    parts = [f"<h2>{html.escape(run_id)} {badge(run['status'])}</h2>"
-             f"<p class='sub'>{html.escape(sdesc)} · started by {html.escape(run['created_by'])} · "
-             f"brief: <code>{html.escape(run['brief'])}</code></p>"]
-    ws_note = needs_workstation_note(run["status"], run["current_stage"], online)
-    if ws_note:
-        parts.append(f"<div class='card'>{ws_note}</div>")
+    by_dir: dict[str, list] = {}
+    for e in execs:
+        by_dir.setdefault(STAGE_DIR.get(e["stage"], e["stage"]), []).append(e)
+    curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
+
+    # totals
+    cost = tot = inp = cached = 0
+    unmetered = 0
+    for e in execs:
+        cost += est_cost_usd(e["input_tokens"], e["cached_input_tokens"],
+                             e["output_tokens"], e["model"])
+        tot += e["total_tokens"] or 0
+        inp += e["input_tokens"] or 0
+        cached += e["cached_input_tokens"] or 0
+        unmetered += 1 if e["total_tokens"] is None else 0
+
+    status_chip = {"running": ("Queued", ""), "executing": ("Running", "ok"),
+                   "waiting_gate": ("Waiting on a human", "gate"),
+                   "failed": ("Failed", "blocked"), "done": ("Shipped", "ok"),
+                   "cancelled": ("Cancelled", "")}.get(run["status"], (run["status"], ""))
+    verdict = report_verdict(report_text(run_id, curdir)) \
+        if run["status"] not in ("done", "cancelled") else None
+    v_chip = chip("report: blocked", "blocked") if verdict == "BLOCKED" else ""
+    repo_bit = (f"<code>{H(run['product_repo'])}</code> @ {H(run['product_branch'] or 'default')}"
+                if run.get("product_repo") else
+                chip("no product repo set — stage 2+ blocks", "warn"))
+    tok_line = (f"{fmt_int(tot)} tok · {round(cached / inp * 100) if inp else 0}% cached"
+                if tot else "no ledger")
+    unm_line = f"<br>{unmetered} unmetered execution{'s' if unmetered != 1 else ''}" if unmetered else ""
+    body = [f"""<div class='runhead'><div>
+        <div class='caps'>Run · pipeline v{H(str(run['pipeline_version']))}</div>
+        <h1>{H(run_id)}</h1>
+        <div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>
+          {chip(*status_chip)}{v_chip}</div>
+        <div class='meta'>brief <code>{H(run['brief'])}</code><br>
+          started by <b>{H(run['created_by'])}</b> · {run['created_at']:%b %d %H:%M} UTC
+          · last activity {ago((now - run['updated_at']).total_seconds())} ago<br>
+          product repo: {repo_bit}</div></div>
+      <div class='totals'><div class='caps'>Est. spend</div>
+        <div class='v'>{H(fmt_money(cost) if tot else '—')}</div>
+        <div class='d'>{H(tok_line)}{unm_line}</div></div></div>"""]
+
     for a in pend:
-        parts.append(f"<div class='card'>⏳ {gate_form(a)}</div>")
+        body.append(gate_card(a, run, now))
 
-    cur_dir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
-    for dir_ in BOARD_DIRS:
-        name, actor, desc = STAGE_META[dir_]
-        e = by_dir.get(dir_)
-        cur = " ← current" if dir_ == cur_dir and run["status"] != "done" else ""
-        state = badge(e["status"]) if e else "<span class='chip'>not started</span>"
-        phase = (f" <span class='chip'>phase: {html.escape(e['stage'].split('.', 1)[1])}</span>"
-                 if e and "." in e["stage"] else "")
-        parts.append(f"<div class='card'><b>{html.escape(name)}</b> <span class='chip'>{html.escape(actor)}</span> "
-                     f"{state}{phase}<b>{cur}</b><div class='sub'>{html.escape(desc)}</div>")
-        if e and e["error"]:
-            parts.append(f"<p class='evt'>error: {html.escape(e['error'][:500])}</p>")
-        report = REPO / "workflow" / "runs" / run_id / dir_ / "report.md"
-        if report.exists():
-            parts.append(f"<details><summary>📄 stage report</summary><div class='report'>"
-                         f"{md.markdown(report.read_text(encoding='utf-8'))}</div></details>")
-        stage_arts = [a for a in arts if a["stage"] == dir_]
+    for i, d in enumerate(BOARD_DIRS):
+        name, actor, desc = STAGE_META.get(d, (d, "agent", ""))
+        tries = sorted(by_dir.get(d, []), key=lambda e: e["started_at"], reverse=True)
+        latest = tries[0] if tries else None
+        cur = d == curdir and run["status"] not in ("done",)
+        cls = "scard cur" if cur else ("scard" if tries else "scard pend")
+        st = {"succeeded": ("Succeeded", "ok"), "failed": ("Failed", "blocked"),
+              "running": ("Running", "ok"), "waiting_gate": ("Waiting", "gate"),
+              "skipped": ("Skipped", "")}.get(latest["status"], (latest["status"], "")) \
+            if latest else ("Not started", "")
+        d_cost = sum(est_cost_usd(e["input_tokens"], e["cached_input_tokens"],
+                                  e["output_tokens"], e["model"]) for e in tries)
+        d_tot = sum(e["total_tokens"] or 0 for e in tries)
+        right = ""
+        if latest:
+            dur = ((latest["finished_at"] or now) - latest["started_at"]).total_seconds()
+            right = f"{ago(dur)}"
+            right += (f"<br>{fmt_int(d_tot)} tok · {H(fmt_money(d_cost))}" if d_tot
+                      else "<br>unmetered")
+        phase = (f" · {latest['stage'].split('.', 1)[1]}"
+                 if latest and "." in latest["stage"] else "")
+        head = (f"<div class='shead'><span class='nm'>{H(name)}</span>"
+                f"<span class='actor'>{'🤖 agent' if actor == 'agent' else '👤 human'}"
+                f" · {H(DIR_RUNNER.get(d, 'ec2'))}{H(phase)}</span>"
+                f"{chip(*st)}{chip('current', 'gate') if cur else ''}"
+                f"<span class='right'>{right}</span></div>")
+        bits = [head, f"<div class='sdesc'>{H(desc)}</div>"]
+        if latest and latest["error"]:
+            bits.append(f"<div class='err'>{H(latest['error'][:600])}</div>")
+        if len(tries) > 1 or any(t["status"] == "failed" for t in tries):
+            rows = "".join(
+                f"<div>attempt {t['attempt']} · "
+                f"<span class='{'ok' if t['status'] == 'succeeded' else 'bad' if t['status'] == 'failed' else ''}'>"
+                f"{H(t['status'])}</span> · {H(t['runner'])} · "
+                f"{ago(((t['finished_at'] or now) - t['started_at']).total_seconds())}"
+                + (f" · {H((t['error'] or '').splitlines()[0][:90])}" if t["error"] else "")
+                + "</div>"
+                for t in tries)
+            bits.append(f"<div class='tries'>{rows}</div>")
+        text = report_text(run_id, d)
+        if text:
+            v = report_verdict(text)
+            v_note = f" — report status: {v}" if v else ""
+            bits.append(f"<details class='report'><summary>report.md{H(v_note)}</summary>"
+                        f"<div class='prose'>{render_markdown(text)}</div></details>")
+        stage_arts = [a for a in arts if a["stage"] == d]
         if stage_arts:
-            links = " · ".join(
-                f"<a href='{html.escape(art_href(a['uri']))}'>{KIND_ICON.get(a['kind'], '')}{html.escape(a['kind'])}</a>"
+            links = "".join(
+                f"<a href='{H(art_href(a['uri']))}' target='_blank'>"
+                f"{KIND_ICON.get(a['kind'], '')}{H(a['kind'])}</a>"
                 for a in stage_arts)
-            parts.append(f"<p>artifacts: {links}</p>")
-        parts.append("</div>")
+            bits.append(f"<div class='arts'>{links}</div>")
+        body.append(f"<div class='{cls}'>{''.join(bits)}</div>")
 
-    evt = "".join(f"<div class='evt'>{e['at']:%b %d %H:%M} · {html.escape(e['actor'])} · "
-                  f"{html.escape(e['type'].replace('_', ' '))}</div>" for e in events)
-    parts.append(f"<h2>📜 Audit log</h2><p class='sub'>Every action on this run, newest first.</p>{evt}")
-    return page(run_id, "".join(parts), user=user)
+    if events:
+        rows = []
+        for e in events:
+            data = e["data"]
+            if isinstance(data, str):
+                snippet = " ".join(data.split())[:120]
+            else:
+                snippet = json.dumps(data)[:120] if data else ""
+            rows.append(f"<div class='evt'><span class='tm'>{e['at']:%b %d %H:%M:%S}</span>"
+                        f"<span class='ac'>{H(e['actor'])}</span>"
+                        f"<span class='ty'><b>{H(e['type'].replace('_', ' '))}</b>"
+                        f"<span>{H(snippet)}</span></span></div>")
+        body.append(f"<h2 class='sect'>Audit log</h2><p class='sub'>Every action on "
+                    f"this run, newest first — {len(events)} shown.</p>"
+                    f"<div>{''.join(rows)}</div>")
+
+    return page(f"{run_id} — Lantern Mission Control", "".join(body), user, "/runs", now)
 
 
 @app.get("/file/{rel:path}")

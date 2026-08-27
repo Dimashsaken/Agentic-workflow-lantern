@@ -1,0 +1,105 @@
+/* Lantern house tokens — literals from design/design-system.md (contentHash 288d9538).
+   Nothing here is invented; additions are proposed in the mockup report, not added. */
+:root{
+  /* surface ladder */
+  --surface-0:#0A0A0C; --surface-1:#121216; --surface-2:#191920; --surface-3:#22222A;
+  --edge:#24242C; --edge-top:rgb(255 255 255 / 5.5%);
+  /* text */
+  --text:#E8E8EC; --text-muted:#8E8E98; --text-dim:#6C6C76;
+  /* accent + semantics */
+  --accent:#F2C57F; --accent-soft:#2C2113; --on-accent:#08080A;
+  --success:#43C67E; --success-soft:#12301F;
+  --warning:#E7935A; --warning-soft:#2E1E16;
+  --danger:#E5705F;
+  --gold-deep:#8C6A2F; --gold-light:#C9B183;
+  /* ordered-quantity ramp — never categories, never verdicts */
+  --night-1:#46565F; --night-2:#5C6E77; --night-3:#7B8A90;
+  --dawn-1:#C77A4E; --dawn-2:#D89A5E; --dawn-3:#E8B570;
+  --dawn-4:#F2C77E; --dawn-5:#F8D68D; --dawn-6:#FCE3A6;
+  /* type */
+  --font-ui:'Figtree','Segoe UI',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Cascadia Mono',Consolas,monospace;
+  /* ADAM.CG PRO is licensed and not vendored — degrades to Figtree caps.
+     Flagged in the report as a design-system gap to close before ship. */
+  --font-label:'ADAM.CG PRO','Figtree','Segoe UI',system-ui,sans-serif;
+  --text-caps:11px; --text-xs:13px; --text-sm:14px; --text-base:15px;
+  --text-md:16px; --text-lg:20px; --text-xl:28px; --text-2xl:40px;
+  /* radii */
+  --r-sm:6px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--surface-0);color:var(--text);
+  font-family:var(--font-ui);font-size:var(--text-base);line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums slashed-zero;
+  font-feature-settings:"tnum" 1,"zero" 1}
+.caps{font-family:var(--font-label);text-transform:uppercase;letter-spacing:.14em;
+  font-size:var(--text-caps);color:var(--text-muted)}
+
+/* ── shell: 64px icon rail + top caps nav ─────────────────────────────── */
+.shell{display:grid;grid-template-columns:64px 1fr;min-height:100vh}
+.rail{background:var(--surface-0);border-right:1px solid var(--edge);
+  display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:22px}
+.rail .logo{width:26px;height:26px;border-radius:var(--r-pill);
+  border:1.5px solid var(--gold-light)}
+.rail .ico{width:22px;height:22px;color:var(--text-dim);display:grid;place-items:center;
+  font-size:14px}
+.rail .ico.on{color:var(--accent)}
+.rail .spacer{flex:1}
+.rail .me{width:26px;height:26px;border-radius:var(--r-pill);background:var(--surface-2);
+  border:1px solid var(--edge);display:grid;place-items:center;
+  font-size:11px;color:var(--text-muted)}
+.topnav{display:flex;gap:0;padding:0 32px;border-bottom:1px solid var(--edge)}
+.topnav a{flex:0 0 auto;min-width:148px;padding:22px 0 12px;
+  border-bottom:1px solid var(--edge);margin-bottom:-1px;
+  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.14em;
+  font-size:var(--text-caps);color:var(--text-dim)}
+.topnav a.on{color:var(--text);border-bottom-color:var(--accent)}
+.topnav .grow{flex:1;border-bottom:1px solid var(--edge);margin-bottom:-1px}
+.topnav .live{align-self:stretch;display:flex;align-items:center;gap:8px;
+  padding-bottom:12px;padding-top:22px;border-bottom:1px solid var(--edge);
+  margin-bottom:-1px;font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.12em;font-size:var(--text-caps);color:var(--text-muted)}
+
+/* ── atoms ─────────────────────────────────────────────────────────────── */
+.dot{width:6px;height:6px;border-radius:var(--r-pill);display:inline-block;
+  vertical-align:middle;flex:0 0 auto}
+.dot.live{background:var(--success);box-shadow:0 0 0 3px var(--success-soft)}
+.dot.gate{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.dot.fail{background:var(--danger)}
+.dot.idle{background:var(--text-dim)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;
+  border:1px solid var(--edge);border-radius:var(--r-pill);
+  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.11em;
+  font-size:var(--text-caps);color:var(--text-muted);background:var(--surface-2);
+  white-space:nowrap}
+.chip.blocked{color:var(--danger);border-color:#3A211E;background:#231517}
+.chip.gate{color:var(--accent);border-color:#3A2D18;background:var(--accent-soft)}
+.chip.ok{color:var(--success);border-color:#1B3D28;background:var(--success-soft)}
+.chip.warn{color:var(--warning);border-color:#3A2A1E;background:var(--warning-soft)}
+.btn{font-family:var(--font-ui);font-size:var(--text-sm);font-weight:600;
+  padding:9px 16px;border-radius:var(--r-sm);cursor:pointer;border:1px solid var(--edge);
+  background:var(--surface-3);color:var(--text)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.ghost{background:transparent;color:var(--text-muted)}
+
+/* stage rail — the 7-stage pipeline compressed into one 7-segment strip */
+/* width:100% matters — as an inline-level flex box (e.g. a <span> in a table
+   cell) it would otherwise shrink-wrap to the gaps and render 12px wide. */
+.srail{display:flex;width:100%;gap:2px;height:4px;border-radius:var(--r-pill);
+  overflow:hidden}
+.srail i{flex:1;background:var(--surface-3)}
+/* progress is an ORDERED quantity, so it uses the night→dawn ramp, not the accent.
+   That keeps --accent scarce for the one real action on the screen. */
+.srail i.done{background:var(--night-2)}
+.srail i.now{background:var(--dawn-4)}
+.srail i.fail{background:var(--danger)}
+.srail.tall{height:6px}
+
+/* numbers that matter: mono, tabular, with a tiny muted caption */
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  font-size:var(--text-lg);color:var(--text);line-height:1.1}
+.num .unit{font-size:var(--text-xs);color:var(--text-muted)}
+.cap{font-size:var(--text-caps);color:var(--text-dim);
+  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.12em}
