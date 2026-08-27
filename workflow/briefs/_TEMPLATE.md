@@ -5,6 +5,8 @@
 - **Assigned developer:**
 - **Date:**
 - **Target release:**
+- **Product repo:** <https://github.com/org/repo — which repository implements this>
+- **Base branch:** main
 
 ## Problem
 

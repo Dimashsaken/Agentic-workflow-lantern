@@ -4,6 +4,8 @@
 - **Reported by:** (user / support / PostHog)
 - **Date observed:**
 - **Environment:** (production / staging / dev, browser, device)
+- **Product repo:** <https://github.com/org/repo>
+- **Base branch:** main
 
 ## What happened
 

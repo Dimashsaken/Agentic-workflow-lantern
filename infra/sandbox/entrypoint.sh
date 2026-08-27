@@ -12,8 +12,10 @@
 # just discouraged. Everything else in /work dies with the container (--rm).
 #
 # Optional product-repo checkout (stages that need the product code):
-#   LANTERN_PRODUCT_REPO    clone URL or a mounted mirror path (e.g. /product-src.git)
-#   LANTERN_PRODUCT_BRANCH  run branch (default main)
+#   LANTERN_PRODUCT_REPO    the mounted mirror path (/product-src.git) — NOT a URL
+#                           and NOT credentialed: the host owns the PAT and the fetch
+#   LANTERN_PRODUCT_BRANCH  base branch to check out (default main)
+#   LANTERN_PRODUCT_ORIGIN  the real origin URL, for messages and the system prompt
 set -euo pipefail
 RUN_ID="$1"; STAGE="$2"
 
@@ -40,9 +42,24 @@ if [ -d /opt/lantern/qa-recorder/node_modules ]; then
   ln -sfn /opt/lantern/qa-recorder/node_modules /work/lantern/tools/qa-recorder/node_modules
 fi
 
+# Product code, read-only and credential-free: the dispatcher bind-mounts a HOST-side
+# bare mirror at /product-src.git (the PAT authenticated the host fetch and is never
+# in that mirror's config), and we clone a throwaway working tree from it. Nothing
+# here can push, and nothing written here outlives the container.
 if [ -n "${LANTERN_PRODUCT_REPO:-}" ]; then
-  git clone --quiet --branch "${LANTERN_PRODUCT_BRANCH:-main}" \
-      "${LANTERN_PRODUCT_REPO}" /work/product
+  # The mount is root-owned and we are uid 1000 — without this git refuses it as
+  # "dubious ownership" and the stage dies with an unreadable product tree.
+  git config --global --add safe.directory "${LANTERN_PRODUCT_REPO}"
+  git config --global --add safe.directory /work/product
+  # --no-hardlinks: the mount is read-only and on another filesystem; be explicit
+  # rather than relying on git's fallback.
+  if ! git clone --quiet --no-hardlinks --branch "${LANTERN_PRODUCT_BRANCH:-main}" \
+       "${LANTERN_PRODUCT_REPO}" /work/product; then
+    echo "FATAL: could not check out ${LANTERN_PRODUCT_ORIGIN:-$LANTERN_PRODUCT_REPO}" \
+         "branch ${LANTERN_PRODUCT_BRANCH:-main} — the stage would have planned" \
+         "against no product code at all." >&2
+    exit 1
+  fi
 fi
 
 exec /opt/lantern/venv/bin/python /work/lantern/tools/azure-runner/orchestrator.py \

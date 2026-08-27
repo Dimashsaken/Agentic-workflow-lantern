@@ -48,8 +48,12 @@ Every agent session, **before doing anything else**, reads in this order:
 3. `agents/<role>/memory.md` — judgement accumulated from past runs
 4. `workflow/RUNBOARD.md` — what's in flight, then the active run folder
    `workflow/runs/<run-id>/` — the brief and all upstream stage reports
-5. The product repo's git state and its own AGENTS.md — full orientation protocol in
-   `docs/AGENT-TOOLING.md` §5 (branches, prior commits for this run, open agent PRs)
+5. The product repo — checked out **read-only** under the `product/` path prefix, with
+   the `product_git` tool for history and search. Full orientation protocol in
+   `docs/AGENT-TOOLING.md` §5 (branches, prior commits for this run, open agent PRs).
+   Which repo/branch is a property of the **run** (`- **Product repo:**` in the brief,
+   or `pipeline.py set-product`); a run without one blocks at stage 2 rather than
+   guessing paths
 
 And **before ending**, it must write two things (both verified mechanically by the
 orchestrator after every stage run):

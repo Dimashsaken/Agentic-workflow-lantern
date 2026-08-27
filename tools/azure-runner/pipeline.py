@@ -18,8 +18,12 @@ Design: docs/ORCHESTRATION.md. Schema: schema.sql.
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
+import re
+import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +39,7 @@ from orchestrator import (
     USAGE_MARKER, append_file, azure_v1_client, build_consult_instructions,
     build_instructions, check_postconditions, collect_export, consult_roles, db_urls,
     list_dir, list_exports, make_append_memory, model_for, paper_mcp_server,
+    product_git,
     paper_reachable, playwright_mcp_server, read_file, render_role_memory, usage_dict,
     write_file,
 )
@@ -101,6 +106,116 @@ def sandbox_db_url() -> str:
     return os.environ.get(
         "LANTERN_SANDBOX_DATABASE_URL",
         db_urls()[0].replace("@localhost", "@host.docker.internal"))
+
+# ── the product repository (per-run target + host-side mirror) ───────────────
+# Two rules shape this design:
+#   1. The PAT NEVER enters a sandbox (D10 scoped-credentials, plan §4 C2.3). So the
+#      HOST authenticates and keeps a bare mirror; the container gets that mirror
+#      bind-mounted READ-ONLY at /product-src.git and clones from a plain local path.
+#      The token is passed per-fetch on the command line and is never written into
+#      the mirror's config, so mounting the mirror leaks nothing.
+#   2. The target is PER RUN, not per daemon: `runs.product_repo`/`product_branch`.
+#      A brief names its own target (the brief field is the authoring surface),
+#      LANTERN_PRODUCT_REPO/_BRANCH are only the fallback default for a box that
+#      works on one product.
+PRODUCT_MIRROR_DIR = Path(os.environ.get(
+    "LANTERN_PRODUCT_MIRROR_DIR", Path.home() / ".lantern" / "product-mirrors"))
+PRODUCT_REPO_DEFAULT = os.environ.get("LANTERN_PRODUCT_REPO", "")
+PRODUCT_BRANCH_DEFAULT = os.environ.get("LANTERN_PRODUCT_BRANCH", "main")
+GIT_TOKEN = os.environ.get("GITHUB_LANTERN_BOT_TOKEN", "")
+
+
+def parse_brief_product(text: str) -> tuple[str, str]:
+    """Pull `- **Product repo:** <url>` / `- **Base branch:** <branch>` out of a brief.
+
+    Placeholder values (em-dash, TBD, or an unfilled <angle-bracket> template slot)
+    read as 'not set' — an unfilled template must not look like a configured target.
+    """
+    def field(label: str) -> str:
+        m = re.search(rf"^\s*-\s*\*\*{label}:\*\*\s*(.+?)\s*$", text, re.M | re.I)
+        if not m:
+            return ""
+        v = m.group(1).strip().strip("`")
+        if v in ("—", "-", "") or v.upper() in ("TBD", "N/A", "NONE"):
+            return ""
+        if v.startswith("<") and v.endswith(">"):
+            return ""
+        return v
+    return field("Product repo"), field("Base branch")
+
+
+def _mirror_path(repo: str) -> Path:
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", repo.rstrip("/").removesuffix(".git")).strip("-").lower()
+    return PRODUCT_MIRROR_DIR / f"{slug[-60:]}-{hashlib.sha256(repo.encode()).hexdigest()[:8]}.git"
+
+
+def _authed(repo: str) -> str:
+    """The fetch URL WITH credentials — host-process only, never persisted or mounted."""
+    if GIT_TOKEN and repo.startswith("https://") and "@" not in repo.split("//", 1)[1].split("/", 1)[0]:
+        return "https://x-access-token:" + GIT_TOKEN + "@" + repo.split("//", 1)[1]
+    return repo
+
+
+def _git(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
+                          timeout=600, errors="replace")
+
+
+def sync_product_mirror(repo: str) -> Path:
+    """Fetch/refresh the host-side bare mirror of `repo` and return its path.
+
+    A local path (an on-box mirror or checkout) is used as-is — no network, no token.
+    """
+    local = Path(repo)
+    if repo.startswith(("/", ".")) or (len(repo) > 2 and repo[1] == ":"):
+        if not local.exists():
+            raise RuntimeError(f"product repo path does not exist on the host: {repo}")
+        return local.resolve()
+
+    mirror = _mirror_path(repo)
+    mirror.parent.mkdir(parents=True, exist_ok=True)
+    if not (mirror / "HEAD").exists():
+        r = _git("clone", "--mirror", _authed(repo), str(mirror))
+        if r.returncode != 0:
+            raise RuntimeError(f"product mirror clone failed: {_scrub(r.stderr)[-600:]}")
+        # Drop the credentialed URL from the mirror's config immediately — this
+        # directory gets mounted into sandboxes and must never carry the token.
+        _git("remote", "set-url", "origin", repo, cwd=mirror)
+    else:
+        r = _git("fetch", "--prune", _authed(repo),
+                 "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*", cwd=mirror)
+        if r.returncode != 0:
+            raise RuntimeError(f"product mirror fetch failed: {_scrub(r.stderr)[-600:]}")
+    leak = _git("config", "--get", "remote.origin.url", cwd=mirror).stdout
+    if "@" in leak and GIT_TOKEN and GIT_TOKEN[:12] in leak:
+        raise RuntimeError("refusing to mount a mirror whose config holds the PAT")
+    return mirror
+
+
+def _scrub(text: str) -> str:
+    """Never let the PAT reach a log line, an error, or a stage_executions row."""
+    return text.replace(GIT_TOKEN, "***") if GIT_TOKEN else text
+
+
+async def product_target(conn, run_id: str) -> tuple[str, str]:
+    """(repo, branch) for a run — DB first, env default second, ('', '') if unset."""
+    row = await conn.fetchrow(
+        "SELECT product_repo, product_branch FROM runs WHERE id = $1", run_id)
+    repo = (row and row["product_repo"]) or PRODUCT_REPO_DEFAULT
+    branch = (row and row["product_branch"]) or PRODUCT_BRANCH_DEFAULT
+    return repo, (branch if repo else "")
+
+
+def product_mount_args(repo: str, branch: str) -> list[str]:
+    """Docker args that give a sandbox a read-only, credential-free product checkout."""
+    if not repo:
+        return []
+    mirror = sync_product_mirror(repo)
+    return ["-v", f"{mirror}:/product-src.git:ro",
+            "-e", "LANTERN_PRODUCT_REPO=/product-src.git",
+            "-e", f"LANTERN_PRODUCT_BRANCH={branch}",
+            "-e", f"LANTERN_PRODUCT_ORIGIN={repo}"]
+
 
 # (stage key, run-folder dir, type, gate-after, runner). Human stages produce an
 # approval immediately and wait. Stage 1 is split by runner affinity: cheap divergence
@@ -321,6 +436,15 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
                     {"stage": stage, "attempt": attempt, "runner": runner})
 
     await render_role_memory(conn, role)   # instructions must read a fresh view
+    # Same product access as a sandbox, via a host checkout instead of a mount, so
+    # laptop/workstation runs see exactly what the box does (orchestrator reads
+    # LANTERN_PRODUCT_DIR at call time).
+    repo, branch = await product_target(conn, run_id)
+    os.environ.pop("LANTERN_PRODUCT_DIR", None)
+    if repo:
+        os.environ["LANTERN_PRODUCT_DIR"] = str(
+            await asyncio.to_thread(product_checkout, repo, branch, run_id))
+        os.environ["LANTERN_PRODUCT_ORIGIN"], os.environ["LANTERN_PRODUCT_BRANCH"] = repo, branch
     session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
 
     mcp_servers = []
@@ -338,6 +462,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
             model=model_for(role, stage),
             instructions=build_instructions(role, run_id, stage),
             tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export,
+                   product_git,
                    make_append_memory(role, run_id, stage, execution_key)],
             mcp_servers=mcp_servers,
         )
@@ -419,6 +544,10 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     # Video recording needs no env here — orchestrator.py configures the MCP itself.
     for inner, value in qa_stage_env(stage).items():
         cmd += ["-e", f"{inner}={value}"]
+    # Product code (read-only, credential-free): the host refreshes its mirror and
+    # bind-mounts it; the entrypoint clones /product-src.git into /work/product.
+    repo, branch = await product_target(conn, run_id)
+    cmd += await asyncio.to_thread(product_mount_args, repo, branch)
     cmd += [SANDBOX_IMAGE, run_id, stage]
 
     proc = await asyncio.create_subprocess_exec(
@@ -647,10 +776,24 @@ async def cmd_init_db() -> None:
     print("schema applied")
 
 
-async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool) -> None:
+async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
+                  product_repo: str = "", product_branch: str = "") -> None:
     brief = Path(brief_path)
     if not brief.exists():
         sys.exit(f"brief not found: {brief_path}")
+    # Product target: --flag wins, then the brief's own field, then the box default.
+    # Resolved at creation so the run records what it was pointed at, not what the
+    # daemon's env happened to say three stages later.
+    brief_repo, brief_branch = parse_brief_product(brief.read_text(encoding="utf-8"))
+    product_repo = product_repo or brief_repo or PRODUCT_REPO_DEFAULT
+    product_branch = product_branch or brief_branch or PRODUCT_BRANCH_DEFAULT
+    if product_repo:
+        # Fail here, not inside a container three stages later.
+        await asyncio.to_thread(sync_product_mirror, product_repo)
+    else:
+        print("WARNING: no product repo for this run — stages 2+ will block asking for "
+              "one. Set it with `pipeline.py set-product <run-id> --repo … --branch …` "
+              "or add a `- **Product repo:**` line to the brief.", file=sys.stderr)
     if not run_id:
         run_id = f"feat-{datetime.now(timezone.utc):%Y%m%d}-{brief.stem.lstrip('_').lower()}"
     run_dir = REPO / "workflow" / "runs" / run_id
@@ -659,10 +802,14 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool) ->
 
     conn = await connect()
     await conn.execute(
-        """INSERT INTO runs (id, brief, pipeline_version, current_stage, created_by)
-           VALUES ($1, $2, $3, $4, $5)""",
-        run_id, str(brief), PIPELINE_VERSION, FEATURE_STAGES[0][0], by)
-    await log_event(conn, run_id, f"human:{by}", "run_created", {"brief": str(brief)})
+        """INSERT INTO runs (id, brief, pipeline_version, current_stage, created_by,
+                             product_repo, product_branch)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+        run_id, str(brief), PIPELINE_VERSION, FEATURE_STAGES[0][0], by,
+        product_repo or None, product_branch or None)
+    await log_event(conn, run_id, f"human:{by}", "run_created",
+                    {"brief": str(brief), "product_repo": product_repo,
+                     "product_branch": product_branch})
     await render_runboard(conn)
     print(f"run {run_id} created — the pipeline takes it from here.")
     if follow:
@@ -798,6 +945,54 @@ async def cmd_decide(run_id: str, gate: str, by: str, note: str, approved: bool)
         print(f"[{run_id}] {gate} rejected by {by} — run marked failed; rework then `retry`.")
     await render_runboard(conn)
     await conn.close()
+
+
+def product_checkout(repo: str, branch: str, run_id: str) -> Path:
+    """Host-side working checkout of the product for the in-process executor.
+
+    Cloned fresh from the mirror every stage, so a stage can never read a tree some
+    earlier stage left dirty. The docker executor does not use this — its container
+    clones from the read-only mount instead.
+    """
+    mirror = sync_product_mirror(repo)
+    dest = PRODUCT_MIRROR_DIR / "checkouts" / run_id
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    r = _git("clone", "--no-hardlinks", "--branch", branch, str(mirror), str(dest))
+    if r.returncode != 0:
+        raise RuntimeError(
+            f"product checkout of branch '{branch}' failed: {_scrub(r.stderr)[-600:]}")
+    return dest
+
+
+async def cmd_set_product(run_id: str, repo: str, branch: str) -> None:
+    """Point an existing run at a product repo/branch and verify the host can reach it.
+
+    Verification is the point: a run recorded against a repo the box cannot clone
+    would fail one stage later, inside a container, as an opaque sandbox error.
+    """
+    conn = await connect()
+    if not await conn.fetchval("SELECT 1 FROM runs WHERE id = $1", run_id):
+        await conn.close()
+        sys.exit(f"unknown run: {run_id}")
+    print(f"syncing host mirror for {repo} …")
+    mirror = await asyncio.to_thread(sync_product_mirror, repo)
+    r = _git("rev-parse", "--verify", f"refs/heads/{branch}", cwd=mirror)
+    if r.returncode != 0:
+        heads = _git("for-each-ref", "--format=%(refname:short)", "refs/heads", cwd=mirror)
+        await conn.close()
+        sys.exit(f"branch '{branch}' not found in {repo}\n"
+                 f"branches: {', '.join(heads.stdout.split()) or '(none)'}")
+    await conn.execute(
+        "UPDATE runs SET product_repo = $1, product_branch = $2, updated_at = now() WHERE id = $3",
+        repo, branch, run_id)
+    await log_event(conn, run_id, "human:cli", "product_target_set",
+                    {"repo": repo, "branch": branch, "head": r.stdout.strip()[:12]})
+    await conn.close()
+    print(f"[{run_id}] product target set: {repo} @ {branch} ({r.stdout.strip()[:12]})\n"
+          f"  mirror: {mirror}\n"
+          f"  stages from here on get it read-only at the `product/` prefix.")
 
 
 async def cmd_retry(run_id: str) -> None:
@@ -1059,6 +1254,13 @@ def main() -> None:
     p = sub.add_parser("run"); p.add_argument("brief"); p.add_argument("--run-id")
     p.add_argument("--by", default=os.environ.get("USERNAME") or os.environ.get("USER", "unknown"))
     p.add_argument("--follow", action="store_true")
+    p.add_argument("--product-repo", default="",
+                   help="product repo URL or on-box path (default: the brief's field, then "
+                        "LANTERN_PRODUCT_REPO)")
+    p.add_argument("--product-branch", default="", help="base branch (default: the brief's field, then main)")
+    p = sub.add_parser("set-product", help="point an existing run at a product repo/branch")
+    p.add_argument("run_id"); p.add_argument("--repo", required=True)
+    p.add_argument("--branch", default=PRODUCT_BRANCH_DEFAULT)
     p = sub.add_parser("daemon")
     p.add_argument("--runner", choices=["ec2", "workstation"],
                    default=os.environ.get("LANTERN_RUNNER", "ec2"))
@@ -1086,7 +1288,9 @@ def main() -> None:
 
     match a.cmd:
         case "init-db": asyncio.run(cmd_init_db())
-        case "run":     asyncio.run(cmd_run(a.brief, a.run_id, a.by, a.follow))
+        case "run":     asyncio.run(cmd_run(a.brief, a.run_id, a.by, a.follow,
+                                            a.product_repo, a.product_branch))
+        case "set-product":   asyncio.run(cmd_set_product(a.run_id, a.repo, a.branch))
         case "daemon":  asyncio.run(cmd_daemon(a.runner))
         case "approve": asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, True))
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))

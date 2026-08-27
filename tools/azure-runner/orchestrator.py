@@ -15,6 +15,7 @@ import asyncio
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -29,6 +30,17 @@ from agents import (Agent, Runner, function_tool, set_default_openai_api,
 from agents.mcp import MCPServerStdio, MCPServerStreamableHttp
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def product_root() -> Path:
+    """Where the product repo is checked out for this stage.
+
+    In a sandbox the entrypoint clones it to /work/product from the read-only mirror
+    mount; in-process the dispatcher sets LANTERN_PRODUCT_DIR to a host checkout.
+    Read at call time, not import time, so both executors work in one process.
+    """
+    return Path(os.environ.get("LANTERN_PRODUCT_DIR", "/work/product"))
+
 PROCESS_START = datetime.now(timezone.utc).timestamp()  # stale-export guard
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -244,6 +256,7 @@ def build_instructions(role: str, run_id: str, stage: str) -> str:
         "fails with nothing written. Act first: call tools, write files, then reply only "
         "once the three postconditions are already on disk. Work continuously until done.",
     ]
+    parts.append(product_note())
     parts.append(PHASE_NOTES.get(stage, ""))
     if stage in PAPER_STAGES:
         parts.append(paper_file_note())
@@ -300,6 +313,37 @@ def _safe(rel: str) -> Path:
     return p
 
 
+def product_wired() -> bool:
+    """True when this stage has a product checkout to read."""
+    return product_root().is_dir()
+
+
+PRODUCT_HINT = (
+    "No product repository is wired into this run. Report Status: BLOCKED asking for "
+    "the product repo + base branch to be set (`pipeline.py set-product <run-id> "
+    "--repo <url> --branch <branch>`), and still satisfy every postcondition.")
+
+
+def _resolve_read(rel: str) -> Path:
+    """Resolve a read path across BOTH roots: the Lantern repo and `product/`.
+
+    `product/...` addresses the read-only product checkout; everything else stays
+    relative to the Lantern repo root, so existing skills and paths are unchanged.
+    Both branches confine the result to their own root — a `..` escape is an error,
+    not a traversal, and the product root can never be reached from the repo one.
+    """
+    norm = rel.replace("\\", "/").lstrip("/")
+    if norm == "product" or norm.startswith("product/"):
+        if not product_wired():
+            raise FileNotFoundError(PRODUCT_HINT)
+        sub = norm[len("product"):].lstrip("/")
+        p = (product_root() / sub).resolve() if sub else product_root().resolve()
+        if not p.is_relative_to(product_root().resolve()):
+            raise ValueError(f"path escapes the product checkout: {rel}")
+        return p
+    return _safe(rel)
+
+
 def _writable(rel: str) -> Path:
     """Like _safe, but rejects files that are rendered views of Postgres.
 
@@ -307,6 +351,12 @@ def _writable(rel: str) -> Path:
     other runs and is silently discarded on the next render — so it is an error, not
     a convenience.
     """
+    norm = rel.replace("\\", "/").lstrip("/")
+    if norm == "product" or norm.startswith("product/"):
+        raise ValueError(
+            "the product checkout is READ-ONLY for fleet stages — it is a throwaway clone "
+            "of a mirror and nothing written there survives the container. Product code is "
+            "written in stage 3 (coding); your output goes in your run folder.")
     p = _safe(rel)
     rp = p.relative_to(REPO).as_posix()
     if rp == "workflow/RUNBOARD.md":
@@ -322,8 +372,8 @@ def _writable(rel: str) -> Path:
 
 @function_tool
 def read_file(path: str) -> str:
-    """Read a file. Path is relative to the Lantern repo root."""
-    return _safe(path).read_text(encoding="utf-8")
+    """Read a file. Relative to the Lantern repo root, or `product/...` for product code."""
+    return _resolve_read(path).read_text(encoding="utf-8")
 
 
 @function_tool
@@ -397,6 +447,96 @@ def make_append_memory(role: str, run_id: str, stage: str, execution_key: str):
 def list_dir(path: str) -> str:
     """List a directory. Path is relative to the Lantern repo root."""
     return "\n".join(sorted(x.name + ("/" if x.is_dir() else "") for x in _safe(path).iterdir()))
+
+
+# ── product repository: read-only git, no shell ──────────────────────────────
+# Orientation (AGENT-TOOLING §5) tells every agent to read the product repo's git
+# state, and pre-coding's blast-radius work is `grep broadly` by definition — both
+# need git, neither needs a shell. This is git with an allowlist: read-only
+# subcommands, no flags that can write a file or execute anything, fixed cwd.
+PRODUCT_GIT_ALLOWED = {
+    "log", "show", "branch", "diff", "ls-files", "ls-tree", "grep",
+    "shortlog", "blame", "tag", "rev-parse", "describe", "status",
+}
+# `-c`/`--exec-path` inject config and binaries; the rest write files or open
+# network paths. Matched exactly and as `--flag=value`.
+PRODUCT_GIT_DENY = ("-c", "--exec-path", "--upload-pack", "--receive-pack",
+                    "--output", "--git-dir", "--work-tree", "-o", "--ext-diff")
+PRODUCT_GIT_MAX = 24000
+
+
+@function_tool
+def product_git(subcommand: str, args: list[str] | None = None) -> str:
+    """Run one READ-ONLY git command in the product checkout (no shell).
+
+    This is how you orient in the product repo and how you trace blast radius:
+
+      product_git("log", ["--oneline", "-20"])             recent history on this branch
+      product_git("branch", ["-a"])                        branches (yours may exist already)
+      product_git("log", ["--all", "--grep", "<run-id>"])  commits already made for this run
+      product_git("grep", ["-n", "createCandidate"])       find every consumer
+      product_git("ls-files", ["src/"])                    enumerate files
+
+    `git grep` searches tracked files only, which is what you want. Allowed
+    subcommands: log, show, branch, diff, ls-files, ls-tree, grep, shortlog, blame,
+    tag, rev-parse, describe, status. Output is truncated at ~24k characters — narrow
+    the query rather than asking for everything.
+    """
+    return _product_git(subcommand, args)
+
+
+def _product_git(subcommand: str, args: list[str] | None = None) -> str:
+    """The tool body, callable as a plain function (see test_product_access.py)."""
+    if not product_wired():
+        raise FileNotFoundError(PRODUCT_HINT)
+    if subcommand not in PRODUCT_GIT_ALLOWED:
+        raise ValueError(f"'{subcommand}' is not a read-only git subcommand. "
+                         f"Allowed: {', '.join(sorted(PRODUCT_GIT_ALLOWED))}")
+    argv = [str(a) for a in (args or [])]
+    for a in argv:
+        if any(a == d or a.startswith(d + "=") for d in PRODUCT_GIT_DENY):
+            raise ValueError(f"flag not allowed in the sandboxed product repo: {a}")
+    try:
+        r = subprocess.run(["git", subcommand, *argv], cwd=product_root(), timeout=120,
+                           capture_output=True, text=True, errors="replace")
+    except subprocess.TimeoutExpired:
+        raise TimeoutError("git command took over 120s — narrow it (add a path or -n limit)")
+    out = (r.stdout or "") + (("\n[stderr] " + r.stderr) if r.stderr.strip() else "")
+    # A non-zero exit is information (git grep exits 1 on no match), not a failure.
+    if len(out) > PRODUCT_GIT_MAX:
+        out = out[:PRODUCT_GIT_MAX] + f"\n… truncated at {PRODUCT_GIT_MAX} chars — narrow the query"
+    return out.strip() or f"(no output, git exit {r.returncode})"
+
+
+def product_note() -> str:
+    """The product-repo section of a stage's system prompt (orientation §3/§4)."""
+    origin = os.environ.get("LANTERN_PRODUCT_ORIGIN", "")
+    branch = os.environ.get("LANTERN_PRODUCT_BRANCH", "")
+    if not product_wired():
+        return ("\n\n# The product repository\nNOT WIRED INTO THIS RUN. " + PRODUCT_HINT +
+                " Do not invent product paths, consumers, or schema — a plan built on "
+                "guessed paths is worse than a blocked one.")
+    head = ""
+    try:
+        head = subprocess.run(["git", "log", "-1", "--format=%h %s"], cwd=product_root(),
+                              timeout=30, capture_output=True, text=True).stdout.strip()
+    except Exception:  # noqa: BLE001 — orientation text must never fail a stage
+        pass
+    return (
+        "\n\n# The product repository\n"
+        "The product code for this run is checked out READ-ONLY under the `product/` path "
+        "prefix — `read_file('product/src/app.ts')`, `list_dir('product/src')`.\n\n"
+        f"- **Origin:** `{origin or 'unknown'}`\n"
+        f"- **Base branch:** `{branch or 'unknown'}` (checked out)\n"
+        f"- **HEAD:** {head or 'unknown'}\n\n"
+        "Use the `product_git` tool for history and search (`log`, `branch`, `grep`, "
+        "`ls-files`) — it is real git, read-only, no shell. Start orientation there: read "
+        "the product's own `AGENTS.md`/`README` for its conventions and commands, "
+        "`product_git('log', ['--oneline','-20'])` for recent history, and "
+        "`product_git('log', ['--all','--grep','<run-id>'])` for work already done for this "
+        "run. This checkout is a throwaway clone of a host-side mirror: it has no "
+        "credentials, no push path, and nothing written there survives the container. "
+        "Every path you put in a report must be one you actually opened here.")
 
 
 def export_dir() -> Path:
@@ -619,6 +759,7 @@ async def main() -> None:
             model=model_for(role, args.stage),
             instructions=build_instructions(role, args.run_id, args.stage),
             tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export,
+                   product_git,
                    make_append_memory(role, args.run_id, args.stage, execution_key)],
             mcp_servers=mcp_servers,
         )

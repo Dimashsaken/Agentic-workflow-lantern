@@ -119,6 +119,11 @@ LANTERN_SANDBOX_DATABASE_URL=      # default: LANTERN_DATABASE_URL with host.doc
 LANTERN_ARTIFACT_BUCKET=           # media uploads after each stage (see Artifact bucket)
 LANTERN_QA_DEV_BASE_URL=           # + _USER/_PASS from SSM /lantern/qa/dev/* — QA stages
 LANTERN_QA_STAGING_BASE_URL=       # + _USER/_PASS from /lantern/qa/staging/*
+LANTERN_PRODUCT_REPO=              # default product target (a run's own target wins)
+LANTERN_PRODUCT_BRANCH=main        # default base branch
+LANTERN_PRODUCT_MIRROR_DIR=        # host mirror cache (default ~/.lantern/product-mirrors)
+GITHUB_LANTERN_BOT_TOKEN=          # HOST-ONLY — authenticates the mirror fetch; never
+                                   #   allowlisted into a sandbox, never in the mirror config
 ```
 
 **QA stages (image v2, P0.1):** the sandbox image bakes `tools/qa-recorder`'s deps;

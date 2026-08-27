@@ -2,14 +2,26 @@
 
 ## 1. Session start
 
-Standard reads (charter → skills → memory → run folder). Then load the chosen UX
-option and skim `01-ui-ux/report.md` handoff notes.
+Standard reads (charter → skills → memory → run folder). Read
+`gate-decisions.md` for the option the `ux_signoff` approver actually chose — the
+stage-1 recommendation is not the decision. Then load that option and skim
+`01-ui-ux/report.md` handoff notes.
+
+Then orient in the **product repo**, which is checked out read-only under `product/`:
+`read_file('product/AGENTS.md')` (or its README) for conventions and commands,
+`product_git('log', ['--oneline','-20'])`, `product_git('branch', ['-a'])`, and
+`product_git('log', ['--all','--grep','<run-id>'])`. If `product/` is not there, the
+run has no product target: report BLOCKED asking for it — never plan against guessed
+paths.
 
 ## 2. Blast-radius analysis
 
 - Trace the flow through the codebase: entry points, handlers, models, jobs, events,
-  analytics. Grep broadly; list every touched path in a table:
-  `path | read/modify/create | why | risk (low/med/high)`.
+  analytics. Grep broadly — `product_git('grep', ['-n', '<symbol>'])` searches every
+  tracked file — then open the hits with `read_file('product/…')`. List every touched
+  path in a table: `path | read/modify/create | why | risk (low/med/high)`.
+- **Every path in your report must be one you actually opened.** A plausible path you
+  never read is a fabrication, and stage 3 pays for it.
 - Explicitly search for consumers of anything you plan to modify — callers, API
   clients, other services, scheduled jobs. Unknown consumers = high risk, say so.
 - Note test coverage of each modified area; thin coverage changes the task ordering

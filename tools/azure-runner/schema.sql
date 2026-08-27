@@ -113,3 +113,9 @@ ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS input_tokens bigint;
 ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS cached_input_tokens bigint;
 ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS output_tokens bigint;
 ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS total_tokens bigint;
+
+-- The product repo this run implements (P0.3). Per-run, not per-daemon: a run
+-- records what it was pointed at, and every stage's sandbox gets that repo
+-- read-only. NULL = unset, and stage 2+ blocks asking for it rather than guessing.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_repo text;
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_branch text;

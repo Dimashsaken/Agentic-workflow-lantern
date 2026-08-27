@@ -116,11 +116,20 @@ orients in this order. This is cheap (a minute) and non-negotiable:
    stage, blocked on what. Answers "what happened recently" without archaeology.
 2. **The active run folder** — brief + every upstream report. The run folder is the
    session history; nothing relevant is allowed to exist only in a chat log (D4).
-3. **The product repo's git state** —
-   `git fetch --all --prune`, `git branch -r`, `git log --oneline -20` on the base
-   branch, and `git log --all --grep=<run-id>` to find every commit already made for
-   this run (including by other agents or the developer).
-4. **The product repo's AGENTS.md** — its conventions, commands, test invocations.
+3. **The product repo's git state.** Fleet stages get the run's product repo checked
+   out **read-only** under the `product/` path prefix (`read_file('product/src/app.ts')`,
+   `list_dir('product/src')`) plus the **`product_git`** tool — real git, read-only
+   subcommands only, no shell:
+   `product_git('log', ['--oneline','-20'])` for recent history, `product_git('branch',
+   ['-a'])`, `product_git('log', ['--all','--grep','<run-id>'])` for work already done
+   for this run, and `product_git('grep', ['-n','<symbol>'])` to trace consumers.
+   The checkout is a throwaway clone of a **host-side mirror**: no credentials, no push
+   path, nothing written there survives the container. Stage 3 (coding) is where product
+   code is written, in the developer's own session.
+   If a stage reports `product/` missing, the run has no product target — that is a
+   BLOCKED report asking for `pipeline.py set-product`, never a guess at paths.
+4. **The product repo's AGENTS.md** — its conventions, commands, test invocations
+   (`read_file('product/AGENTS.md')`).
 5. **Role-relevant externals** — open agent PRs (`gh pr list --label agent:<role>`),
    and for qa-staging/debug: current PostHog error state.
 

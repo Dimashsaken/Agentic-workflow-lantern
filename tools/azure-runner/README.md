@@ -39,6 +39,14 @@ LANTERN_QA_DEV_BASE_URL=            # + LANTERN_QA_DEV_USER / LANTERN_QA_DEV_PAS
 LANTERN_QA_STAGING_BASE_URL=        # + LANTERN_QA_STAGING_USER / LANTERN_QA_STAGING_PASS
 LANTERN_ARTIFACT_BUCKET=            # S3 bucket name; unset = media stays local (dev)
 
+# Product repository (P0.3 — the code the run implements; per-run target overrides these):
+LANTERN_PRODUCT_REPO=               # fallback default when a brief/run names none
+LANTERN_PRODUCT_BRANCH=main         # fallback default base branch
+LANTERN_PRODUCT_MIRROR_DIR=         # host mirror cache (default ~/.lantern/product-mirrors)
+GITHUB_LANTERN_BOT_TOKEN=           # HOST-ONLY: authenticates the mirror fetch. Never
+                                    #   allowlisted into a sandbox, never written into
+                                    #   the mirror config that gets mounted.
+
 # Token ledger + spend tripwires (P0.4 — `pipeline.py usage` / `usage-check`):
 LANTERN_PRICE_IN_PER_M=4            # $/1M input tokens — PROVISIONAL until Azure
 LANTERN_PRICE_CACHED_IN_PER_M=1     #   invoice lines confirm the deployment rates

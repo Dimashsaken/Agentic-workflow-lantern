@@ -1,11 +1,13 @@
 # Symphony alignment — keep the control plane, wrap Codex in, add the Slack front-door
 
-**Status: PROPOSAL v2** (2026-08-26) — for Justin + CTO sign-off. Once approved, record
+**Status: PROPOSAL v3** (2026-08-27) — for Justin + CTO sign-off. Once approved, record
 the decision as D13 in `docs/DECISIONS.md`. Research basis: openai/symphony SPEC.md +
 Elixir implementation (claims adversarially re-verified against primary sources
 2026-08-26), Fredrin (the LinkedIn post), Codex CLI v0.149 docs, hermes-agent, OpenClaw,
 and Slack platform docs. v2 incorporates a three-lens adversarial review (architecture,
-security, cost/ops) of the v1 draft — the material changes are marked **[v2]**.
+security, cost/ops) of the v1 draft — the material changes are marked **[v2]**. **v3
+(2026-08-27) rewrites §5 against measured ledger data** — the Azure cost estimate was
+wrong by two orders of magnitude in the expensive direction — and records P0.3 progress.
 
 ## 1. What the CTO actually shared
 
@@ -122,10 +124,32 @@ has. No new scope beyond what's listed.
   CPU oversubscription, and the only memory datapoint is browser-*idle*). Re-measure with
   browser-active QA load before going higher. The first-ever full run happens on the
   known-good t3.large at cap 2 — don't add suspects to it.
-- [ ] **P0.3** Run one real feature brief through all 7 stages, gates included. File
-  every failure as a memory entry. Stage 1 alone took seven attempts to pass honestly;
-  budget the same discovery tax for stages 4–7's first sandbox runs. Acceptance:
-  `prod_signoff` approved on a real run.
+- [ ] **P0.3 IN PROGRESS** Run one real feature brief through all 7 stages, gates
+  included. File every failure as a memory entry. Stage 1 alone took seven attempts to
+  pass honestly; budget the same discovery tax for stages 4–7's first sandbox runs.
+  Acceptance: `prod_signoff` approved on a real run.
+  *2026-08-27 — stage 1 passed on two runs (`feat-20260825-candidate-compare`,
+  `feat-20260825-role-health`); `ux_signoff` decided on both. Stage 2 ran for real and
+  **both executions returned BLOCKED with the same question: which product repository
+  and base branch?** The pipeline had no way to answer it — the run had no product
+  target, and fleet agents had no read path to product code even if it had. Fixed in
+  this pass:*
+  - *The target is now a property of the **run** (`runs.product_repo`/`product_branch`),
+    set from a `- **Product repo:**` brief field, `pipeline.py run --product-repo`, or
+    `pipeline.py set-product` for an existing run. A run without one prints a warning at
+    creation and its stages block rather than guess.*
+  - *Agents get the product **read-only** under the `product/` path prefix plus a
+    `product_git` tool (read-only subcommands, no shell) — enough for orientation §3/§4
+    and for `git grep`-based consumer tracing, which is what blast-radius work actually
+    is.*
+  - ***The PAT never enters a sandbox.*** The host keeps a bare mirror (token passed
+    per-fetch, never written into the mirror config), bind-mounts it read-only at
+    `/product-src.git`, and the entrypoint clones a throwaway tree from that local path.
+    `test_product_access.py` is the proof: confinement both ways, no write path, no
+    token in the mirror or in any error string.
+  - *`gate-decisions.md` (added 2026-08-27) is what made the second half of role-health's
+    blocker answerable — pre-coding correctly refused to treat a stage-1 recommendation
+    as an approval, and now reads the actual decision from the run folder.*
 - [x] **P0.4 DONE (2026-08-26)** **Token ledger**: per-stage-execution token counts (Agents SDK usage
   object) into `stage_executions`, rolled up per run. **[v2]** Scope v1 = fleet stages
   only; the human stage-3 Codex session runs on a developer laptop and its JSONL is out
@@ -277,28 +301,67 @@ deliberately unset — this starts when Phase 2's acceptance passes, not on a ca
 
 | Item | Est. weekly |
 |---|---|
-| m5.2xlarge (on-demand, always-on, from end of Phase 0) | ~$65 (US regions; +10–25% EU/AP) |
+| t3.large today; m5.2xlarge from end of Phase 0 (on-demand, always-on) | ~$65 (US regions; +10–25% EU/AP) |
 | gp3 100 GB + S3 (videos, 90-day expiry) + egress | ~$15 |
 | Slack (verify plan — free tier suffices for Socket Mode; upgrade is a real line if chosen) | $0–TBD |
 | **AWS cash total** | **~$80/wk** |
-| Azure OpenAI (credits) | Unanchored until P0.4 measures — see below |
+| Azure OpenAI (credits) — **measured, see below** | **~$4–20 per full run** |
 
-**[v2] The honest cost picture.** The Azure token estimate (20–100M tok/day ≈
-$60–600/day) is a 10× range with unverified blended pricing (`sol`/`terra` are opaque
-deployment labels); no number here is real until the P0.4 ledger measures actual runs —
-treat thresholds as provisional and recalibrate after Phase 0. Two separate guardrails,
-because there are two different ceilings:
+**[v3 — 2026-08-27] The estimate is no longer a guess: the P0.4 ledger has measured
+real stage executions.** The v2 figure (20–100M tok/day ≈ $60–600/day) was wrong by
+two orders of magnitude, and it was wrong in the expensive direction — it would have
+justified throttling a system that costs single-digit dollars a run.
 
-1. **Rate tripwire** (the $10k/wk constraint): **daily** ledger check, provisional
-   threshold $1,200/day model spend, posting immediately — not in a weekly digest. The
-   known blow-up mode is Symphony-style unattended retries (verified reports of ~$2–3k/day
-   at extreme usage); stage timeouts, retry backoff, and `max_turns` are the brakes, the
-   daily check is the alarm.
-2. **Pool drawdown** (the finite ~$25k credit pool, D7): cumulative alarms at 25% / 50% /
-   75% of the pool. At the estimate's high end the pool lasts ~6 weeks — i.e. roughly
-   this plan's own calendar — after which "credits, not cash" silently becomes cash.
-   **Decision needed from Justin/CTO before the 75% alarm**: post-credit budget line, or
-   throttle (auto-coding is the discretionary spend to cut first).
+Measured (`pipeline.py usage`, 2026-08-27, `gpt-5.6-sol`):
+
+| Execution | Input (cached) | Output | Est. $ |
+|---|---|---|---|
+| `feat-20260825-role-health` 02-pre-coding | 333,604 | 4,176 | **$0.58** |
+| `feat-20260825-candidate-compare` 02-pre-coding | 236,939 | 3,845 | **$0.40** |
+| Both, one day | 570,543 (488,460 cached) | 8,021 | **$0.98** |
+
+Two facts the shape of that table makes obvious: **86% of input tokens were cached**
+(the system prompt is AGENTS.md + charter + skills + memory, identical every turn), and
+**output is ~1.4% of input** — these agents read enormously and write a report. Prompt
+caching is doing most of the cost work, and it will keep doing it as prompts grow.
+
+**Extrapolation to a full run, stated with its error bars.** A feature run is 7 fleet
+executions (stage 1 splits into diverge + design; stage 3 is a human and is unmetered).
+At the measured ~$0.50/execution that is **~$3.50/run** — but three corrections push it
+up, and honesty requires naming them rather than quoting the floor:
+
+- Both measured executions ended **BLOCKED**, so they did *less* work than a complete
+  stage: no schema plan traced through real code, no task breakdown.
+- Now that the product repo is wired in (P0.3), stage 2 reads a real codebase instead
+  of an empty one — the dominant input-token line is about to grow, though caching
+  softens it.
+- QA stages (4, 7) carry **screenshots through the Responses API**, and image input is
+  not comparable to text. They are the ones to watch; nothing has measured them yet.
+
+Call a full run **$4–20** until stages 4–7 have run once. Even the pessimistic end puts
+20 runs/week at ~$400 of credits — against a ~$25k pool, that is roughly a year, not the
+six weeks v2 feared. **The pool is not the binding constraint; it never was.**
+
+**Recalibrated tripwires** (`LANTERN_DAILY_SPEND_ALARM_USD`, `LANTERN_CREDIT_POOL_USD`):
+
+1. **Rate tripwire — lower it to $50/day** (from the provisional $1,200). At measured
+   rates, $1,200/day is ~2,400 stage executions: a runaway loop could burn for weeks
+   without tripping it, which makes it decoration rather than an alarm. $50/day is ~10×
+   a normal day's work — loud enough to catch a retry storm, quiet enough not to cry
+   wolf. Raise it deliberately when concurrency goes to ~5 and auto-coding lands, not
+   reactively after the first false positive.
+2. **Pool drawdown — keep the 25/50/75% alarms, drop the urgency.** At this burn the
+   75% alarm is far away; the "decision needed before the 75% alarm" item is no longer
+   time-critical. It is still worth having an answer before Phase 2 multiplies run
+   volume.
+
+**The honest caveats, unchanged:** dollar *rates* are still provisional — `sol`/`terra`
+are opaque deployment labels and the $4/$1/$20-per-M figures await Azure invoice lines.
+Token *counts* are exact. And the ledger undercounts twice: executions that crash before
+reporting are unmetered (16 of them predate the ledger; `usage` says so out loud), and
+the human stage-3 Codex session on a developer laptop has no capture mechanism at all.
+Both undercounts are small against a two-orders-of-magnitude correction, but they mean
+the real number is *above* the measured one, never below.
 
 ## 6. Risks and honest unknowns
 
