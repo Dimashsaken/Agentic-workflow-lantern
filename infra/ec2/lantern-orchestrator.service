@@ -7,6 +7,11 @@ Requires=docker.service
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner
 Environment=LANTERN_EXECUTOR=docker
+# Without this Python buffers stdout when it is not a TTY, so every diagnostic the
+# dispatcher prints — gate opened, stage failed + the retry hint, QA targets missing —
+# is written to a buffer that a long-lived daemon never flushes. journalctl showed
+# nothing but systemd's own lines until 2026-08-27.
+Environment=PYTHONUNBUFFERED=1
 # cap 2 on t3.large: 2 x 2.5G sandbox memory limits + Postgres + Mission Control
 # is what 8 GB honestly holds — raise only together with the instance size
 Environment=LANTERN_MAX_CONCURRENCY=2
