@@ -50,6 +50,10 @@ if [ -n "${LANTERN_PRODUCT_REPO:-}" ]; then
   # The mount is root-owned and we are uid 1000 — without this git refuses it as
   # "dubious ownership" and the stage dies with an unreadable product tree.
   git config --global --add safe.directory "${LANTERN_PRODUCT_REPO}"
+  # A bare mirror IS the repo dir; a local-path target (sync_product_mirror uses an
+  # on-box checkout as-is) keeps its repo in .git/ — mark both, or the local-path
+  # case dies with "dubious ownership in .../.git" and a useless clone error.
+  git config --global --add safe.directory "${LANTERN_PRODUCT_REPO}/.git"
   git config --global --add safe.directory /work/product
   # --no-hardlinks: the mount is read-only and on another filesystem; be explicit
   # rather than relying on git's fallback.

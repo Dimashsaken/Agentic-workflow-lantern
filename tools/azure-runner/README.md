@@ -51,7 +51,7 @@ GITHUB_LANTERN_BOT_TOKEN=           # HOST-ONLY: authenticates the mirror fetch.
 LANTERN_PRICE_IN_PER_M=4            # $/1M input tokens — PROVISIONAL until Azure
 LANTERN_PRICE_CACHED_IN_PER_M=1     #   invoice lines confirm the deployment rates
 LANTERN_PRICE_OUT_PER_M=20
-LANTERN_DAILY_SPEND_ALARM_USD=1200  # rate tripwire (plan §5)
+LANTERN_DAILY_SPEND_ALARM_USD=50    # rate tripwire (plan §5 v3; ~10x a normal day)
 LANTERN_CREDIT_POOL_USD=25000       # pool tripwire: alarms at 25/50/75% drawn
 LANTERN_POOL_SPENT_OFFSET_USD=0     # est. credits burned before the ledger existed
 LANTERN_ALARM_WEBHOOK=              # Slack-compatible webhook; unset = journal only

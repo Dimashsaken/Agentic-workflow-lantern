@@ -1305,7 +1305,9 @@ async def cmd_usage_check() -> None:
 
     Two ceilings, two alarms — both dedupe through the events table so a crossed
     threshold alerts once (daily for the rate alarm, once ever per pool threshold):
-      1. rate:  today's est spend > LANTERN_DAILY_SPEND_ALARM_USD (default 1200)
+      1. rate:  today's est spend > LANTERN_DAILY_SPEND_ALARM_USD (default 50 — the
+                plan §5 v3 recalibration: at ~$0.50/stage-execution, the old $1,200
+                was ~2,400 executions of headroom, i.e. decoration, not an alarm)
       2. pool:  cumulative est spend (+ LANTERN_POOL_SPENT_OFFSET_USD for pre-ledger
                 burn) crosses 25/50/75% of LANTERN_CREDIT_POOL_USD (default 25000)
 
@@ -1318,7 +1320,7 @@ async def cmd_usage_check() -> None:
         f"""SELECT {USAGE_COLS} FROM stage_executions
             WHERE started_at >= date_trunc('day', now()) GROUP BY model""")
     today_cost = est_cost_rows(today_rows)
-    daily_limit = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "1200"))
+    daily_limit = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "50"))
     if today_cost > daily_limit:
         already = await conn.fetchval(
             """SELECT 1 FROM events WHERE actor = 'usage-check' AND type = 'spend_alarm'

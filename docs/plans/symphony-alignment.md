@@ -344,7 +344,8 @@ six weeks v2 feared. **The pool is not the binding constraint; it never was.**
 
 **Recalibrated tripwires** (`LANTERN_DAILY_SPEND_ALARM_USD`, `LANTERN_CREDIT_POOL_USD`):
 
-1. **Rate tripwire — lower it to $50/day** (from the provisional $1,200). At measured
+1. **Rate tripwire — lowered to $50/day** (from the provisional $1,200) — *applied
+   2026-08-27: the code default, `.env.example`, and both READMEs now say 50.* At measured
    rates, $1,200/day is ~2,400 stage executions: a runaway loop could burn for weeks
    without tripping it, which makes it decoration rather than an alarm. $50/day is ~10×
    a normal day's work — loud enough to catch a retry storm, quiet enough not to cry

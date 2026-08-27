@@ -205,7 +205,7 @@ there, not a systemd unit.
 
 The token ledger lives on `stage_executions`; `pipeline.py usage` reports it. The
 hourly timer runs the two alarms from the plan (§5): daily-rate
-(`LANTERN_DAILY_SPEND_ALARM_USD`, default 1200) and credit-pool drawdown
+(`LANTERN_DAILY_SPEND_ALARM_USD`, default 50) and credit-pool drawdown
 (25/50/75% of `LANTERN_CREDIT_POOL_USD`), deduped through the `events` table and
 delivered to `LANTERN_ALARM_WEBHOOK` (Slack-compatible) or the journal:
 

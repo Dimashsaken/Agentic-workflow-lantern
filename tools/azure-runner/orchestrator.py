@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -673,6 +674,27 @@ def usage_dict(result) -> dict:
 USAGE_MARKER = "LANTERN_USAGE "
 
 
+def report_blocker(report: Path) -> str | None:
+    """The open question of a `Status: BLOCKED` stage report, or None if not blocked.
+
+    Returns "" for a blocked report that states no question — still a failure, and a
+    louder one: the contract is BLOCKED + exactly one unambiguous question.
+    """
+    try:
+        text = report.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = re.search(r"^\s*[-*]?\s*\**Status:?\**:?\s*\**\s*([A-Za-z_]+)", text, re.M)
+    if not m or m.group(1).upper() != "BLOCKED":
+        return None
+    q = re.search(r"^#+\s*Open questions.*?$(.*?)(?=^#|\Z)", text, re.M | re.S)
+    if not q:
+        return ""
+    lines = [ln.strip().lstrip("-*").strip()
+             for ln in q.group(1).splitlines() if ln.strip()]
+    return lines[0][:400] if lines else ""
+
+
 async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
                                stage: str, execution_key: str) -> list[str]:
     """The two written postconditions: stage report on disk, memory row from THIS execution.
@@ -683,8 +705,23 @@ async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
     """
     missing = []
     sdir = stage_dir(stage)
-    if not (REPO / "workflow/runs" / run_id / sdir / "report.md").exists():
+    report_path = REPO / "workflow/runs" / run_id / sdir / "report.md"
+    if not report_path.exists():
         missing.append(f"stage report workflow/runs/{run_id}/{sdir}/report.md not written")
+    else:
+        # A BLOCKED report is a legitimate outcome, but it is NOT a completed stage.
+        # Until this check existed, blocked and succeeded were indistinguishable to the
+        # dispatcher: both wrote a report + a memory row, so both opened the stage's
+        # approval gate, and a human could sign off a plan whose own summary said no
+        # plan exists. (Both 02-pre-coding executions of 2026-08-27 did exactly that.)
+        # Fail the stage instead: the report and memory still stand on disk, no gate is
+        # created, and `retry` is the resume path once the question is answered.
+        blocked_q = report_blocker(report_path)
+        if blocked_q is not None:
+            missing.append(
+                "stage reported Status: BLOCKED, so it did not complete — no gate is "
+                "opened for a blocked stage. Answer its open question, then `retry`. "
+                f"Question: {blocked_q or '(none stated — the report must state exactly one)'}")
     missing.extend(check_claimed_artifacts(run_id, sdir))
     if is_qa_video_stage(stage):
         # Presence AND validity AND recency (the fabrication lesson, applied to video):
