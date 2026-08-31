@@ -103,10 +103,18 @@ of every column and apply the empty-bottom test in the checklist.
   recommendation and the single strongest argument against it.
 - Export every option's frames as **2x PNGs** into `01-ui-ux/`; get the Paper file
   URL for humans.
-- `get_jsx` for **every presented option** → `jsx/<axis>.jsx`, full returned JSX
-  verbatim (typically 8–15 KB) — not only the recommended one. The gate-picker may
-  choose any option, and the orchestrator fails the stage unless `jsx/` holds one
-  real-markup file per presented option (a node id or stub is rejected).
+- JSX for **every presented option** — not only the recommended one, since the
+  gate-picker may choose any. Call
+  `collect_jsx(<node id>, "workflow/runs/<run-id>/01-ui-ux/jsx/<axis>.jsx")` per
+  option: the host calls Paper's `get_jsx` itself and writes the full output
+  (typically 7–15 KB) verbatim to disk. **Never call `get_jsx` yourself for the
+  handoff and never write a jsx file with `write_file`** — output copied through
+  your context gets truncated (attempt 5 of feat-20260831 handed off ~1.5 KB
+  summaries of 7–9 KB artboards), and the orchestrator now hash-checks every jsx
+  file against what collect_jsx wrote, so a hand-written or edited file fails the
+  stage. Unlike `get_screenshot` (§3C), `get_jsx` is not capture-session-limited —
+  it works from any MCP session (verified 2026-08-31), so collect_jsx never needs a
+  Desktop restart.
 - Write `01-ui-ux/handoff.json` — the orchestrator builds the ux_signoff gate
   payload from it, so Mission Control can show the PNGs side by side:
 
@@ -138,11 +146,12 @@ PNG each, update `handoff.json` statuses (`chosen` / `rejected`).
    size traceable to `design/design-system.md`? Fix, then package.
 1. **2x PNGs of every frame** — the acceptance references the coding agent will
    screenshot-diff against.
-2. **`get_jsx` per frame** → `jsx/<frame>.jsx` — structural source of truth, a
-   starting point, NOT production code. Write the **full returned JSX verbatim**
-   (typically 8–15 KB per frame). A node id, a URL, or a summary is NOT a handoff:
-   the coding agent reads this file to rebuild the screen and cannot open Paper. The
-   orchestrator rejects any jsx file that has no markup in it.
+2. **`collect_jsx(<node id>, ".../jsx/<frame>.jsx")` per frame** — structural source
+   of truth, a starting point, NOT production code. The host writes the full
+   `get_jsx` output verbatim; the coding agent reads this file to rebuild the screen
+   and cannot open Paper. A node id, a URL, or a summary is NOT a handoff — and
+   neither is JSX you copied through your own context: the orchestrator rejects any
+   jsx file that does not hash-match what collect_jsx wrote (§3D).
 3. The `design/design-system.md` version used (copy the file in, or record its git
    hash in the report).
 4. `flow-spec.md` — screens, transitions, all states (empty/loading/error), exact

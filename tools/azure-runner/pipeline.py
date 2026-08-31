@@ -39,7 +39,7 @@ from orchestrator import (
     USAGE_MARKER, append_file, azure_v1_client, build_consult_instructions,
     build_instructions, check_postconditions, check_stage_inputs, collect_export,
     consult_roles, db_urls,
-    list_dir, list_exports, make_append_memory, model_for, paper_mcp_server,
+    list_dir, list_exports, make_append_memory, make_collect_jsx, model_for, paper_mcp_server,
     product_git,
     paper_reachable, playwright_mcp_server, read_file, render_role_memory, usage_dict,
     write_file,
@@ -454,10 +454,12 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     mcp_servers = []
     if role in BROWSER_ROLES:
         mcp_servers.append(playwright_mcp_server(run_id, stage))
+    paper = None
     if stage in PAPER_STAGES:
         if not await paper_reachable():
             raise RuntimeError(PAPER_PREFLIGHT_HINT)
-        mcp_servers.append(paper_mcp_server())
+        paper = paper_mcp_server()
+        mcp_servers.append(paper)
     for s in mcp_servers:
         await s.connect()
     try:
@@ -467,7 +469,8 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
             instructions=build_instructions(role, run_id, stage),
             tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export,
                    product_git,
-                   make_append_memory(role, run_id, stage, execution_key)],
+                   make_append_memory(role, run_id, stage, execution_key),
+                   *([make_collect_jsx(paper)] if paper else [])],
             mcp_servers=mcp_servers,
         )
         result = await Runner.run(
