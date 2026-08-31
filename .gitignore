@@ -22,3 +22,6 @@ workflow/runs/**/*.zip
 # OS noise
 .DS_Store
 Thumbs.db
+
+# Playwright MCP scratch
+.playwright-mcp/
