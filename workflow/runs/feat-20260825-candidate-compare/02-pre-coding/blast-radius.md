@@ -1,56 +1,52 @@
-# Blast radius — feat-20260825-candidate-compare
+# Blast radius — feat-20260825-candidate-compare (attempt 2)
 
 ## Assessment
 
-**Status: BLOCKED. Overall risk: high while the product repository is unidentified.** The run contains design artifacts but no product repository, base branch, assigned developer, code conventions, schema, or current implementation. Therefore concrete paths, consumers, test coverage, and integration boundaries cannot be traced without guessing.
+**Status: BLOCKED. Overall implementation risk: high/unbounded.** The configured product checkout is the Lantern delivery control-plane repository itself (`main` at `40a463b`), not a hiring product containing CALIBRATE, candidate judgments, weighted traits, or OUTREACH. The chosen `verdict` UX is confirmed in `gate-decisions.md`, but there is no production feature surface to plan against.
 
-Chosen flow assumed from the approved gate: **`verdict`**, the stage-1 recommendation. The approval note/actor is not present in the run folder.
-
-## Product-code paths
+## Paths actually opened
 
 | path | read/modify/create | why | risk |
 |---|---|---|---|
-| Product repository (not named) | read | Locate shell, CALIBRATE, IDEAL CANDIDATE, OUTREACH, analytics, API, models, schema, tests, and AGENTS.md | high |
-| Product implementation paths | unknown | Cannot classify exact changes until the repository is available | high |
+| `product/AGENTS.md` | read / no change | Product conventions identify this repository as the agent pipeline control plane. | low |
+| `product/README.md` | read / no change | Confirms the repository operates the pipeline, not the candidate product. | low |
+| `workflow/runs/feat-20260825-candidate-compare/brief.md` | read / no change | Feature scope and desired analytics. | low |
+| `workflow/runs/feat-20260825-candidate-compare/gate-decisions.md` | read / no change | Confirms `verdict` was approved and attempt 1 was rejected as vacuous. | low |
+| `workflow/runs/feat-20260825-candidate-compare/01-ui-ux/report.md` | read / no change | Stage-1 handoff constraints. | low |
+| `workflow/runs/feat-20260825-candidate-compare/01-ui-ux/flow-spec.md` | read / no change | Interaction, state, and event contract. | low |
+| `workflow/runs/feat-20260825-candidate-compare/01-ui-ux/handoff.json` | read / no change | Approved-option artifacts and metadata. | low |
+| `agents/coding/skills.md` | read / no change | Coding principles for the eventual work order. | low |
 
-## Control-plane paths examined
+## Repository-wide searches performed
 
-| path | read/modify/create | why | risk |
-|---|---|---|---|
-| `workflow/runs/feat-20260825-candidate-compare/brief.md` | read | Scope, outcomes, states, events | low |
-| `workflow/runs/feat-20260825-candidate-compare/01-ui-ux/report.md` | read | Stage-1 findings and handoff | low |
-| `workflow/runs/feat-20260825-candidate-compare/01-ui-ux/flow-spec.md` | read | Recommended interaction/state contract | low |
-| `workflow/runs/feat-20260825-candidate-compare/01-ui-ux/handoff.json` | read | Options and recommended selection | low |
-| `workflow/runs/feat-20260825-candidate-compare/01-ui-ux/jsx/verdict.jsx` | read | Structural design exemplar only; explicitly not production code | low |
-| `workflow/runs/feat-20260825-candidate-compare/01-ui-ux/design-system.snapshot.md` | read | UI constraints | low |
+Searched all tracked files for `candidate`, `compare`, `CALIBRATE`, `outreach`, `PostHog`, and `schema`. Hits are briefs/design artifacts, pipeline documentation, and prior blocked planning—not product handlers, models, jobs, UI routes, or tests. The only code/schema present operates Lantern's agent pipeline.
 
-## Expected functional surfaces to trace once unblocked
+## Missing product surfaces and consumers
 
-These are search targets, not claimed file paths:
+The following must be traced in the correct repository before sizing:
 
-1. CALIBRATE finalist selection and its consumers.
-2. Existing per-trait judgments, weights, evidence sourcing state, and score calculation.
-3. ICP/weight versioning and stale-judgment detection.
-4. Candidate advance/hold transitions and OUTREACH draft creation.
-5. Calibration feedback ingestion for the required decision rationale.
-6. Conversation-panel prompts/replies and evidence-row focus.
-7. PostHog wrapper and event schema.
-8. Authorization boundaries for role/candidate evidence and decisions.
-9. Background evidence-sourcing jobs/events and cache invalidation.
-10. Tests for all above surfaces.
+1. CALIBRATE route/component and finalist eligibility logic.
+2. Candidate, role, weighted-trait, judgment, and evidence models.
+3. Score/recommendation calculation and every consumer.
+4. ICP/weight updates and stale-judgment invalidation.
+5. Advance/hold state transitions and all callers/listeners/jobs.
+6. OUTREACH draft creation and navigation contracts.
+7. Calibration-feedback persistence for the required rationale.
+8. Tenant/role authorization on reads and writes.
+9. Evidence-sourcing queues/jobs/events and row-level retry behavior.
+10. Analytics wrapper and event-schema consumers.
+11. Unit/integration/e2e coverage for all above.
 
-## Consumer and integration audit
-
-Not executable without product code. Required searches include callers and listeners for candidate status changes, role-weight edits, judgment writes, outreach draft creation, evidence completion, analytics dispatch, scheduled sourcing jobs, and any external API clients. Unknown consumers remain **high risk**.
+Unknown consumers remain **high risk**. No exact product files may safely be classified as modify/create from this checkout.
 
 ## Test coverage
 
-Unknown. If decision persistence, scoring, or status-transition coverage is thin, characterization tests must precede implementation.
+No product tests exist in the configured checkout. In the correct repository, thin coverage around scoring and status transitions requires characterization tests before implementation.
+
+## Structure and packages
+
+No product exemplar can be named. Default is **no new package**; existing UI, validation, analytics, and persistence patterns should be reused. Any new dependency requires developer sign-off after alternatives, maintenance, license, size, and transitive risk are documented.
 
 ## Security pre-review
 
-Not automatically required from known scope: no auth, payments, or deletion change is stated. Reassess after tracing the product code; candidate evidence and decisions still require tenant/role authorization review.
-
-## Proposed structure and dependencies
-
-Exact structure cannot be named without repository exemplars. Default decision is **no new package**: comparison arithmetic, validation, UI state, and analytics should use the existing stack. Any dependency proposal requires developer sign-off with maintenance, license, size, and transitive-risk evidence.
+No stated auth, payment, or deletion scope automatically triggers early security review. Reassess after locating authorization and candidate-data boundaries in the correct repository.

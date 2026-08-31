@@ -1,9 +1,7 @@
-# Schema plan — feat-20260825-candidate-compare
+# Schema plan — feat-20260825-candidate-compare (attempt 2)
 
-**Status: BLOCKED — schema impact cannot be determined because the product repository and current schema are not identified in the brief or run artifacts.**
+**Status: BLOCKED — the configured repository contains only Lantern pipeline orchestration data, not the candidate/role/judgment schema required by this feature.**
 
-Potential persistence needing verification includes the required advance/hold rationale, decision timestamp/actor, source ICP-weight version, recommendation match, and whether existing calibration/status records already model these values. Existing fields must be preferred; analytics-only data must not be treated as the durable source of truth.
+The correct product schema must be inspected to determine whether existing records already hold decision rationale, candidate state, calibration feedback, actor/timestamp, and the judged weight version. Prefer no schema change; analytics must not become the durable source of truth.
 
-If inspection shows no persistence change is needed, replace this document with the required one-line declaration: **No schema change is needed.**
-
-If a change is needed, the completed plan must include an additive forward migration, explicit rollback, constraints/indexes, mid-deploy behavior, backfill strategy, production-size duration estimate, and compatibility across old/new application versions. **HITL: required** for every schema change before coding.
+If persistence is missing, the completed plan must specify additive forward migration, explicit rollback, constraints/indexes, mid-deploy old/new-code compatibility, backfill, and production-size duration. **HITL: required for any schema change.**

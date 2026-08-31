@@ -53,3 +53,4 @@ customer data. Target: under ~200 lines after consolidation.
 <!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
 
 - 2026-08-26 [feat-20260825-role-health · 01-ui-ux.diverge] 2026-08-26 (feat-20260825-role-health): For operational-health screens, a dedicated “diagnosis before evidence” judge criterion prevents familiar metric grids from winning on completeness even though they increase interpretation time.
+- 2026-08-31 [feat-20260831-gate-latency · 01-ui-ux.diverge] 2026-08-31 (feat-20260831-gate-latency): For operational latency, judge whether a structure exposes age + threshold + cohort median + sample count in one glance; threshold-only treatments create urgency without revealing whether the bottleneck is systemic, while medians without local age hide which gate needs action.
