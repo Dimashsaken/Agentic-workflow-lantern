@@ -74,6 +74,13 @@ Stage 1 runs as two executions with different runners (plan:
 
 ### 3C. Critique loop (≤3 iterations per option) — and prove it ran
 
+`get_screenshot` renders only the app's **active page**: before your first
+screenshot, call `open_file(<file id>, pageId=<your run page>)` to make your page
+active — a screenshot of a node on an inactive page silently returns empty, not an
+error (observed 2026-08-31). If screenshots return empty even for the active page,
+the Desktop app's capture path is degraded: go BLOCKED and ask for a Paper Desktop
+restart — do not substitute exports or memory for critique evidence.
+
 `get_screenshot` → **layout pass** → fix → re-screenshot → **style pass** → fix,
 per `design/critique-checklist.md` (the passes stay separate). Stop at 3 and note
 unresolved items in `options.md`.
