@@ -1,9 +1,18 @@
 # Mission Control
 
 The web UI for the fleet — design and rationale in `docs/MISSION-CONTROL.md`.
-Three screens: the **Inbox** (pending gates with inline Approve/Reject), the
-**Board** (runs as cards in stage columns), and the **Run page** (verification
-timeline: reports, artifacts, videos, events).
+Five screens: the **Board** (runs as tickets in obligation columns), **Gates**
+(pending approvals with inline Approve/Reject), the **Run page** (verification
+timeline: reports, artifacts, videos, events), **Chat** (consult any fleet role,
+a custom agent, or the Lantern orchestrator — live tool streaming, history, and
+a per-turn token ledger; design in `docs/CHAT.md`, engine in
+`tools/azure-runner/chat_service.py`), and **Agents** (the roster + two-field
+custom-agent creation). **Spend** folds chat turns into the same ledger.
+
+Chat needs the Azure model env vars (`AZURE_OPENAI_*`, `LANTERN_MODEL_*`) on the
+box; without them every page still works and the composer explains what is
+missing. The SSE bus is in-process — run ONE uvicorn worker (the systemd unit
+and the commands below already do).
 
 Runs from the azure-runner venv (shared deps, imports `pipeline.py` directly):
 

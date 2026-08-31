@@ -30,7 +30,7 @@ workflow/runs/          one folder per feature/bug run; all stage artifacts live
 workflow/templates/     stage report + handoff templates
 tools/azure-runner/     the fleet runtime: pipeline.py (one-call loop) + orchestrator.py (single stage) + schema.sql
 tools/qa-recorder/      Playwright-based QA with built-in video recording
-tools/mission-control/  web UI: gate inbox, run board, verification timeline (docs/MISSION-CONTROL.md)
+tools/mission-control/  web UI: gate inbox, run board, verification timeline, fleet chat (docs/MISSION-CONTROL.md, docs/CHAT.md)
 infra/ec2/              EC2 provisioning: bootstrap.sh + systemd units + operations
 docs/ORCHESTRATION.md   the one-call concept→live loop: Postgres state machine, gates, failure modes
 docs/AGENT-TOOLING.md   runtime stack, per-agent tools/MCP matrix, GitHub identity, orientation protocol
@@ -99,7 +99,10 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
    changes artifacts; postconditions and gates apply.
 2. **Direct consult** — any developer asks any role directly:
    `pipeline.py agents` to list them, `pipeline.py ask <role> "<prompt>"` to talk
-   (`-i` for a live loop; follow-up asks continue the same conversation). Consults are
+   (`-i` for a live loop; follow-up asks continue the same conversation), or the
+   **Chat tab in Mission Control** (docs/CHAT.md, D13) — same session store, so a
+   thread continues across CLI and web; the web adds the `lantern` orchestrator
+   chat and user-created custom agents. Consults are
    **advisory and read-only**: the agent reads the repo and answers, but work that
    mutates the product or a run goes through a pipeline run.
 

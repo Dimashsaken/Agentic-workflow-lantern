@@ -249,3 +249,43 @@ root ONLY to chown the docker-created root-owned mountpoint parents, then drops
 itself to uid 1000 (setpriv) — a straight `--user 1000` start cannot write beside
 mountpoints docker pre-creates as root. The image keeps browsers in a world-readable
 `/ms-playwright` and `HOME=/work`, so nothing runs as root past the first line.
+
+## D13 — 2026-08-31 — Chat surface: consult mode gets a web face, custom agents, one ledger
+
+The ask: talk to the fleet from the browser the way you talk to Claude Code —
+per-stage specialists or one chat that does everything, effortless agent
+creation, past-chat history, and a backend where sessions and token spend are
+tracked end to end. Design doc: `docs/CHAT.md`. Decisions, each with the why:
+
+- **Chat is consult mode (D11), not a new power.** Web consults get the same
+  advisory/read-only toolset, the same `consult:{user}:{agent}:{name}` session
+  key (so CLI and web continue each other's threads via the SDK's Postgres
+  sessions), and the same `consult` audit events. The gate line does not move:
+  nothing in the chat surface can start runs, decide gates, or write files.
+- **The "one chat" is an orchestrator agent, not a router.** `lantern` carries
+  the AGENTS.md contract plus three read-only database tools
+  (`pipeline_snapshot`, `run_detail`, `spend_summary`) and `ask_specialist`,
+  which runs a one-shot consult of a fleet role and relays the answer with
+  attribution. Specialist usage merges into the parent turn's ledger row
+  (`model = 'mixed'` when deployments differ — flat rates price those).
+- **Transcript state is ours; model context is the SDK's.** `chat_turns` holds
+  what the UI renders (user text, final text, an ordered `trace` of tool calls
+  and handoffs, the P0.4 token columns); the Agents SDK's `agent_messages`
+  holds what the model re-reads. Deliberate duplication: the SDK's message
+  shape has drifted between releases and is never parsed for display.
+- **Live activity is an in-process bus + SSE, not a queue service.** Subscribers
+  are per-session and outlive turns (v1 had them per-turn — a page attached
+  while idle went deaf to the next turn; `test_chat_service.py` pins the fix).
+  Replay covers mid-turn attach and reconnect. Process-local on purpose (one
+  uvicorn, one box, D8's "upgrade when it hurts"); a turn orphaned by a restart
+  is marked failed «interrupted», never left pretending, and shutdown closes
+  every stream so restarts can't hang on open SSE connections.
+- **Custom agents are rows, not roles.** `custom_agents` (name, purpose,
+  optional instructions — composed from the purpose when empty, the Dust move)
+  get the consult toolset and learn through `role_memory` under their slug,
+  embedded into later instructions (table-only; no `agents/<slug>/` folder is
+  rendered). An agent that needs to act in the pipeline still becomes a real
+  role via `agents/_template/` — the roster page says exactly that.
+- **Browser roles consult without their Playwright MCP in v1**, and the card
+  says so, rather than spawning a browser per web turn; `pipeline.py ask -i`
+  remains the path when a live browser matters.

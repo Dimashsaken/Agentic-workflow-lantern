@@ -111,6 +111,14 @@ whole repo (and browser roles get the Playwright MCP — `--no-browser` to skip)
 conversation state persists in Postgres per `{you}:{role}:{session}`. Consults are
 advisory and read-only by design; producing or changing artifacts is pipeline-run work.
 
+The same consults run in the browser: **`chat_service.py`** powers Mission
+Control's Chat tab (docs/CHAT.md, D13) — same session store (a CLI thread whose
+`{you}:{role}:{session}` matches continues on the web), plus the `lantern`
+orchestrator chat (read-only DB tools + `ask_specialist`), user-created custom
+agents (`custom_agents` table), a per-turn token ledger (`chat_turns`), and live
+SSE streaming. `test_chat_service.py` covers the turn lifecycle with a faked
+model loop — no Azure credentials needed.
+
 Role memory consolidation (roughly monthly): merge the rendered rows below the marker
 in `agents/<role>/memory.md` up into the hand-written base, then mark them done and
 re-render:
