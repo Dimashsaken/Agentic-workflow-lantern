@@ -646,6 +646,29 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     return problems
 
 
+def check_stage_inputs(run_id: str, stage: str) -> str | None:
+    """Refuse to start a stage whose upstream inputs are absent from this checkout.
+
+    Run folders move between runners only through git (D9 assumed "one shared
+    run-folder dir"; with EC2 + workstation that sharing is a git commit/pull, and
+    nothing automates it yet). Without this check the agent starts against a
+    checkout that never saw the upstream phase and invents the missing context —
+    observed 2026-08-31 on feat-20260831-gate-latency: 01-ui-ux.design fabricated
+    a divergence (claimed 6 skeletons, there were 8) and converged an option the
+    judge had explicitly cut.
+    """
+    if stage == "01-ui-ux.design":
+        sdir = REPO / "workflow/runs" / run_id / "01-ui-ux"
+        skeletons = (sorted((sdir / "divergence").glob("*.html"))
+                     if (sdir / "divergence").is_dir() else [])
+        if not (sdir / "report.md").is_file() or not skeletons:
+            return ("01-ui-ux.design inputs missing from this checkout: the diverge "
+                    "report and divergence/*.html skeletons must exist before Paper "
+                    "convergence — pull the diverge commit into this runner's checkout "
+                    "(run folders sync between runners through git), then retry")
+    return None
+
+
 def usage_dict(result) -> dict:
     """Token usage of one Runner.run, as plain ints (P0.4 token ledger).
 

@@ -37,7 +37,8 @@ from agents.extensions.memory import SQLAlchemySession
 from orchestrator import (
     BROWSER_ROLES, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
     USAGE_MARKER, append_file, azure_v1_client, build_consult_instructions,
-    build_instructions, check_postconditions, collect_export, consult_roles, db_urls,
+    build_instructions, check_postconditions, check_stage_inputs, collect_export,
+    consult_roles, db_urls,
     list_dir, list_exports, make_append_memory, model_for, paper_mcp_server,
     product_git,
     paper_reachable, playwright_mcp_server, read_file, render_role_memory, usage_dict,
@@ -447,6 +448,9 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         os.environ["LANTERN_PRODUCT_ORIGIN"], os.environ["LANTERN_PRODUCT_BRANCH"] = repo, branch
     session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
 
+    problem = check_stage_inputs(run_id, stage)
+    if problem:
+        raise RuntimeError(problem)
     mcp_servers = []
     if role in BROWSER_ROLES:
         mcp_servers.append(playwright_mcp_server(run_id, stage))
@@ -523,6 +527,9 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     await log_event(conn, run_id, "orchestrator", "stage_started",
                     {"stage": stage, "attempt": attempt, "runner": runner, "executor": "docker"})
 
+    problem = check_stage_inputs(run_id, stage)
+    if problem:
+        raise RuntimeError(problem)
     run_dir = REPO / "workflow" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     name = f"lantern-{run_id}-{stage}-{attempt}".replace(".", "-")

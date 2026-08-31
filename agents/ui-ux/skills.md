@@ -96,6 +96,10 @@ of every column and apply the empty-bottom test in the checklist.
   recommendation and the single strongest argument against it.
 - Export every option's frames as **2x PNGs** into `01-ui-ux/`; get the Paper file
   URL for humans.
+- `get_jsx` for **every presented option** → `jsx/<axis>.jsx`, full returned JSX
+  verbatim (typically 8–15 KB) — not only the recommended one. The gate-picker may
+  choose any option, and the orchestrator fails the stage unless `jsx/` holds one
+  real-markup file per presented option (a node id or stub is rejected).
 - Write `01-ui-ux/handoff.json` — the orchestrator builds the ux_signoff gate
   payload from it, so Mission Control can show the PNGs side by side:
 
