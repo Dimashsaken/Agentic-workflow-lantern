@@ -9,8 +9,8 @@ thing every agent reads after its role files (orientation step 1 —
 
 | Run ID | What | Stage | Status | Waiting on | Updated |
 |--------|------|-------|--------|------------|---------|
-| feat-20260825-role-health | Feature Brief: Role health — is this pipeline alive? | 02-pre-coding | waiting_gate | gate `plan_signoff` | 2026-08-27 |
-| feat-20260825-candidate-compare | Feature Brief: Candidate compare — pick who advances | 02-pre-coding | waiting_gate | gate `plan_signoff` | 2026-08-27 |
+| feat-20260825-role-health | Feature Brief: Role health — is this pipeline alive? | 02-pre-coding | failed | rework, then `pipeline.py retry` | 2026-08-31 |
+| feat-20260825-candidate-compare | Feature Brief: Candidate compare — pick who advances | 02-pre-coding | failed | rework, then `pipeline.py retry` | 2026-08-31 |
 
 ## Recently completed (last 30 days)
 

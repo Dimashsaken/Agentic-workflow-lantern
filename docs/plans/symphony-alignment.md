@@ -150,6 +150,15 @@ has. No new scope beyond what's listed.
   - *`gate-decisions.md` (added 2026-08-27) is what made the second half of role-health's
     blocker answerable — pre-coding correctly refused to treat a stage-1 recommendation
     as an approval, and now reads the actual decision from the run folder.*
+
+  *2026-08-31 — the pre-fix vacuous `plan_signoff` gates on both runs were rejected
+  (a human could still have approved a "plan" whose own summary said no plan exists);
+  both runs now sit honestly `failed` at stage 2 pending a product target. Sandbox
+  image rebuilt with the 5f3f653 entrypoint fix, `prove_isolation.sh` +
+  `prove_video.sh` green; Mission Control v2 merged; local/origin/box at parity.
+  Remaining inputs are human-only — the product repo/branch (the SSM github token is
+  a personal PAT that reaches no product repo today) and a QA dev target in
+  `/lantern/qa/dev/*`. Playbook + session prompt: `docs/plans/first-full-run.md`.*
 - [x] **P0.4 DONE (2026-08-26)** **Token ledger**: per-stage-execution token counts (Agents SDK usage
   object) into `stage_executions`, rolled up per run. **[v2]** Scope v1 = fleet stages
   only; the human stage-3 Codex session runs on a developer laptop and its JSONL is out
