@@ -25,7 +25,14 @@ access or SSO: put CloudFront/ALB + OIDC in front; the app doesn't change.
 2. **The Board — runs as cards in stage columns** (kanban: `01-ui-ux` →
    `07-qa-staging`). Color = status (running/waiting/failed/done). One glance
    answers "where is my feature?" — the mental model matches the fixed pipeline, so
-   no legend is needed.
+   no legend is needed. Above the columns sits the **gate-latency ledger**
+   (feat-20260831-gate-latency): per gate type, the median time-to-decision over
+   the last 30 days of decided approvals with its sample count — the
+   symphony-alignment §6 staffing signal. Human review latency is the #1 failure
+   mode of ticket-to-PR systems, so the wait is on the board, not in a report:
+   every pending Review card shows its age, and past 24h it gets an explicit
+   `STALE` warning treatment. Read-only over `approvals`; a failed aggregate
+   degrades to a sentence without hiding the cards or their decision controls.
 3. **The Run page — a verification timeline.** Per stage: status, attempts, the
    stage report rendered as HTML, artifacts (QA videos linked with their shot
    lists, plans, diff/PR links), and the append-only event log underneath. This is

@@ -5,6 +5,18 @@ Three screens: the **Inbox** (pending gates with inline Approve/Reject), the
 **Board** (runs as cards in stage columns), and the **Run page** (verification
 timeline: reports, artifacts, videos, events).
 
+**Gate latency (feat-20260831-gate-latency):** the Board carries a full-width
+ledger between the statusline and the columns — per gate type, the median
+`decided_at - requested_at` over the last 30 days of decided (approved or
+rejected) approvals, with its sample count. Zero-decision gates show
+`— · no decisions · n=0`; a median over 24h renders in the warning color. Every
+pending Review card shows its age from `approvals.requested_at`; strictly over
+24h it gains a `STALE` chip and warning border (the plan's staffing threshold —
+hardcoded, changing it is a code edit in `app.py:STALE_SECONDS`). All of it is
+read-only from the `approvals` table in one grouped query; if that query fails
+the ledger degrades to a sentence and the board still renders. Behavior tests:
+`python -m unittest test_gate_latency` (stdlib only, no DB).
+
 Runs from the azure-runner venv (shared deps, imports `pipeline.py` directly):
 
 ```bash

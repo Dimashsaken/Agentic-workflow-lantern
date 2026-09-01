@@ -225,6 +225,7 @@ def ledger_metrics(rows: list[dict]) -> list[dict]:
                         "sub": f"{label} · n={r['n']}"})
     return out
 
+
 def _payload(a) -> dict:
     p = a["payload"] if "payload" in dict(a) else None
     if isinstance(p, str):
