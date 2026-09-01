@@ -2,10 +2,36 @@
   "paper_url": "https://app.paper.design/file/01M0W444P0FVBY0PKRDYAPYDWH/8-0",
   "recommended": "statusline-ledger",
   "options": [
-    {"name":"statusline-ledger","pngs":["workflow/runs/feat-20260831-gate-latency/01-ui-ux/statusline-ledger@2x.png"],"status":"presented"},
-    {"name":"review-lane-summary","pngs":["workflow/runs/feat-20260831-gate-latency/01-ui-ux/review-lane-summary@2x.png"],"status":"presented"},
-    {"name":"run-detail-context","pngs":["workflow/runs/feat-20260831-gate-latency/01-ui-ux/run-detail-context@2x.png"],"status":"presented"}
+    {
+      "name": "statusline-ledger",
+      "pngs": [
+        "workflow/runs/feat-20260831-gate-latency/01-ui-ux/statusline-ledger@2x.png"
+      ],
+      "status": "chosen"
+    },
+    {
+      "name": "review-lane-summary",
+      "pngs": [
+        "workflow/runs/feat-20260831-gate-latency/01-ui-ux/review-lane-summary@2x.png"
+      ],
+      "status": "rejected"
+    },
+    {
+      "name": "run-detail-context",
+      "pngs": [
+        "workflow/runs/feat-20260831-gate-latency/01-ui-ux/run-detail-context@2x.png"
+      ],
+      "status": "rejected"
+    }
   ],
   "video": null,
-  "metrics": {"divergence_generated":8,"critique_iterations":{"statusline-ledger":2,"review-lane-summary":2,"run-detail-context":2},"paper_calls_estimate":18}
+  "metrics": {
+    "divergence_generated": 8,
+    "critique_iterations": {
+      "statusline-ledger": 2,
+      "review-lane-summary": 2,
+      "run-detail-context": 2
+    },
+    "paper_calls_estimate": 18
+  }
 }
