@@ -12,6 +12,7 @@ rendered views of it, so the postcondition is sound under concurrent runs.
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -214,7 +215,9 @@ PHASE_NOTES = {
     "01-ui-ux.design": (
         "\n\n# Phase note\nThis execution is the Paper convergence phase (skills §3B–3D): "
         "divergence output and scores already exist in the stage directory — read them, "
-        "do not redo them. You have the `paper` MCP server. Finish by writing "
+        "do not redo them. You have the `paper` MCP server. Collect each presented "
+        "option's JSX with the `collect_jsx` tool — the host writes get_jsx output "
+        "verbatim; JSX copied through your own context is rejected. Finish by writing "
         "handoff.json (skills §3D) — the gate payload is built from it."),
 }
 
@@ -368,6 +371,10 @@ def _writable(rel: str) -> Path:
         raise ValueError(
             "memory.md is rendered from the role_memory table — record learnings with "
             "the append_memory tool instead")
+    if p.name == COLLECTED_MANIFEST:
+        raise ValueError(
+            f"{COLLECTED_MANIFEST} is written only by collect_jsx — it is the proof that "
+            "a jsx file came through the host verbatim, so agents never write it")
     return p
 
 
@@ -584,6 +591,68 @@ def collect_export(filename: str, dest_path: str) -> str:
     return f"collected {dst.relative_to(REPO).as_posix()} ({dst.stat().st_size // 1024} KB)"
 
 
+# Sidecar written only by collect_jsx (agent write tools refuse the name): maps each
+# collected file to the sha256 of what the host wrote, so the postcondition can prove
+# a jsx artifact never transited — and was never rewritten from — agent context.
+COLLECTED_MANIFEST = ".collected.json"
+
+
+def _record_collected(dst: Path, node_id: str) -> None:
+    manifest = dst.parent / COLLECTED_MANIFEST
+    data = {}
+    if manifest.is_file():
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except ValueError:
+            data = {}
+    data[dst.name] = {"sha256": hashlib.sha256(dst.read_bytes()).hexdigest(),
+                      "bytes": dst.stat().st_size, "node_id": node_id}
+    manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def make_collect_jsx(paper: MCPServerStreamableHttp):
+    """Build the collect_jsx tool bound to this stage's Paper MCP connection.
+
+    Host-side for a reason: get_jsx returns 7–9 KB per artboard, and routing that
+    through the agent's own context invites truncation — observed 2026-08-31
+    (feat-20260831-gate-latency attempt 5): jsx/ files arrived as ~1.5 KB
+    hand-compressed summaries and still cleared the size floor. The host calls
+    get_jsx itself and writes the tool result verbatim; the agent only ever sees a
+    size confirmation, so context limits can never touch the artifact.
+    """
+    @function_tool
+    async def collect_jsx(node_id: str, dest_path: str) -> str:
+        """Write Paper's full get_jsx output for one artboard/frame into the run folder.
+
+        This is the ONLY way to produce a jsx/ handoff file: the host calls get_jsx
+        and writes the result verbatim to `dest_path` — never copy JSX through your
+        own context (it gets truncated) and never rewrite the file afterwards (the
+        orchestrator hash-checks it against what was collected). `node_id` is the id
+        you recorded from create_artboard; `dest_path` is repo-relative, e.g.
+        'workflow/runs/<run-id>/01-ui-ux/jsx/<axis>.jsx'. Call once per presented
+        option. Returns the size written, not the JSX.
+        """
+        call_args = {"nodeId": node_id}
+        fid = os.environ.get("LANTERN_PAPER_FILE_ID")
+        if fid:
+            call_args["fileId"] = fid     # scoped to the agent-owned file by construction
+        res = await paper.call_tool("get_jsx", call_args)
+        text = "\n".join(c.text for c in res.content if getattr(c, "text", None))
+        if getattr(res, "isError", False):
+            raise RuntimeError(f"get_jsx failed for node {node_id}: {text[:500]}")
+        if "<" not in text:
+            raise RuntimeError(
+                f"get_jsx returned no markup for node {node_id} — check the id against "
+                "what create_artboard returned, and that the node still exists")
+        dst = _safe(dest_path)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(text, encoding="utf-8")
+        _record_collected(dst, node_id)
+        return (f"collected {dst.relative_to(REPO).as_posix()} "
+                f"({len(text.encode('utf-8')) // 1024} KB of get_jsx output, verbatim)")
+    return collect_jsx
+
+
 def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     """Every file a handoff.json claims must actually exist.
 
@@ -632,12 +701,25 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     elif len(jsx_files) < len(names):
         problems.append(
             f"jsx/ has {len(jsx_files)} files for {len(names)} presented options — one per frame")
+    # Provenance, not plausibility. A size/markup floor passed a ~1.5 KB hand-compressed
+    # summary of 7–9 KB get_jsx output (observed 2026-08-31, attempt 5) — anything that
+    # transits agent context can be silently truncated, so the only acceptable evidence
+    # is the collect_jsx manifest hash proving the host wrote the file verbatim.
+    collected = {}
+    mf = jsx_dir / COLLECTED_MANIFEST
+    if mf.is_file():
+        try:
+            collected = json.loads(mf.read_text(encoding="utf-8"))
+        except ValueError:
+            problems.append(f"jsx/{COLLECTED_MANIFEST} is not valid JSON")
     for f in jsx_files:
-        body = f.read_text(encoding="utf-8", errors="replace")
-        if "<" not in body or len(body) < 400:
+        entry = collected.get(f.name)
+        if not entry or entry.get("sha256") != hashlib.sha256(f.read_bytes()).hexdigest():
             problems.append(
-                f"jsx/{f.name} is a pointer stub, not get_jsx output — the handoff promises "
-                "structural source the coding agent can read, not a node id")
+                f"jsx/{f.name} was not written by collect_jsx (or was rewritten after) — "
+                "get_jsx output copied through agent context gets truncated; call "
+                "collect_jsx(node_id, dest_path) so the host writes it verbatim, and "
+                "leave the file alone")
     # The critique loop must leave evidence, not just a self-reported number.
     if names and not (REPO / "workflow/runs" / run_id / sdir / "critique-log.md").is_file():
         problems.append(
@@ -806,10 +888,12 @@ async def main() -> None:
     mcp_servers = []
     if role in BROWSER_ROLES:
         mcp_servers.append(playwright_mcp_server(args.run_id, args.stage))
+    paper = None
     if args.stage in PAPER_STAGES:
         if not await paper_reachable():
             sys.exit(PAPER_PREFLIGHT_HINT)
-        mcp_servers.append(paper_mcp_server())
+        paper = paper_mcp_server()
+        mcp_servers.append(paper)
 
     for s in mcp_servers:
         await s.connect()
@@ -820,7 +904,8 @@ async def main() -> None:
             instructions=build_instructions(role, args.run_id, args.stage),
             tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export,
                    product_git,
-                   make_append_memory(role, args.run_id, args.stage, execution_key)],
+                   make_append_memory(role, args.run_id, args.stage, execution_key),
+                   *([make_collect_jsx(paper)] if paper else [])],
             mcp_servers=mcp_servers,
         )
         # Attempt number from the execution key ('run:stage:attempt') — the agent
