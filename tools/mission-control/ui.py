@@ -81,6 +81,24 @@ a{color:inherit;text-decoration:none}
 .statusline .warn{color:var(--warning)}
 .statusline .bad{color:var(--danger)}
 
+/* gate-latency ledger: full-width strip between statusline and the board.
+   Scrolls sideways at narrow widths so no gate's number is ever clipped. */
+.ledger{display:flex;align-items:center;gap:44px;padding:14px 28px;
+  background:var(--surface-1);border-bottom:1px solid var(--edge);
+  overflow-x:auto}
+.ledger .lhead{flex:0 0 auto}
+.ledger .lhead .d{font-size:var(--text-xs);color:var(--text-muted);margin-top:2px}
+.ledger .lm{flex:0 0 auto}
+.ledger .lm .v{font-family:var(--font-mono);font-size:var(--text-xl);
+  line-height:1.1;font-variant-numeric:tabular-nums;color:var(--text);
+  white-space:nowrap}
+.ledger .lm .v.warn{color:var(--warning)}
+.ledger .lm .v.dim{color:var(--text-dim)}
+.ledger .lm .s{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.11em;font-size:var(--text-caps);color:var(--text-muted);
+  margin-top:3px;white-space:nowrap}
+.ledger .lerr{font-size:var(--text-xs);color:var(--text-muted)}
+
 /* ── atoms ────────────────────────────────────────────────────────────── */
 .dot{width:6px;height:6px;border-radius:var(--r-pill);display:inline-block;
   vertical-align:middle;flex:0 0 auto}
@@ -498,6 +516,24 @@ def ago(seconds: float) -> str:
         return f"{h}h {m:02d}m" if m else f"{h}h"
     d, h = divmod(h, 24)
     return f"{d}d {h}h" if h else f"{d}d"
+
+
+def gate_ledger(metrics: list[dict] | None) -> str:
+    """The board's gate-latency strip (feat-20260831-gate-latency).
+    metrics: [{'value','kind','sub'}, ...] pre-formatted by app.py, one per
+    gate type; None means the aggregate query failed — the board must still
+    render, so the strip degrades to a plain sentence."""
+    head = ("<div class='lhead'><div class='caps'>GATE LATENCY · LAST 30 DAYS"
+            "</div><div class='d'>Median time to decision · UTC</div></div>")
+    if metrics is None:
+        body = ("<div class='lerr'>Gate latency unavailable — refresh. "
+                "Pending gates are still shown.</div>")
+    else:
+        body = "".join(
+            f"<div class='lm'><div class='v{' ' + m['kind'] if m['kind'] else ''}'>"
+            f"{H(m['value'])}</div><div class='s'>{H(m['sub'])}</div></div>"
+            for m in metrics)
+    return f"<section class='ledger'>{head}{body}</section>"
 
 
 def strip(d: dict, hot: bool = False, dim: bool = False) -> str:

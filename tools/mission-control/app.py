@@ -722,6 +722,9 @@ async def board(request: Request):
         f" of ${tripwire:.0f}</span>{sep}"
         f"<span>{ec2_bit}</span>{sep}<span>{ws_bit}</span></div>")
 
+    lat = snap["gate_latency"]
+    lat_html = ui.gate_ledger(ledger_metrics(lat) if lat is not None else None)
+
     COLS = [
         ("queued",  "Queued",  "Empty. Runs wait here for a runner slot before an agent picks them up."),
         ("running", "Running", "No agent is working right now. A ticket moves here when a daemon claims it."),
@@ -738,7 +741,7 @@ async def board(request: Request):
         kb.append(f"<div class='kbcol'>{head}{content}</div>")
 
     return page("Board — Lantern Mission Control",
-                statusline + f"<section class='kb'>{''.join(kb)}</section>",
+                statusline + lat_html + f"<section class='kb'>{''.join(kb)}</section>",
                 user, "/", now)
 
 
