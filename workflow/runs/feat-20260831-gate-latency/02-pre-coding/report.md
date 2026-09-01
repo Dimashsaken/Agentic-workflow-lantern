@@ -1,36 +1,36 @@
-# Stage Report: 02-pre-coding — feat-20260831-gate-latency
+# Stage Report: 02-pre-coding — feat-20260831-gate-latency (attempt 2)
 
 - **Agent/author:** pre-coding
-- **Date:** 2026-08-31
+- **Date:** 2026-09-01
 - **Status:** PASS-WITH-NOTES
 
 ## Summary
 
-Overall risk is medium; the plan reconciles the selected run-detail option with the brief by adding only a minimal Board age/stale/median companion. No schema or package change is needed. The single riskiest element is the shared `gate_card()` renderer, where run-detail work could regress the gate inbox or decision controls.
+Overall risk is medium; this attempt replaces the rejected run-detail-first plan with the corrected `statusline-ledger` Board implementation. No schema or package change is needed. The single riskiest element is changing `snapshot()`'s shared aggregate/result shape without regressing its `/runs` consumer.
 
 ## Work performed
 
-- Read the brief, authoritative UX gate decision, all stage-1 handoff documents, product conventions/history, schema, Mission Control rendering/data paths, design tokens, docs, and coding principles.
-- Traced `snapshot()`, `build_card()`, `gate_card()`, and `ago()` consumers and confirmed Mission Control has no tracked tests.
-- Produced exact blast radius, schema/query plan, ordered sub-half-day task plan, package decision, HITL boundary, and code-complete checklist.
+- Re-read role guidance, rendered memory/runboard, corrected gate record, complete stage-1 handoff, attempt-1 artifacts, product conventions/history, Mission Control code, schema, tokens, docs, dependencies, tests, and coding principles.
+- Traced all consumers of `snapshot()`, `build_card()`, `gate_card()`, and `ago()` and verified the existing scalar `decided` aggregate is not rendered.
+- Rewrote blast radius and task plan around the authoritative full-width Board ledger; retained only existing run-detail pending age from the rejected option.
 
 ## Findings / results
 
-1. **Medium risk:** approved `run-detail-context` explicitly does not satisfy Board glance by itself; the implementation must pair it with minimal Board treatment rather than silently adopting the unselected recommended layout.
-2. **High local risk:** `gate_card()` serves both `/gates` and `/run/{id}` and contains the decision forms, requiring regression tests and explicit context injection.
-3. **No schema/package change:** existing approvals fields and dependencies suffice. Do not add an index without a separately approved schema proposal.
-4. **Thin coverage:** no Mission Control tests are tracked, so behavioral tests are task 1.
-5. **No security pre-review:** the implementation remains authenticated, read-only for latency data, and does not alter the server-side decision boundary.
+1. **Corrected authority:** `plan_signoff` rejected attempt 1 because it targeted `run-detail-context`; stage-1 handoff now marks `statusline-ledger` chosen.
+2. **Medium risk:** `snapshot()` serves both Board and Runs; the new grouped 30-day result must not break `/runs`.
+3. **Existing coverage gap:** Mission Control has no tracked tests, so behavior tests remain the first implementation task.
+4. **No schema/package change:** current approval fields and dependencies are sufficient; an index requires separate evidence and approval.
+5. **Scope guard:** run detail already shows pending age through `gate_card()`; adding rejected median/evidence composition there would violate the corrected decision.
 
 ## Artifacts
 
-- `blast-radius.md` — opened-path inventory, flow/consumer tracing, and risk assessment.
-- `schema-plan.md` — no-migration decision and exact aggregate-query/index assessment.
-- `task-plan.md` — structure, packages, ordered tasks, HITL, and code-complete definition.
+- `blast-radius.md` — corrected path inventory, consumer tracing, and risks.
+- `schema-plan.md` — no-migration plan and precise 30-day grouped query semantics.
+- `task-plan.md` — corrected implementation work order, HITL, and code-complete checklist.
 
 ## Handoff notes for the next stage
 
-Start with tests, then add one grouped query. Preserve `POST /gate/{approval_id}/{decision}`, authentication, Inbox evidence, and `ago()`'s broad contract. `HITL: required` for approval of the scope reconciliation stated in `task-plan.md`; an index discovery requires a new schema gate.
+Start with the behavior tests, then change the shared snapshot aggregate. Implement the full-width ledger between the existing statusline and Board columns, preserve all approval controls, and do not carry forward attempt 1's rejected run-detail redesign. **HITL: required:** developer approves this corrected plan; any index requires a separate schema gate.
 
 ## Open questions
 
@@ -38,4 +38,4 @@ None.
 
 ## Memory candidates
 
-- When the approved UX option is knowingly narrower than the brief, pre-coding must preserve the chosen composition while explicitly planning the smallest companion needed for acceptance; otherwise either human authority or product scope is silently overridden.
+- A rejected downstream plan followed by a corrected UX decision must trigger a clean re-plan from the authoritative gate record, not an incremental patch to the old plan, because stale scope can otherwise survive in tasks and become accidental implementation.

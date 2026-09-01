@@ -1,36 +1,37 @@
-# Blast radius — feat-20260831-gate-latency
+# Blast radius — feat-20260831-gate-latency (attempt 2)
 
-## Scope reconciliation
+## Approved scope
 
-The approved `run-detail-context` option is authoritative for the decision block, but `01-ui-ux/options.md` explicitly says it cannot alone satisfy the brief's board-glance outcome. Implement the approved run-detail treatment and the smallest required board companion: pending-gate age on Review cards, an explicit stale state after 24h, and a compact per-gate median/count summary. Do not substitute the unapproved full-width `statusline-ledger` composition.
+The corrected authoritative choice is `statusline-ledger`: a persistent full-width 30-day median ledger above the five Board columns, with pending age and stale treatment local to Review cards. The rejected attempt-1 run-detail composition must not be implemented. Run detail remains in scope only for the brief's existing requirement that pending gates show age there; `gate_card()` already does so, so no run-detail redesign is planned.
 
 ## Flow and consumers
 
-`tools/mission-control/app.py:snapshot()` is the shared data boundary for Board and Runs. Board rendering flows through `board()` → `build_card()`; run-detail and Gates render pending approvals through `gate_card()`. `tools/mission-control/ui.py` owns the existing humane-duration formatter and all CSS. Approval decisions remain the existing authenticated server-side POST path.
+`tools/mission-control/app.py:snapshot()` is the shared batch data boundary for Board and Runs. Board rendering flows through `board()` → `build_card()`; run detail and Gates use `gate_card()`. `tools/mission-control/ui.py` owns the humane-duration formatter, page shell, and CSS. The feature adds one grouped read query and Board presentation while leaving authenticated approval POSTs unchanged.
 
 | Path | Action | Why | Risk |
 |---|---|---|---|
-| `tools/mission-control/app.py` | modify | Add grouped 30-day decision-latency query/data shape; classify pending age; render compact Board summary, Review-card stale state, and approved run-detail context. Preserve `/gates` reuse and POST decisions. | high |
-| `tools/mission-control/ui.py` | modify | Add small render helpers/CSS for summary, stale card, and decision context using existing tokens; reuse `ago()`. | medium |
-| `tools/azure-runner/schema.sql` | read only | Confirms `approvals.requested_at`, `decided_at`, `status`, and `gate`; no migration. Existing pending index does not support the bounded decided-history aggregate. | medium |
-| `tools/mission-control/mockups/tokens.css` | read only | Token source for warning/stale treatment; no new colors. | low |
-| `tools/mission-control/mockups/README.md` | read only | Existing board rationale and truthful empty-state conventions. | low |
-| `tools/mission-control/README.md` | modify | Document the Board latency readout and 24h stale semantics. | low |
-| `docs/MISSION-CONTROL.md` | modify | Keep product documentation aligned with Board/run-detail behavior and read-only source. | low |
-| `tools/mission-control/test_gate_latency.py` | create | Focused unit/render/query-contract tests because Mission Control currently has no tests. | medium |
+| `tools/mission-control/app.py` | modify | Replace/extend the existing all-time ungrouped `decided` aggregate with per-gate 30-day medians/counts; render the approved Board ledger; classify Review cards stale at >24h. | high |
+| `tools/mission-control/ui.py` | modify | Add full-width ledger and stale-card CSS/render atom using existing tokens; reuse `ago()` unchanged. | medium |
+| `tools/azure-runner/schema.sql` | read only | Confirms all source fields and current pending-only index; no migration. | medium |
+| `tools/mission-control/mockups/tokens.css` | read only | Source of warning/stale and ordered-quantity tokens; no new colors. | low |
+| `tools/mission-control/mockups/README.md` | read only | Existing Board density, truthfulness, and token conventions. | low |
+| `tools/mission-control/README.md` | modify | Document the ledger, 30-day window, and >24h stale state. | low |
+| `docs/MISSION-CONTROL.md` | modify | Align Board behavior documentation with the chosen UI. | low |
+| `tools/mission-control/test_gate_latency.py` | create | Add focused behavioral coverage because Mission Control has no tracked tests. | medium |
 
 ## Consumer tracing
 
-- `snapshot()` consumers: `board()` and `runs_index()`. Additive snapshot keys must not alter Runs behavior.
-- `build_card()` consumer: `board()` only. Its returned card HTML must retain existing action forms and evidence link.
-- `gate_card()` consumers: `/gates` and `/run/{run_id}`. Gate-latency context must be explicitly enabled for run detail (or safely useful in both places); do not accidentally remove Inbox evidence/actions.
-- `ago()` has broad Mission Control use. Do not change its output contract globally; add a gate-specific wrapper only if the approved compact copy requires it.
-- Approval fields are also written by CLI/web orchestration code, but this feature only reads them. No auth, decision, event, or pipeline-state mutation is planned.
+- `snapshot()` consumers are `board()` and `runs_index()`. The latency result must be additive or replace the currently unused `decided` key without changing Runs rendering.
+- `build_card()` is consumed only by `board()`. It already derives Review age from `approvals.requested_at`; this feature adds explicit stale copy/style without changing action forms.
+- `gate_card()` is consumed by `/gates` and `/run/{id}` and already renders `waiting {age}` from `requested_at`. Leave it structurally unchanged except optional shared stale helper/class if required; do not implement rejected run-detail median context.
+- `ago()` has many Mission Control consumers. Keep its global output contract unchanged.
+- Approval creation and decisions are written by orchestration/CLI/web code outside this read path. No writer, auth, event, cron, analytics, or pipeline state consumer changes.
 
-## Coverage and risk notes
+## Coverage and risks
 
-- There are no tracked Mission Control tests; tests precede rendering changes.
-- Single riskiest element: `gate_card()` is shared by run detail and the gate inbox, so implementing approved context there can unintentionally change both verification surfaces or the decision controls.
-- SQL should compute one grouped aggregate, not one query per gate/card. Use UTC database `now()` and include only rows decided within the last 30 days.
-- Median definition must be fixed in tests: `percentile_cont(0.5)` over epoch seconds, grouped by `gate`; approved and rejected decisions both count because both are decisions.
-- Security pre-review is not required: no auth, payments, deletion, new writes, or authorization boundary changes.
+- No Mission Control tests are tracked; write tests first.
+- Single riskiest element: the existing `snapshot()` aggregate is shared by Board and Runs, so changing its query/result shape can break `/runs` while the new Board appears correct.
+- Use one grouped query, never one query per gate or card. Include statuses `approved` and `rejected`, require non-null `decided_at`, and filter decisions by `decided_at >= now() - interval '30 days'`.
+- Render all five known `GATE_META` types in stable order, including zero-sample rows as `—` and `no decisions · n=0`; unknown historical gate types may append after known types rather than disappear.
+- Stale means strictly older than 24h. Existing duration formatting clamps future timestamps to zero; test this behavior.
+- No security pre-review: auth, writes, payments, deletion, and authorization boundaries are untouched.
