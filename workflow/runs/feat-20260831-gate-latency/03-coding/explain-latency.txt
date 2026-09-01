@@ -1,0 +1,57 @@
+=== current volume ===
+ approvals_total | decided 
+-----------------+---------
+              10 |       7
+(1 row)
+
+=== EXPLAIN on real data ===
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=15.01..15.04 rows=1 width=44) (actual time=0.131..0.151 rows=2 loops=1)
+   Group Key: gate
+   Buffers: shared hit=13
+   ->  Sort  (cost=15.01..15.02 rows=1 width=48) (actual time=0.074..0.075 rows=7 loops=1)
+         Sort Key: gate
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=5
+         ->  Seq Scan on approvals  (cost=0.00..15.00 rows=1 width=48) (actual time=0.010..0.016 rows=7 loops=1)
+               Filter: ((decided_at IS NOT NULL) AND (status = ANY ('{approved,rejected}'::text[])) AND (decided_at >= (now() - '30 days'::interval)))
+               Rows Removed by Filter: 3
+               Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=23
+ Planning Time: 0.211 ms
+ Execution Time: 0.183 ms
+(15 rows)
+
+=== production-like volume (20k synthetic, rolled back) ===
+BEGIN
+INSERT 0 1
+INSERT 0 20000
+ANALYZE
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=959.89..1045.30 rows=5 width=25) (actual time=8.483..11.476 rows=5 loops=1)
+   Group Key: gate
+   Buffers: shared hit=261
+   ->  Sort  (cost=959.89..972.08 rows=4876 width=29) (actual time=7.745..8.301 rows=6019 loops=1)
+         Sort Key: gate
+         Sort Method: quicksort  Memory: 522kB
+         Buffers: shared hit=261
+         ->  Seq Scan on approvals  (cost=0.00..661.20 rows=4876 width=29) (actual time=0.010..6.416 rows=6019 loops=1)
+               Filter: ((decided_at IS NOT NULL) AND (status = ANY ('{approved,rejected}'::text[])) AND (decided_at >= (now() - '30 days'::interval)))
+               Rows Removed by Filter: 13991
+               Buffers: shared hit=261
+ Planning:
+   Buffers: shared hit=33
+ Planning Time: 0.219 ms
+ Execution Time: 11.506 ms
+(15 rows)
+
+ROLLBACK
+=== confirm rollback ===
+ approvals_total 
+-----------------
+              10
+(1 row)
+

@@ -9,10 +9,10 @@
 The approved `statusline-ledger` UX is implemented: the Board renders a full-width
 per-gate 30-day median ledger between the statusline and the five columns, every
 pending Review card shows its age, and cards strictly older than 24h get an explicit
-`STALE` warning treatment. All 34 new behavior tests plus the existing no-DB
-repository test pass; the two checks that need a live Postgres (`EXPLAIN` plan
-evidence, `test_verification.py`) are deferred to the box because no local database
-was reachable — see Findings 1–2.
+`STALE` warning treatment. All 34 new behavior tests plus the existing repository
+tests pass; the two checks that needed a live Postgres were initially deferred and
+then **closed same-day against the box's database over SSH** — query plan needs no
+index (Finding 1) and `test_verification.py` passes (Finding 2).
 
 ## Work performed
 
@@ -51,25 +51,26 @@ Six tasks, one commit each, tests first (`a0d9fda` → `717dad6`):
    `docs/MISSION-CONTROL.md` updated; whole-diff review done (one PEP8
    blank-line fix).
 
-Definition-of-code-complete checklist from the task plan: all boxes hold except
-the query-plan half of "query plan is acceptable", deferred per Finding 1.
+Definition-of-code-complete checklist from the task plan: all boxes hold,
+including "query plan is acceptable without schema changes" (Finding 1).
 Verified explicitly: constant query count regardless of cards/gate types
 (asserted by test), no new package/write/alert/client-clock/threshold-config/
 chart/analytics code anywhere in the diff.
 
 ## Findings / results
 
-1. **[deferred — for qa-dev] `EXPLAIN (ANALYZE, BUFFERS)` not run.** No reachable
-   Postgres from this laptop (no local service; Docker Desktop daemon down; the
-   `.env` DSN is `localhost:5432/lantern`). Analysis: the query is one grouped
-   aggregate over `approvals`, whose volume is one row per gate per run — even
-   hundreds of runs is a few thousand rows, where a seq scan is optimal and the
-   existing partial index (`pending` only) is irrelevant. I judge no index
-   required, so no schema approval is triggered; QA on the box should run the
-   EXPLAIN to confirm and attach it to the 04-qa-dev report.
-2. **[deferred — for qa-dev] `tools/azure-runner/test_verification.py` needs the
-   DB** and was not run for the same reason. `test_product_access.py` (no DB)
-   passes. The mission-control change touches neither file's subject matter.
+1. **[resolved 2026-09-01] `EXPLAIN (ANALYZE, BUFFERS)` run on the box**
+   (`lantern-fleet`, the live `lantern` DB) — evidence in
+   `explain-latency.txt`. Real data (10 approvals): seq scan, 0.183 ms. At
+   production-like volume (20 000 synthetic approvals inserted in a
+   transaction and **rolled back** — post-check confirms the table back at 10
+   rows): seq scan + quicksort, 11.5 ms, 261 shared-hit buffers, no I/O. One
+   such query per board load is negligible; **no index is required, so no
+   schema approval is triggered.**
+2. **[resolved 2026-09-01] `tools/azure-runner/test_verification.py` run on the
+   box** against the live DB (it self-cleans its `test-verification-role`
+   rows): all checks pass — "the new postcondition is sound where the old one
+   was not". `test_product_access.py` (no DB) also passes locally.
 3. **[note] SQL semantics are unit-tested as a query contract** (assertions on
    `LATENCY_SQL`'s clauses), not against a live database — the honest limit of
    the no-DB test design the plan prescribed. The DB-level behaviors (30-day
@@ -89,6 +90,8 @@ chart/analytics code anywhere in the diff.
   `python -m unittest test_gate_latency` from `tools/mission-control` using the
   azure-runner venv. Result this session: **34/34 OK** (plus
   `test_product_access.py` all-pass).
+- `explain-latency.txt` — `EXPLAIN (ANALYZE, BUFFERS)` of `LATENCY_SQL` on the
+  box DB: real data plus 20k-row rolled-back synthetic volume (Finding 1).
 - No videos this stage (developer stage; QA records video in 04).
 
 ## Handoff notes for the next stage
@@ -110,7 +113,6 @@ chart/analytics code anywhere in the diff.
   - *Failure isolation* — **high** at the unit/route level, but the injected
     failure is a `PostgresError` on one query; a real outage takes the whole
     snapshot down (pre-existing behavior, unchanged by design).
-- The `EXPLAIN` from Finding 1 is a five-minute box task — please close it.
 - `snapshot()` also runs the latency query for `/runs` (shared batch, per the
   blast-radius design); its result is simply unused there.
 
