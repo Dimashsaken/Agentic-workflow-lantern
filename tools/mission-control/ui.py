@@ -152,6 +152,8 @@ input::placeholder{color:var(--text-dim)}
   border-top:1px solid var(--edge-top);border-radius:var(--r-md);
   padding:13px 14px;margin-bottom:12px}
 .kcard.hot{background:var(--surface-2);border-color:#2E2A22}
+.kcard.stale{border-color:var(--warning)}
+.kcard.stale .stg .age{color:var(--warning)}
 .kcard.dim{opacity:.6}
 .kcard .title{display:block;font-size:var(--text-sm);font-weight:600;
   color:var(--text);line-height:1.35;overflow-wrap:anywhere}

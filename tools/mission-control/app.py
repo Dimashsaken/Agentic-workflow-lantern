@@ -607,13 +607,16 @@ def build_card(run, snap: dict, now: datetime) -> tuple[str, str]:
     stage_lab = f"stage {curidx + 1}/{len(BOARD_DIRS)} · {stage_name}"
     chips: list[tuple[str, str]] = []
     wl = err = acts = ""
-    age, cold, hot, dim = "", False, False, False
+    age, cold, hot, dim, stale = "", False, False, False, False
 
     if a is not None:
         col, hot = "review", True
-        age = ago((now - a["requested_at"]).total_seconds())
+        waited = (now - a["requested_at"]).total_seconds()
+        age, stale = ago(waited), is_stale(waited)
         if verdict == "BLOCKED":
             chips.append(("report: blocked", "blocked"))
+        if stale:
+            chips.append(("STALE", "warn"))
         chips.append((GATE_SHORT.get(a["gate"], a["gate"]), "gate"))
         wl = ("Waiting on <b>you</b> — the report says BLOCKED, read it first."
               if verdict == "BLOCKED" else
@@ -674,7 +677,8 @@ def build_card(run, snap: dict, now: datetime) -> tuple[str, str]:
         cpct = f" · {round(led['cached'] / led['inp'] * 100)}% cached" if led.get("inp") else ""
         foot = (f"<div class='foot'><span class='m'>{H(fmt_money(led['cost']))}</span>"
                 f"<span>{H(led_model(led))} · {fmt_k(led['tot'])} tok{cpct}</span></div>")
-    card = (f"<div class='kcard{' hot' if hot else ''}{' dim' if dim else ''}'>"
+    card = (f"<div class='kcard{' hot' if hot else ''}{' stale' if stale else ''}"
+            f"{' dim' if dim else ''}'>"
             f"<a class='title' href='/run/{H(run['id'])}'>{H(title)}</a>"
             f"<div class='meta'>{H(prefix)}{' · ' if prefix else ''}{H(run['created_by'])}</div>"
             + (f"<div class='chips'>{chips_html}</div>" if chips_html else "")
