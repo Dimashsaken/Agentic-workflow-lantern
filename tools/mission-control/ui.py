@@ -83,7 +83,7 @@ a{color:inherit;text-decoration:none}
 
 /* gate-latency ledger: full-width strip between statusline and the board.
    Scrolls sideways at narrow widths so no gate's number is ever clipped. */
-.ledger{display:flex;align-items:center;gap:44px;padding:14px 28px;
+.ledger{display:flex;align-items:center;gap:32px;padding:14px 28px;
   background:var(--surface-1);border-bottom:1px solid var(--edge);
   overflow-x:auto}
 .ledger .lhead{flex:0 0 auto}
