@@ -62,6 +62,15 @@ def approval_row(id=7, run_id="feat-20260901-fake", gate="plan_signoff",
     return row
 
 
+def live_approval(age_seconds, **over) -> dict:
+    """An approval aged against real wall-clock time, for route-level tests
+    (routes compute `now` themselves). The 30s margin keeps ago() on the
+    whole-unit boundary ('20h', '4d') for the duration of a test run."""
+    return approval_row(
+        requested_at=datetime.now(timezone.utc)
+        - timedelta(seconds=age_seconds + 30), **over)
+
+
 def latency_row(gate, med, n) -> dict:
     return {"gate": gate, "med": med, "n": n}
 
@@ -327,7 +336,7 @@ class TestLedgerRender(unittest.TestCase):
 class TestRoutes(unittest.TestCase):
     def test_board_renders_ledger_between_statusline_and_columns(self):
         pool = FakePool(
-            runs=[run_row()], pend=[approval_row(age_seconds=4 * DAY)],
+            runs=[run_row()], pend=[live_approval(4 * DAY)],
             latency=[latency_row("ux_signoff", 72000.0, 2),
                      latency_row("plan_signoff", 4 * DAY + 0.0, 2)])
         html = body_of(get(mc.board, signed(), pool=pool))
@@ -343,8 +352,7 @@ class TestRoutes(unittest.TestCase):
         self.assertLess(i_ledger, i_board)
 
     def test_board_survives_latency_query_failure(self):
-        pool = FakePool(runs=[run_row()],
-                        pend=[approval_row(age_seconds=4 * DAY)],
+        pool = FakePool(runs=[run_row()], pend=[live_approval(4 * DAY)],
                         fail_latency=True)
         html = body_of(get(mc.board, signed(), pool=pool))
         self.assertIn("Gate latency unavailable — refresh.", html)
@@ -375,7 +383,7 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(resp.headers["location"], "/login")
 
     def test_runs_page_unaffected_by_snapshot_reshape(self):
-        pool = FakePool(runs=[run_row()], pend=[approval_row(age_seconds=4 * DAY)])
+        pool = FakePool(runs=[run_row()], pend=[live_approval(4 * DAY)])
         resp = get(mc.runs_index, signed(), pool=pool)
         self.assertEqual(resp.status_code, 200)
         self.assertIn("feat-20260901-fake", body_of(resp))
@@ -385,15 +393,14 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 303)
 
     def test_gates_page_shows_pending_age(self):
-        pool = FakePool(runs=[run_row()], pend=[approval_row(age_seconds=20 * 3600)])
+        pool = FakePool(runs=[run_row()], pend=[live_approval(20 * 3600)])
         html = body_of(get(mc.gates, signed(), pool=pool))
-        self.assertIn("waiting", html)
-        self.assertIn("20h", html)
+        self.assertIn("waiting 20h", html)
         self.assertIn("/gate/7/approve", html)
 
     def test_run_detail_still_shows_pending_age_no_median_context(self):
         run = run_row()
-        pool = FakePool(runs=[run], pend=[approval_row(age_seconds=20 * 3600)])
+        pool = FakePool(runs=[run], pend=[live_approval(20 * 3600)])
         html = body_of(get(mc.run_page, run["id"], signed(), pool=pool))
         self.assertIn("waiting 20h", html)
         self.assertIn("/gate/7/approve", html)

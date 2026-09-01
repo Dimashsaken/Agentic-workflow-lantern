@@ -171,6 +171,60 @@ def render_markdown(text: str) -> str:
 
 # ── data assembly ────────────────────────────────────────────────────────────
 
+# Gate latency (feat-20260831-gate-latency): one grouped read over decided
+# approvals. The 30-day window is on decided_at — a decision made yesterday on
+# a gate opened months ago still counts. percentile_cont interpolates the
+# median for even-sized cohorts.
+LATENCY_SQL = """SELECT gate, count(*)::int AS n,
+       percentile_cont(0.5) WITHIN GROUP
+         (ORDER BY EXTRACT(EPOCH FROM decided_at - requested_at)) AS med
+FROM approvals
+WHERE status IN ('approved','rejected') AND decided_at IS NOT NULL
+  AND decided_at >= now() - interval '30 days'
+GROUP BY gate"""
+
+STALE_SECONDS = 24 * 3600      # the plan's staffing threshold — a code edit, not config
+
+
+def is_stale(elapsed_seconds: float) -> bool:
+    return elapsed_seconds > STALE_SECONDS
+
+
+def gate_latency_rows(rows) -> list[dict]:
+    """Normalize latency query rows: every known gate in GATE_META order
+    (zero-sample gates included), then unknown historical gates rather than
+    dropping them."""
+    by_gate = {r["gate"]: r for r in rows}
+    out = []
+    for g in GATE_META:
+        r = by_gate.get(g)
+        out.append({"gate": g,
+                    "med": float(r["med"]) if r and r["med"] is not None else None,
+                    "n": int(r["n"]) if r else 0})
+    for r in rows:
+        if r["gate"] not in GATE_META:
+            out.append({"gate": r["gate"],
+                        "med": float(r["med"]) if r["med"] is not None else None,
+                        "n": int(r["n"])})
+    return out
+
+
+def ledger_metrics(rows: list[dict]) -> list[dict]:
+    """Display form of normalized latency rows: value/kind/sub per gate.
+    Zero-sample cohorts show '—', never '0h'; medians over the 24h staffing
+    threshold get the warning kind."""
+    out = []
+    for r in rows:
+        label = GATE_SHORT.get(r["gate"], r["gate"])
+        if not r["n"] or r["med"] is None:
+            out.append({"value": "—", "kind": "dim",
+                        "sub": f"{label} · no decisions · n=0"})
+        else:
+            out.append({"value": ago(r["med"]),
+                        "kind": "warn" if r["med"] > STALE_SECONDS else "",
+                        "sub": f"{label} · n={r['n']}"})
+    return out
+
 def _payload(a) -> dict:
     p = a["payload"] if "payload" in dict(a) else None
     if isinstance(p, str):
@@ -200,12 +254,10 @@ async def snapshot(p) -> dict:
            FROM stage_executions GROUP BY run_id, model""")
     pend = await p.fetch(
         "SELECT * FROM approvals WHERE status='pending' ORDER BY requested_at")
-    decided = await p.fetchrow(
-        """SELECT count(*)::int AS n,
-                  percentile_cont(0.5) WITHIN GROUP
-                    (ORDER BY EXTRACT(EPOCH FROM decided_at - requested_at)) AS med
-           FROM approvals
-           WHERE status IN ('approved','rejected') AND decided_at IS NOT NULL""")
+    try:
+        gate_latency = gate_latency_rows(await p.fetch(LATENCY_SQL))
+    except asyncpg.PostgresError:       # the ledger degrades; the board must not
+        gate_latency = None
     try:
         runner_rows = await p.fetch(
             "SELECT name, last_seen, EXTRACT(EPOCH FROM now()-last_seen) AS age FROM runners")
@@ -246,8 +298,8 @@ async def snapshot(p) -> dict:
     runners = {r["name"]: r for r in runner_rows}
     online = {n: (r["age"] is not None and r["age"] < 90) for n, r in runners.items()}
     return {"runs": runs, "latest_by_dir": latest_by_dir, "ledger": ledger,
-            "pend": pend, "decided": decided, "runners": runners, "online": online,
-            "today": today, "feed": feed}
+            "pend": pend, "gate_latency": gate_latency, "runners": runners,
+            "online": online, "today": today, "feed": feed}
 
 
 def rail_segs(run, latest_by_dir) -> tuple[list[str], str, int]:
