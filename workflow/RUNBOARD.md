@@ -9,7 +9,7 @@ thing every agent reads after its role files (orientation step 1 —
 
 | Run ID | What | Stage | Status | Waiting on | Updated |
 |--------|------|-------|--------|------------|---------|
-| feat-20260831-gate-latency | Feature Brief: Gate latency on the board | 02-pre-coding | waiting_gate | gate `plan_signoff` | 2026-09-01 |
+| feat-20260831-gate-latency | Feature Brief: Gate latency on the board | 03-coding | waiting_gate | gate `code_complete` | 2026-09-01 |
 | feat-20260825-candidate-compare | Feature Brief: Candidate compare — pick who advances | 02-pre-coding | failed | rework, then `pipeline.py retry` | 2026-08-31 |
 | feat-20260825-role-health | Feature Brief: Role health — is this pipeline alive? | 02-pre-coding | failed | rework, then `pipeline.py retry` | 2026-08-31 |
 

@@ -13,3 +13,9 @@ Rendered by the orchestrator when a gate is decided. The `approvals` table is th
 - **Decided by:** dimash
 - **When:** 2026-09-01 04:48 UTC
 - **Note:** Plan targets run-detail-context; the ux_signoff choice is corrected to statusline-ledger. Re-plan stage 2 for statusline-ledger as primary (board ledger); run-detail pending-gate age remains in scope per the brief (age wherever pending gates render).
+
+## plan_signoff — APPROVED
+
+- **Decided by:** dimash
+- **When:** 2026-09-01 05:02 UTC
+- **Note:** statusline-ledger plan: no schema change, tests-first, snapshot() risk acknowledged
