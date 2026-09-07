@@ -4,11 +4,11 @@
   the control-plane box and its Postgres were decommissioned 2026-09-07, so this stage
   ran without `append_memory`, without any `pipeline.py` write, and without a database)
 - **Date:** 2026-09-07
-- **Status:** PASS-WITH-NOTES — conditional: the stage-5 gate ("all `fix-now` findings
-  resolved and verified in the diff") is **not yet met**. Two `fix-now` items are open
-  (F1, F2), both one-line edits; the status becomes PASS once the developer lands them
-  and this role verifies them in the updated diff. No blocking question. No
-  backward-compatibility break.
+- **Status:** PASS-WITH-NOTES — the stage-5 gate is met: both `fix-now` findings (F1, F2)
+  were resolved by the developer session in commit `964cbee` and VERIFIED by this role in
+  the updated diff (see Verification, below). One `debt-ticket` (DT-1) and seven `waived`
+  items remain, each with its reason. No backward-compatibility break. Next: stage 6
+  (security).
 
 ## Summary
 
@@ -219,6 +219,19 @@ No tracker is wired (Linear chosen, not integrated); this entry is the ticket.
 - `py_compile` on `app.py`, `ui.py`, `test_gate_latency.py`: OK. `git diff --check
   904db65 main -- tools docs`: clean. AST unused-name scan: nothing introduced by the
   diff (the two pre-existing hits are listed under Findings).
+
+## Verification (2026-09-07, after commit 964cbee)
+
+- **F1 — VERIFIED.** `tools/mission-control/app.py` now reads
+  `except asyncpg.PostgresError as e:` followed by
+  `print(f"gate latency query failed: {e}", file=sys.stderr)` before `gate_latency = None`;
+  `import sys` is present. During the suite, `test_board_survives_latency_query_failure`
+  emitted the log line to stderr and still passed — the board degrades and the operator
+  gets a trace.
+- **F2 — VERIFIED.** `ledger_metrics(` has no remaining hits under `tools/mission-control`;
+  `gate_latency_metrics(` appears exactly five times: the definition, the board call site,
+  and the three test references. `git diff 964cbee HEAD` on the two files is empty.
+- **Tests:** `Ran 35 tests — OK`.
 
 ## Artifacts
 
