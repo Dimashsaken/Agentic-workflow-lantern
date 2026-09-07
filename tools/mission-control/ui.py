@@ -622,7 +622,7 @@ def page(title: str, body: str, user: str | None = None, active: str = "/",
     if not user:                                       # login page: no shell
         return (f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
                 f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
-                f"<title>{H(title)}</title>{FONTS}<style>{CSS}</style></head>"
+                f"<title>{H(title)}</title><link rel='icon' href='data:,'>{FONTS}<style>{CSS}</style></head>"
                 f"<body>{body}</body></html>")
     tabs = "".join(
         f"<a href='{href}'{' class=on' if href == active else ''}>{H(name)}</a>"

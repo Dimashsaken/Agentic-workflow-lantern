@@ -45,6 +45,10 @@ SPECIALIST_MAX_TURNS = 24
 ARG_SNIPPET = 240                  # trace truncation: args / outputs stay readable,
 OUT_SNIPPET = 400                  # never dominant
 INTERRUPTED = "interrupted — mission control restarted mid-turn"
+# Set by the web app's shutdown hook. A process going down cancels turn tasks
+# exactly like a developer's Stop does; without this flag a restart would be
+# recorded as "stopped by the developer" — observed 2026-09-07 under --reload.
+SHUTTING_DOWN = False
 
 
 def chat_configured() -> tuple[bool, str]:
@@ -593,6 +597,12 @@ async def run_chat_turn(pool: asyncpg.Pool, session, turn_id: int, user_text: st
                         "channel": "web", "status": status,
                         "prompt": user_text[:300], "usage": merged}))
 
+    async def _close_and_total(status: str, final_text, error) -> None:
+        """Stopped/failed turns still settle the ledger and tell the page."""
+        await close_turn(status, final_text, error)
+        publish({"kind": "totals", "session": await session_totals(pool, session["id"])},
+                persist=False)
+
     try:
         ensure_client()
         async with pool.acquire() as conn:
@@ -638,7 +648,8 @@ async def run_chat_turn(pool: asyncpg.Pool, session, turn_id: int, user_text: st
                  "model": row["model"], "total_tokens": row["total_tokens"],
                  "input_tokens": row["input_tokens"],
                  "cached_input_tokens": row["cached_input_tokens"],
-                 "output_tokens": row["output_tokens"], "elapsed_s": elapsed},
+                 "output_tokens": row["output_tokens"], "elapsed_s": elapsed,
+                 "session": await session_totals(pool, session["id"])},
                 persist=False)
     except asyncio.CancelledError:
         try:
@@ -651,15 +662,39 @@ async def run_chat_turn(pool: asyncpg.Pool, session, turn_id: int, user_text: st
                     usage_sink.append({**u, "model": getattr(agent, "model", None)})
         except Exception:                       # noqa: BLE001 — best effort on teardown
             pass
-        publish({"kind": "stopped"})
-        await asyncio.shield(close_turn("stopped", None, "stopped by the developer"))
+        if SHUTTING_DOWN:
+            publish({"kind": "error", "message": INTERRUPTED})
+            await asyncio.shield(_close_and_total("failed", None, INTERRUPTED))
+        else:
+            publish({"kind": "stopped"})
+            await asyncio.shield(_close_and_total("stopped", None, "stopped by the developer"))
         raise
     except Exception as e:                      # noqa: BLE001 — turn boundary: persist, then surface
         msg = f"{type(e).__name__}: {e}"
         publish({"kind": "error", "message": msg[:600]})
-        await close_turn("failed", None, msg[:2000])
+        await _close_and_total("failed", None, msg[:2000])
     finally:
         bus.finish(session["id"])
+
+
+async def session_totals(pool, session_id: str) -> dict:
+    """{est_usd, tokens, turns, unmetered} for one conversation — what the header
+    and composer footer show; sent with each final event so they never go stale."""
+    from pipeline import est_cost_usd
+    rows = await pool.fetch(
+        """SELECT model, sum(input_tokens)::bigint AS inp,
+                  sum(cached_input_tokens)::bigint AS cached,
+                  sum(output_tokens)::bigint AS outp, sum(total_tokens)::bigint AS tot
+           FROM chat_turns WHERE session_id = $1 AND total_tokens IS NOT NULL
+           GROUP BY model""", session_id)
+    counts = await pool.fetchrow(
+        """SELECT count(*)::int AS n,
+                  count(*) FILTER (WHERE total_tokens IS NULL AND status <> 'running')::int AS unmetered
+           FROM chat_turns WHERE session_id = $1""", session_id)
+    return {"est_usd": round(sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+                                 for r in rows), 4),
+            "tokens": int(sum(r["tot"] or 0 for r in rows)),
+            "turns": counts["n"], "unmetered": counts["unmetered"]}
 
 
 _engine = None

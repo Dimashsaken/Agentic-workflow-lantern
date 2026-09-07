@@ -5,7 +5,10 @@ After=network.target postgresql.service
 [Service]
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/mission-control
-ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080
+# --timeout-graceful-shutdown: uvicorn waits for open connections BEFORE it
+# fires the app's shutdown hook, so a Chat page holding an SSE stream would
+# otherwise pin every restart until systemd's 90s kill (docs/CHAT.md).
+ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080 --timeout-graceful-shutdown 3
 Restart=always
 RestartSec=5
 

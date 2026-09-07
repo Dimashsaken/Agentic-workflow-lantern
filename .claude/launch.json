@@ -4,7 +4,7 @@
     {
       "name": "mission-control",
       "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "app:app", "--app-dir", "tools/mission-control", "--host", "127.0.0.1", "--port", "8080", "--reload"],
+      "runtimeArgs": ["-m", "uvicorn", "app:app", "--app-dir", "tools/mission-control", "--host", "127.0.0.1", "--port", "8080", "--reload", "--timeout-graceful-shutdown", "3"],
       "port": 8080
     }
   ]

@@ -24,6 +24,7 @@ from ui import H, ago, chip, fmt_int, fmt_money
 
 router = APIRouter()
 deps: dict = {}     # get_pool, current_user, page, render_markdown — set by app.setup
+SSE_MAX_SECONDS = 300
 
 
 def setup(**kw) -> APIRouter:
@@ -48,7 +49,9 @@ async def on_startup() -> None:
 
 
 async def on_shutdown() -> None:
-    """Release every open SSE stream so graceful restarts don't hang on them."""
+    """Release every open SSE stream, and make sure a turn the dying process
+    cancels records itself as interrupted, not as a developer's Stop."""
+    cs.SHUTTING_DOWN = True
     BUS.close_all()
 
 
@@ -288,6 +291,17 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
     tools = 0;
   }
 
+  function money(x){ return x <= 0 ? '—' : (x < 0.01 ? '<$0.01' : '$' + x.toFixed(2)); }
+  function updateTotals(s){   // the final event carries the session ledger (server-priced)
+    if(!s) return;
+    var c = document.getElementById('tot-cost'), l = document.getElementById('tot-line');
+    var b = document.getElementById('cbilled');
+    if(c) c.textContent = s.tokens ? money(s.est_usd) : '—';
+    if(l) l.textContent = s.tokens.toLocaleString() + ' tok · ' + s.turns + ' turn' +
+      (s.turns === 1 ? '' : 's') + (s.unmetered ? ' · ' + s.unmetered + ' unmetered' : '');
+    if(b) b.textContent = s.tokens && s.est_usd ? money(s.est_usd) + ' this chat' : 'nothing billed yet';
+  }
+
   function endLive(turnId, ok){
     if(liveTimer){clearInterval(liveTimer); liveTimer = null;}
     var w = document.getElementById('working'); if(w) w.remove();
@@ -351,7 +365,13 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
       case 'delta': if(liveText){liveText.textContent += ev.text; pin(false)} break;
       case 'tool': case 'specialist': if(liveWork) toolLine(ev); break;
       case 'tool_done': case 'specialist_done': if(liveWork) toolOut(ev); break;
-      case 'final': endLive(ev.turn_id, true); break;
+      case 'final': updateTotals(ev.session); endLive(ev.turn_id, true); break;
+      case 'totals': updateTotals(ev.session); break;
+      case 'idle':
+        // Nothing is running server-side, yet this page shows a live turn: the
+        // process that owned it is gone. Swap in the row's real (reaped) state.
+        if(live){ endLive(live.dataset.turn, true); }
+        break;
       case 'error': if(live){var d=document.createElement('div');d.className='terr';
           d.textContent = ev.message || 'failed';
           live.querySelector('.msg.agent').appendChild(d);} endLive(0, false); break;
@@ -387,6 +407,11 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
     send.addEventListener('click', submit);
     autosize(); if(!input.disabled) input.focus();
   }
+  document.addEventListener('keydown', function(e){   // Esc interrupts, like Claude Code
+    if(e.key === 'Escape' && live){
+      fetch('/chat/' + encodeURIComponent(CFG.sid) + '/stop', {method:'POST'});
+    }
+  });
   if(CFG.running){ startLive(CFG.running, null); }
   pin(true);
 })();
@@ -552,8 +577,18 @@ async def chat_events(sid: str, request: Request):
             for ev in replay:
                 yield f"data: {json.dumps(ev)}\n\n"
             if not replay:
+                # A client reconnecting after a restart lands here while its page
+                # still shows a working turn — reap so the fragment it fetches
+                # says «interrupted» instead of pretending to run.
+                p = await _pool()
+                async with p.acquire() as conn:
+                    await cs.reap_stale_turns(conn, BUS, sid)
                 yield f"data: {json.dumps({'kind': 'idle'})}\n\n"
-            while True:
+            # Bounded lifetime: EventSource reconnects on its own (replay rebuilds a
+            # live turn), and no stream can hold a restart hostage for long.
+            # uvicorn --timeout-graceful-shutdown is the real cap; this is the belt.
+            deadline = asyncio.get_running_loop().time() + SSE_MAX_SECONDS
+            while asyncio.get_running_loop().time() < deadline:
                 try:
                     ev = await asyncio.wait_for(q.get(), timeout=15)
                 except asyncio.TimeoutError:
@@ -688,8 +723,8 @@ async def chat_session(sid: str, request: Request):
         <div class='adesc'>{H(info["desc"])}</div>
         <div class='chips'>{''.join(chips)}</div>
       </div>
-      <div class='totals'><span class='v'>{H(fmt_money(est)) if tot else '—'}</span>
-        {fmt_int(tot)} tok · {len(turns)} turn{'s' if len(turns) != 1 else ''}{H(unm)}<br>
+      <div class='totals'><span class='v' id='tot-cost'>{H(fmt_money(est)) if tot else '—'}</span>
+        <span id='tot-line'>{fmt_int(tot)} tok · {len(turns)} turn{'s' if len(turns) != 1 else ''}{H(unm)}</span><br>
         started {s['created_at']:%b %d} by {H(s['created_by'])} ·
         <a href='#' onclick="if(confirm('Archive this conversation? History is kept, it just leaves the list.')){{fetch('/chat/{H(sid)}/archive',{{method:'POST'}}).then(function(){{location='/chat'}})}};return false"
           style='text-decoration:underline'>archive</a></div>

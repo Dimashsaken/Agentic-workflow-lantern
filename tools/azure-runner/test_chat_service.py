@@ -153,11 +153,12 @@ async def main() -> None:
         replay0, q = bus.subscribe(sid)
         await cs.run_chat_turn(pool, session, turn_id, "What is Lantern?", USER, bus)
 
-        seen = []
+        q_events = []
         while not q.empty():
             ev = q.get_nowait()
             if ev:
-                seen.append(ev["kind"])
+                q_events.append(ev)
+        seen = [e["kind"] for e in q_events]
         check("subscriber saw deltas, the tool call, and the final",
               "delta" in seen and "tool" in seen and "final" in seen)
         turn = await conn.fetchrow("SELECT * FROM chat_turns WHERE id = $1", turn_id)
@@ -177,6 +178,11 @@ async def main() -> None:
         check("consult audit event written with usage",
               ev_row is not None and json.loads(ev_row["data"])["usage"]["total_tokens"] == 1280)
         check("bus entry cleared after the turn", bus.active(sid) is None)
+        final_ev = next(e for e in q_events if e["kind"] == "final")
+        totals = await cs.session_totals(pool, sid)
+        check("final event carries the session ledger the header shows",
+              final_ev["session"]["tokens"] == 1280 == totals["tokens"]
+              and totals["turns"] == 1 and totals["est_usd"] > 0)
 
         # 5 — failure path: error recorded, turn never left running
         cs.run_streamed = fake_stream([delta("part"), delta("never sent")], fail_after=1)
@@ -189,6 +195,42 @@ async def main() -> None:
         check("failed turn recorded honestly (status + error, no final text)",
               turn2["status"] == "failed" and "model exploded" in turn2["error"]
               and turn2["final_text"] is None)
+
+        # 5b — a cancel during process shutdown is an interruption, not a Stop
+        async def slow_events():
+            yield delta("thinking…")
+            await asyncio.sleep(30)
+
+        class SlowResult:
+            final_output = None
+            context_wrapper = SimpleNamespace(usage=None)
+
+            def cancel(self, mode="immediate"):
+                pass
+
+            def stream_events(self):
+                return slow_events()
+
+        cs.run_streamed = lambda agent, input, session=None, max_turns=None: SlowResult()
+        for flag, want_status, want_error in ((False, "stopped", "stopped by the developer"),
+                                              (True, "failed", cs.INTERRUPTED)):
+            tid = await conn.fetchval(
+                "INSERT INTO chat_turns (session_id, asked_by, user_text) VALUES ($1,$2,'slow') RETURNING id",
+                sid, USER)
+            bus.start(sid, tid)
+            task = asyncio.create_task(cs.run_chat_turn(pool, session, tid, "slow", USER, bus))
+            bus.attach_task(sid, task)
+            await asyncio.sleep(0.3)
+            cs.SHUTTING_DOWN = flag
+            bus.stop(sid)
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            cs.SHUTTING_DOWN = False
+            row = await conn.fetchrow("SELECT status, error FROM chat_turns WHERE id = $1", tid)
+            check(f"cancel with SHUTTING_DOWN={flag} records «{want_status}»",
+                  row["status"] == want_status and row["error"] == want_error)
 
         # 6 — orphaned 'running' rows are reaped, but a live one is not
         orphan = await conn.fetchval(

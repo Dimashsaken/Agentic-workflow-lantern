@@ -120,10 +120,15 @@ the bus. Subscribers are per-SESSION and outlive turns — a page attached while
 the conversation is idle must still hear the next turn (v1 had them per-turn
 and went deaf; `test_chat_service.py` pins the regression). Known limit, stated
 plainly: the bus is process-local, so Mission Control runs single-process (it
-already does — one uvicorn, one systemd unit); shutdown closes every open
-stream so restarts never hang on SSE connections, and a turn whose process died
-is marked `failed («interrupted — mission control restarted mid-turn»)` on next
-contact rather than pretending to still run.
+already does — one uvicorn, one systemd unit). Restarts and SSE: uvicorn waits
+for open connections *before* it fires the app's shutdown hook, so an open
+event stream would pin a restart until systemd's 90s kill — the unit and the
+dev launcher therefore run with `--timeout-graceful-shutdown 3`, streams
+self-end every 5 minutes (EventSource reconnects; replay rebuilds a live turn),
+and the shutdown hook still releases whatever is left. A turn whose process
+died is marked `failed («interrupted — mission control restarted mid-turn»)`
+on next contact — including when a page reconnects to find nothing running —
+rather than pretending to still run.
 
 Every finished turn also lands one `consult` row in `events` (actor
 `human:{user}`, `channel: web`, usage attached) — the CLI already does exactly
@@ -142,7 +147,8 @@ this, so the audit log sees one stream of consults regardless of surface.
 2. **`/chat/{sid}` — the conversation.** Claude-Code-anatomy transcript: `YOU`
    / agent caps labels, streamed text, tool lines with folded results,
    specialist handoffs shown as indented sub-consults, a working footer with
-   elapsed time + live tool count + Stop, and a per-turn ledger line (model ·
+   elapsed time + live tool count + Stop (Esc also stops, as in Claude Code;
+   a stopped turn keeps the tokens it already burned), and a per-turn ledger line (model ·
    tokens · cached % · est. $ · duration). Composer pinned at bottom with the
    advisory-line status footer ("UI-UX CONSULT · ADVISORY, READ-ONLY · $0.32
    THIS CHAT" — or "NOTHING BILLED YET", which is the design system's own
