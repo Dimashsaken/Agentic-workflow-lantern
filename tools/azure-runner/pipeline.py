@@ -1576,20 +1576,48 @@ async def cmd_import_run(run_id: str, by: str, stage: str, status: str, gate: st
     print(f"imported {run_id} at {stage} ({status}{', gate ' + gate if gate else ''})")
 
 
-async def cmd_status() -> None:
+def status_payload(runs, pending_gates) -> dict:
+    """Shape status query rows for machine-readable output."""
+    return {
+        "runs": [
+            {
+                "id": r["id"],
+                "status": r["status"],
+                "current_stage": r["current_stage"],
+                "updated_at": r["updated_at"].isoformat(),
+                "coding_mode": r["coding_mode"],
+                "product_repo": r["product_repo"],
+            }
+            for r in runs
+        ],
+        "pending_gates": [
+            {
+                "run_id": p["run_id"],
+                "gate": p["gate"],
+                "requested_at": p["requested_at"].isoformat(),
+            }
+            for p in pending_gates
+        ],
+    }
+
+
+async def cmd_status(json_mode: bool = False) -> None:
     conn = await connect()
     runs = await conn.fetch(
-        """SELECT id, status, current_stage, updated_at, coding_mode FROM runs
+        """SELECT id, status, current_stage, updated_at, coding_mode, product_repo FROM runs
            WHERE status NOT IN ('done', 'cancelled') ORDER BY updated_at DESC""")
-    if not runs:
-        print("no active runs")
-    for r in runs:
-        tag = "  [auto-coding]" if r["coding_mode"] == "auto" else ""
-        print(f"{r['id']:<40} {r['status']:<13} {r['current_stage']:<18} updated {r['updated_at']:%Y-%m-%d %H:%M}{tag}")
     pend = await conn.fetch("SELECT run_id, gate, requested_at FROM approvals WHERE status = 'pending'")
-    for p in pend:
-        # plain ASCII: Windows consoles default to cp1252 and choke on emoji/arrows
-        print(f"  pending gate: {p['run_id']} -> {p['gate']} (since {p['requested_at']:%Y-%m-%d %H:%M})")
+    if json_mode:
+        print(json.dumps(status_payload(runs, pend)))
+    else:
+        if not runs:
+            print("no active runs")
+        for r in runs:
+            tag = "  [auto-coding]" if r["coding_mode"] == "auto" else ""
+            print(f"{r['id']:<40} {r['status']:<13} {r['current_stage']:<18} updated {r['updated_at']:%Y-%m-%d %H:%M}{tag}")
+        for p in pend:
+            # plain ASCII: Windows consoles default to cp1252 and choke on emoji/arrows
+            print(f"  pending gate: {p['run_id']} -> {p['gate']} (since {p['requested_at']:%Y-%m-%d %H:%M})")
     await conn.close()
 
 
@@ -1749,7 +1777,7 @@ def main() -> None:
     p = sub.add_parser("retry"); p.add_argument("run_id")
     p = sub.add_parser("qa-preflight", help="can a QA stage reach its target, from the sandbox?")
     p.add_argument("--stage", choices=sorted(QA_TARGET_PREFIX), default="qa-dev")
-    sub.add_parser("status")
+    p = sub.add_parser("status"); p.add_argument("--json", action="store_true")
     sub.add_parser("agents")
     p = sub.add_parser("ask"); p.add_argument("role"); p.add_argument("prompt")
     p.add_argument("--session", default="default",
@@ -1778,7 +1806,7 @@ def main() -> None:
         case "approve": asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, True))
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))
         case "retry":   asyncio.run(cmd_retry(a.run_id))
-        case "status":  asyncio.run(cmd_status())
+        case "status":  asyncio.run(cmd_status(a.json))
         case "qa-preflight":  asyncio.run(cmd_qa_preflight(a.stage))
         case "agents":  asyncio.run(cmd_agents())
         case "ask":     asyncio.run(cmd_ask(a.role, a.prompt, a.session, a.by,

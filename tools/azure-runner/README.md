@@ -81,6 +81,10 @@ python pipeline.py usage [--days 7]             # token ledger: per-day + per-ru
 python pipeline.py usage-check                  # spend tripwires (hourly systemd timer on EC2)
 ```
 
+For scripts, `python pipeline.py status --json` prints one JSON object with `runs`
+and `pending_gates` arrays; plain `python pipeline.py status` keeps the human-readable
+table.
+
 Every stage execution records its token usage on its `stage_executions` row (P0.4):
 the Agents SDK usage object in-process, or the container's `LANTERN_USAGE` stdout
 line (validated — it shares stdout with agent text) parsed by the dispatcher — a
