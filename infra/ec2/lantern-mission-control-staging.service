@@ -1,0 +1,19 @@
+[Unit]
+Description=Lantern Mission Control — STAGING instance (the build under test for stage 7)
+After=network.target postgresql.service
+
+[Service]
+User=ubuntu
+# A separate checkout that infra/ec2/deploy-staging.sh moves to the branch/ref a human
+# chose at the staging_deploy gate. It shares the pipeline database (Mission Control
+# IS the product in the dogfood runs) and the main checkout's venv; only the code
+# differs. The QA staging target is this port on the docker bridge
+# (LANTERN_QA_STAGING_BASE_URL=http://172.17.0.1:8081).
+WorkingDirectory=/home/ubuntu/lantern-staging/tools/mission-control
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8081 --timeout-graceful-shutdown 3
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

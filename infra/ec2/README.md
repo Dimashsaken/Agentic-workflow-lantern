@@ -205,6 +205,35 @@ execution needs a second daemon on the design workstation — setup in
 `tools/azure-runner/README.md` ("Runner affinity"); it is a plain terminal process
 there, not a systemd unit.
 
+## Staging instance — the stage-7 target (dogfood runs)
+
+When the product IS Lantern, "deploy to staging" means running the candidate build of
+Mission Control on a second port. `lantern-mission-control-staging.service` serves
+`~/lantern-staging` (a second checkout) on **8081** against the same database with the
+main checkout's `.env`; the human at the `staging_deploy` gate deploys with:
+
+```bash
+bash infra/ec2/deploy-staging.sh <branch-or-sha>     # e.g. main, or feat/20260907-status-json
+```
+
+The script fetches the ref from the main checkout, restarts the unit, and proves the
+port answers. QA stage 7 reaches it on the docker bridge —
+`LANTERN_QA_STAGING_BASE_URL=http://172.17.0.1:8081` with the QA user — exactly like
+stage 4 reaches the main instance on `http://172.17.0.1:8080`.
+
+## Outside access
+
+The security group allows **8080 and 8081 from anywhere** (opened 2026-09-07 so the
+CTO can test) and 22 from named IPs only. Mission Control is behind its login
+(`LANTERN_WEB_USERS`), but it is plain HTTP: put CloudFront/ALB with TLS (or Tailscale)
+in front before anyone types a password on a network they do not own, and narrow the
+rules back to named IPs when the demo is over:
+
+```bash
+aws ec2 revoke-security-group-ingress --group-id sg-0b3dd42bc8b77c474 \
+  --ip-permissions 'IpProtocol=tcp,FromPort=8080,ToPort=8080,IpRanges=[{CidrIp=0.0.0.0/0}]'
+```
+
 ## Spend tripwires (P0.4)
 
 The token ledger lives on `stage_executions`; `pipeline.py usage` reports it. The
