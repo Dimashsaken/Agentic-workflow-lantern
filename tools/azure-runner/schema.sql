@@ -119,3 +119,59 @@ ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS total_tokens bigint;
 -- read-only. NULL = unset, and stage 2+ blocks asking for it rather than guessing.
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_repo text;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_branch text;
+
+-- ── Chat surface (docs/CHAT.md, D13): web consults with history and a ledger ──
+-- chat_sessions.id doubles as the Agents SDK session key ('consult:{user}:{agent}:{name}'),
+-- so the SDK's agent_sessions/agent_messages rows and ours can never disagree on identity,
+-- and a thread started with `pipeline.py ask` can continue on the web.
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id          text PRIMARY KEY,             -- 'consult:{user}:{agent}:{name}'
+    agent       text NOT NULL,                -- fleet role, custom agent slug, or 'lantern'
+    title       text,                         -- first message by default; renamable
+    created_by  text NOT NULL,
+    run_id      text,                         -- optional run scope (no FK: runs may be imported later)
+    archived    boolean NOT NULL DEFAULT false,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    last_at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_last ON chat_sessions(last_at DESC);
+
+-- One row per user turn: the transcript, the activity trace ("what was happening"),
+-- and the same token-ledger columns as stage_executions (P0.4 — dollars are always
+-- computed at render time from exact token counts; NULL tokens = unmetered, never $0).
+CREATE TABLE IF NOT EXISTS chat_turns (
+    id          bigserial PRIMARY KEY,
+    session_id  text NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    asked_by    text NOT NULL,
+    user_text   text NOT NULL,
+    final_text  text,
+    status      text NOT NULL DEFAULT 'running',  -- running|done|failed|stopped
+    error       text,
+    trace       jsonb,                            -- ordered tool calls / specialist handoffs / notes
+    model               text,
+    requests            int,
+    input_tokens        bigint,
+    cached_input_tokens bigint,
+    output_tokens       bigint,
+    total_tokens        bigint,
+    started_at  timestamptz NOT NULL DEFAULT now(),
+    finished_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id, id);
+CREATE INDEX IF NOT EXISTS idx_chat_turns_started ON chat_turns(started_at);
+
+-- User-created consult agents (Dust-style: purpose is the only required field;
+-- instructions are composed from it when empty). They learn through role_memory
+-- under their slug — table-only, no agents/<slug>/memory.md is rendered.
+CREATE TABLE IF NOT EXISTS custom_agents (
+    slug        text PRIMARY KEY,
+    name        text NOT NULL,
+    purpose     text NOT NULL,                -- one line: what this agent is for
+    instructions text,                        -- optional; template-composed when empty
+    model_pref  text NOT NULL DEFAULT 'reasoning',  -- reasoning|fast
+    created_by  text NOT NULL,
+    archived    boolean NOT NULL DEFAULT false,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);

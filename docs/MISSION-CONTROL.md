@@ -15,7 +15,7 @@ via Tailscale (recommended) or a security-group-allowlisted IP + the built-in HT
 Basic auth — never open to the internet. Upgrade path if it ever needs public
 access or SSO: put CloudFront/ALB + OIDC in front; the app doesn't change.
 
-## The three screens (and why these visuals)
+## The five screens (and why these visuals)
 
 1. **The Inbox — "what needs a human right now."** Pending gates, oldest first,
    each with its payload (video link, plan, findings) and Approve/Reject inline.
@@ -31,7 +31,17 @@ access or SSO: put CloudFront/ALB + OIDC in front; the app doesn't change.
    lists, plans, diff/PR links), and the append-only event log underneath. This is
    where Justin watches a video instead of attending a demo, and where a developer
    audits an agent's claim in seconds — small artifacts, visually reviewable, per
-   Karpathy's leash rule.
+   Karpathy's leash rule. Every stage card links to a run-scoped consult of its
+   owning role ("consult ui-ux about this run"), and the run header to Lantern.
+4. **Chat — talking to the fleet** (`/chat`, design: `docs/CHAT.md`). The web
+   face of consult mode (D11): any fleet role, any custom agent, or the Lantern
+   orchestrator (which reads the pipeline database and hands questions to
+   specialists), with session history, live tool-call streaming over SSE, and
+   every turn in the token ledger. Advisory and read-only — the composer footer
+   says so on every conversation.
+5. **Agents — the roster** (`/agents`). Fleet roles beside user-created custom
+   agents, with per-agent usage and memory counts; new agents are a two-field
+   form (name + purpose; instructions composed when left empty).
 
 ## Gate integrity in the UI
 
@@ -47,8 +57,10 @@ status legend defines every color — a developer's first visit needs no walkthr
 
 ## Roadmap
 
-- v1 (now): the three screens above, polling refresh.
-- v2: SSE live event stream on the run page; inline `<video>` playback via
-  presigned S3 URLs; Slack notification links deep-linking to the gate.
-- v3: brief-composer form ("start a run" from the browser), PostHog error inbox
-  feeding the debug lifecycle.
+- v1: the first three screens, polling refresh. **Done.**
+- v2 (now): Chat + Agents (SSE streaming landed there first); chat spend in the
+  ledger views.
+- v3: SSE on the run page; inline `<video>` playback via presigned S3 URLs;
+  Slack notification links deep-linking to the gate; brief-composer form
+  ("start a run" from the browser); PostHog error inbox feeding the debug
+  lifecycle; browser-MCP consults for browser roles (docs/CHAT.md roadmap).
