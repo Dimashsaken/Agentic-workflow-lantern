@@ -18,6 +18,7 @@ sys.path.insert(0, str(AZURE_RUNNER))
 load_dotenv(AZURE_RUNNER / ".env")
 
 from pipeline import REPO, db_urls  # noqa: E402
+from chat_service import ensure_chat_tables  # noqa: E402
 
 DEMO_REPORT = """# Stage Report: 01-ui-ux — feat-20260825-demo-export
 
@@ -41,9 +42,11 @@ TINY_PNG = base64.b64decode(
 
 async def main(reset: bool) -> None:
     conn = await asyncpg.connect(db_urls()[1])
+    await ensure_chat_tables(conn)
     if reset:
         await conn.execute(
-            "TRUNCATE events, artifacts, approvals, stage_executions, runs, runners CASCADE")
+            "TRUNCATE events, artifacts, approvals, stage_executions, runs, runners, "
+            "chat_turns, chat_sessions, custom_agents CASCADE")
 
     # Runner heartbeats: EC2 alive, the design workstation offline for 10 minutes.
     await conn.execute("""INSERT INTO runners (name, last_seen) VALUES
@@ -120,8 +123,85 @@ async def main(reset: bool) -> None:
         """INSERT INTO runs (id, brief, pipeline_version, status, current_stage, created_by, completed_at)
            VALUES ($1, 'workflow/briefs/onboarding.md', '2', 'done', '07-qa-staging', 'justin', now())""", r4)
 
+    # Chat surface (docs/CHAT.md): a Lantern thread with a specialist handoff, a
+    # ui-ux consult, and one custom agent — enough for the hub, a transcript, and
+    # the roster to render with real-looking rows.
+    await conn.execute("""INSERT INTO custom_agents (slug, name, purpose, model_pref, created_by)
+        VALUES ('release-notes', 'Release Notes',
+                'Turns a run''s stage reports into customer-facing release notes.',
+                'fast', 'justin') ON CONFLICT (slug) DO NOTHING""")
+
+    cs1 = "consult:justin:lantern:web-demo01"
+    await conn.execute(
+        """INSERT INTO chat_sessions (id, agent, title, created_by, last_at)
+           VALUES ($1, 'lantern', 'What is blocked right now, and what would it cost to unblock?',
+                   'justin', now() - interval '2 hours')
+           ON CONFLICT (id) DO NOTHING""", cs1)
+    trace1 = [
+        {"t": 0.8, "kind": "tool", "name": "pipeline_snapshot", "args": "{}"},
+        {"t": 2.1, "kind": "tool_done",
+         "output": '{"runs": [{"id": "feat-20260825-demo-export", "status": "waiting_gate", '
+                   '"pending_gate": "ux_signoff", "gate_age_h": 11.2}, '
+                   '{"id": "feat-20260825-demo-billing", "status": "running", '
+                   '"stage": "01-ui-ux.design"}], "runners": [{"name": "ec2", "online": true}, '
+                   '{"name": "workstation", "online": false}], "today_est_usd": 0.94}'},
+        {"t": 3.0, "kind": "specialist", "role": "ui-ux",
+         "question": "What is left before the demo-export ux_signoff gate can be decided?"},
+        {"t": 21.4, "kind": "specialist_done", "role": "ui-ux", "tokens": 9840,
+         "answer": "The handoff is complete — three options with PNGs and a recommendation "
+                   "(background-job). The gate has been waiting on a human for 11 hours; "
+                   "nothing is missing from the stage side."},
+    ]
+    await conn.execute(
+        """INSERT INTO chat_turns (session_id, asked_by, user_text, final_text, status, trace,
+                                   model, requests, input_tokens, cached_input_tokens,
+                                   output_tokens, total_tokens, started_at, finished_at)
+           VALUES ($1, 'justin',
+                   'What is blocked right now, and what would it cost to unblock?',
+                   $2, 'done', $3, 'sol', 6, 41200, 33800, 1450, 42650,
+                   now() - interval '2 hours', now() - interval '2 hours' + interval '38 seconds')
+           ON CONFLICT DO NOTHING""",
+        cs1,
+        "Two things are waiting, neither on an agent:\n\n"
+        "1. **feat-20260825-demo-export** — parked at the `ux_signoff` gate for 11 hours. "
+        "The ui-ux agent confirms the handoff is complete (three options, recommendation: "
+        "background-job). Deciding the gate costs nothing but a look at the walkthrough.\n"
+        "2. **feat-20260825-demo-billing** — queued for the design workstation, which is "
+        "offline. Starting `pipeline.py daemon --runner workstation` on the design machine "
+        "unblocks it.\n\nToday's spend so far is ~$0.94 of the $50 tripwire.",
+        json.dumps(trace1))
+
+    cs2 = "consult:dev-anna:ui-ux:web-demo02"
+    await conn.execute(
+        """INSERT INTO chat_sessions (id, agent, title, created_by, run_id, last_at)
+           VALUES ($1, 'ui-ux', 'Why background-job over the wizard for large exports?',
+                   'dev-anna', 'feat-20260825-demo-export', now() - interval '26 hours')
+           ON CONFLICT (id) DO NOTHING""", cs2)
+    trace2 = [
+        {"t": 1.2, "kind": "tool", "name": "read_file",
+         "args": '{"path": "workflow/runs/feat-20260825-demo-export/01-ui-ux/report.md"}'},
+        {"t": 2.9, "kind": "tool_done",
+         "output": "# Stage Report: 01-ui-ux — feat-20260825-demo-export …"},
+    ]
+    await conn.execute(
+        """INSERT INTO chat_turns (session_id, asked_by, user_text, final_text, status, trace,
+                                   model, requests, input_tokens, cached_input_tokens,
+                                   output_tokens, total_tokens, started_at, finished_at)
+           VALUES ($1, 'dev-anna', 'Why background-job over the wizard for large exports?',
+                   $2, 'done', $3, 'sol', 3, 18400, 12100, 620, 19020,
+                   now() - interval '26 hours', now() - interval '26 hours' + interval '21 seconds')
+           ON CONFLICT DO NOTHING""",
+        cs2,
+        "Two reasons from the judge pass (report.md, options table):\n\n"
+        "- **Fewest steps for the large-file case** — the wizard front-loads choices the "
+        "user can't answer for a 2GB export; background-job asks nothing and emails the link.\n"
+        "- **Failure isolation** — a queued job can retry server-side; the wizard's inline "
+        "progress dies with the tab.\n\nThe wizard scored higher only on discoverability.",
+        json.dumps(trace2))
+
     await conn.close()
-    print("demo data seeded (runs:", ", ".join([r1, r2, r3, r4]) + ")")
+    print("demo data seeded (runs:", ", ".join([r1, r2, r3, r4]),
+          "+ 2 chat sessions, 1 custom agent)")
 
 
 if __name__ == "__main__":

@@ -432,6 +432,182 @@ details.report .prose{padding:6px 18px 16px}
 
 h2.sect{font-size:var(--text-md);font-weight:600;margin:30px 0 4px}
 p.sub{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 10px}
+
+/* ── chat: the conversation shell (docs/CHAT.md) ──────────────────────── */
+.chatwrap{display:grid;grid-template-columns:288px minmax(0,1fr);
+  height:calc(100vh - 54px)}
+.chatside{border-right:1px solid var(--edge);overflow-y:auto;
+  padding:16px 14px 24px;display:flex;flex-direction:column;gap:2px}
+.chatside .newchat{display:block;text-align:center;margin-bottom:12px;
+  padding:9px 12px;border:1px solid var(--edge);border-radius:var(--r-sm);
+  background:var(--surface-2);font-family:var(--font-label);
+  text-transform:uppercase;letter-spacing:.13em;font-size:var(--text-caps);
+  color:var(--text)}
+.chatside .newchat:hover{background:var(--surface-3)}
+.sgrp{font-family:var(--font-label);text-transform:uppercase;letter-spacing:.14em;
+  font-size:var(--text-caps);color:var(--text-dim);padding:12px 8px 5px}
+.sess{display:block;padding:8px 10px;border-radius:var(--r-sm);
+  border:1px solid transparent}
+.sess:hover{background:var(--surface-1)}
+.sess.on{background:var(--surface-2);border-color:var(--edge)}
+.sess .t1{display:flex;align-items:center;gap:7px;min-width:0}
+.sess .t1 .ttl{font-size:var(--text-xs);color:var(--text);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;flex:1}
+.sess .t2{display:flex;gap:8px;font-family:var(--font-mono);
+  font-size:var(--text-caps);color:var(--text-dim);margin-top:3px}
+.sess .t2 .ag{color:var(--text-muted);text-transform:uppercase;
+  letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess .t2 .sp{margin-left:auto;white-space:nowrap}
+.sideempty{font-size:var(--text-xs);color:var(--text-dim);line-height:1.6;
+  padding:8px 10px}
+
+.chatmain{display:flex;flex-direction:column;min-width:0}
+.chathead{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;
+  padding:16px 28px 13px;border-bottom:1px solid var(--edge)}
+.chathead .anm{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.16em;font-size:var(--text-sm);color:var(--gold-light)}
+.chathead .adesc{font-size:var(--text-xs);color:var(--text-muted);
+  margin-top:4px;max-width:76ch;line-height:1.55}
+.chathead .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chathead .totals{margin-left:auto;text-align:right;font-family:var(--font-mono);
+  font-size:var(--text-caps);color:var(--text-dim);line-height:1.6;white-space:nowrap}
+.chathead .totals .v{font-size:var(--text-lg);color:var(--text);display:block;
+  font-variant-numeric:tabular-nums}
+.chathead form.rename{margin:0}
+.chathead input.ttl{background:transparent;border:1px solid transparent;
+  border-radius:var(--r-sm);color:var(--text);font-family:var(--font-ui);
+  font-size:var(--text-md);font-weight:600;padding:2px 6px;margin-left:-6px;
+  width:min(56ch,60vw)}
+.chathead input.ttl:hover{border-color:var(--edge)}
+.chathead input.ttl:focus{border-color:var(--edge);outline:none;
+  background:var(--surface-1)}
+
+.transcript{flex:1;overflow-y:auto;padding:6px 28px 26px;scroll-behavior:smooth}
+.turn{max-width:920px;margin:0 auto}
+.msg{padding:16px 0 4px}
+.msg .who{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.15em;font-size:var(--text-caps);color:var(--text-dim);
+  display:flex;align-items:baseline;gap:10px}
+.msg .who .tm{font-family:var(--font-mono);letter-spacing:0;margin-left:auto}
+.msg.you .who{color:var(--night-3)}
+.msg.agent .who{color:var(--dawn-3)}
+.msg .utext{font-size:var(--text-base);color:var(--text);line-height:1.6;
+  margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg .atext{margin-top:6px}
+.msg .atext.streaming{white-space:pre-wrap;font-size:var(--text-sm);
+  line-height:1.65;color:var(--text)}
+.msg .atext.streaming::after{content:'▌';color:var(--dawn-3);
+  animation:caret 1.1s steps(2) infinite}
+@keyframes caret{50%{opacity:0}}
+
+/* tool lines: the agent's visible work, Claude-Code anatomy */
+.work{margin:10px 0 2px;border-left:2px solid var(--edge);padding:2px 0 2px 14px;
+  display:flex;flex-direction:column;gap:3px}
+.tl{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-muted);
+  display:flex;gap:8px;align-items:baseline;min-width:0}
+.tl .g{color:var(--dawn-2);flex:0 0 auto}
+.tl .tn{color:var(--text)}
+.tl .ta{color:var(--text-dim);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;min-width:0}
+.tl.spec .g{color:var(--night-3)}
+details.tlo{margin:-1px 0 2px 20px}
+details.tlo summary{cursor:pointer;font-family:var(--font-mono);
+  font-size:var(--text-caps);color:var(--text-dim);list-style:none}
+details.tlo summary:hover{color:var(--text-muted)}
+details.tlo summary::before{content:'▸ '}
+details.tlo[open] summary::before{content:'▾ '}
+details.tlo pre{background:var(--surface-0);border:1px solid var(--edge);
+  border-radius:var(--r-sm);padding:8px 11px;margin:5px 0 3px;overflow-x:auto;
+  font-size:var(--text-caps);color:var(--text-muted);max-height:260px;
+  overflow-y:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.tfoot{display:flex;gap:14px;margin-top:10px;font-family:var(--font-mono);
+  font-size:var(--text-caps);color:var(--text-dim);align-items:baseline;
+  flex-wrap:wrap}
+.tfoot .m{color:var(--text-muted)}
+.terr{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--danger);
+  background:#231517;border:1px solid #3A211E;border-radius:var(--r-sm);
+  padding:9px 12px;margin-top:8px;overflow-wrap:anywhere}
+.tstop{font-size:var(--text-xs);color:var(--warning);margin-top:8px}
+
+.workingline{display:flex;align-items:center;gap:9px;margin-top:12px;
+  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.13em;
+  font-size:var(--text-caps);color:var(--accent)}
+.workingline .dot{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);
+  animation:caret 1.2s steps(2) infinite}
+.workingline .stop{margin-left:6px;background:none;border:1px solid var(--edge);
+  border-radius:var(--r-pill);color:var(--text-muted);cursor:pointer;
+  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.11em;
+  font-size:var(--text-caps);padding:3px 10px}
+.workingline .stop:hover{color:var(--danger);border-color:#3A211E}
+
+.composer{border-top:1px solid var(--edge);padding:14px 28px 10px}
+.composer .cbox{max-width:920px;margin:0 auto}
+.composer textarea{width:100%;background:var(--surface-1);color:var(--text);
+  border:1px solid var(--edge);border-radius:var(--r-md);padding:12px 52px 12px 14px;
+  font-family:var(--font-ui);font-size:var(--text-base);line-height:1.5;
+  resize:none;min-height:48px;max-height:220px;display:block}
+.composer textarea:focus{outline:none;border-color:var(--gold-deep)}
+.composer textarea::placeholder{color:var(--text-dim)}
+.composer .crow{position:relative}
+.composer .send{position:absolute;right:9px;bottom:9px;width:32px;height:32px;
+  border-radius:var(--r-sm);border:1px solid var(--accent);background:var(--accent);
+  color:var(--on-accent);font-size:15px;cursor:pointer;line-height:1}
+.composer .send:disabled{background:var(--surface-3);border-color:var(--edge);
+  color:var(--text-dim);cursor:default}
+.cfoot{display:flex;gap:8px;max-width:920px;margin:9px auto 0;
+  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.13em;
+  font-size:var(--text-caps);color:var(--text-dim);flex-wrap:wrap}
+.cfoot b{color:var(--text-muted);font-weight:400}
+
+/* ── chat hub + agent roster ──────────────────────────────────────────── */
+.hub{flex:1;overflow-y:auto;padding:24px 28px}
+.hub .inner{max-width:920px;margin:0 auto}
+.hub h1{font-size:var(--text-lg);font-weight:600;margin:6px 0 4px}
+.lede{font-size:var(--text-sm);color:var(--text-muted);margin:0 0 18px;
+  max-width:78ch;line-height:1.6}
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+  gap:12px;margin:14px 0 4px}
+.acard{background:var(--surface-1);border:1px solid var(--edge);
+  border-top:1px solid var(--edge-top);border-radius:var(--r-md);
+  padding:13px 15px;cursor:pointer;display:block}
+.acard:hover{background:var(--surface-2)}
+.acard.sel{border-color:var(--gold-deep);background:var(--surface-2)}
+.acard .an{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.14em;font-size:var(--text-caps);color:var(--text)}
+.acard.sel .an{color:var(--accent)}
+.acard .ad{font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;
+  margin:6px 0 0;display:-webkit-box;-webkit-line-clamp:3;
+  -webkit-box-orient:vertical;overflow:hidden}
+.acard .am{display:flex;gap:10px;margin-top:10px;font-family:var(--font-mono);
+  font-size:var(--text-caps);color:var(--text-dim);flex-wrap:wrap}
+.acard.hero{grid-column:1 / -1;background:var(--surface-2);
+  border-color:#2E2A22;padding:16px 18px}
+.acard.hero .an{color:var(--gold-light);font-size:var(--text-xs)}
+.acard.hero .ad{-webkit-line-clamp:unset;max-width:88ch;color:var(--text)}
+.roster .acard{cursor:default}
+.roster .acard:hover{background:var(--surface-1)}
+.acard .arow{display:flex;gap:8px;row-gap:8px;align-items:center;margin-top:11px;
+  flex-wrap:wrap}
+.acard .arow .go{margin-left:auto;white-space:nowrap}
+.newagent{background:var(--surface-0);border:1px dashed var(--edge);
+  border-radius:var(--r-md);padding:16px 18px;margin-top:18px}
+.newagent h3{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.14em;font-size:var(--text-caps);color:var(--text-muted);
+  font-weight:400;margin:0 0 10px}
+.newagent .frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.newagent input[type=text]{flex:1;min-width:220px}
+.newagent textarea{width:100%;background:var(--surface-0);color:var(--text);
+  border:1px solid var(--edge);border-radius:var(--r-sm);padding:9px 11px;
+  font-family:var(--font-ui);font-size:var(--text-sm);min-height:70px;resize:vertical}
+.newagent .hint{font-size:var(--text-caps);color:var(--text-dim);margin:4px 0 10px;
+  line-height:1.6}
+.newagent label.radio{display:inline-flex;gap:6px;align-items:center;
+  font-size:var(--text-xs);color:var(--text-muted);margin-right:14px}
+.notice{border:1px solid #3A2A1E;background:var(--warning-soft);color:var(--text-muted);
+  border-radius:var(--r-md);padding:11px 14px;font-size:var(--text-xs);
+  margin:14px 0;line-height:1.55}
+.notice b{color:var(--warning)}
 """
 
 # The reload keeps the board live without a JS framework: skip whenever the
@@ -455,15 +631,18 @@ SCRIPT = """
 </script>
 """
 
-NAV = [("Board", "/"), ("Gates", "/gates"), ("Runs", "/runs"), ("Spend", "/spend")]
+NAV = [("Board", "/"), ("Chat", "/chat"), ("Gates", "/gates"), ("Runs", "/runs"),
+       ("Agents", "/agents"), ("Spend", "/spend")]
 
 
 def page(title: str, body: str, user: str | None = None, active: str = "/",
-         clock: str = "") -> str:
+         clock: str = "", auto_reload: bool = True) -> str:
+    """auto_reload=False for live-streaming pages (chat): the 30s reloader would
+    tear down an in-flight SSE transcript; those pages update themselves."""
     if not user:                                       # login page: no shell
         return (f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
                 f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
-                f"<title>{H(title)}</title>{FONTS}<style>{CSS}</style></head>"
+                f"<title>{H(title)}</title><link rel='icon' href='data:,'>{FONTS}<style>{CSS}</style></head>"
                 f"<body>{body}</body></html>")
     tabs = "".join(
         f"<a href='{href}'{' class=on' if href == active else ''}>{H(name)}</a>"
@@ -476,7 +655,7 @@ def page(title: str, body: str, user: str | None = None, active: str = "/",
     return (f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
             f"<title>{H(title)}</title>{FONTS}<style>{CSS}</style></head>"
-            f"<body>{top}{body}{SCRIPT}</body></html>")
+            f"<body>{top}{body}{SCRIPT if auto_reload else ''}</body></html>")
 
 
 # ── atoms ────────────────────────────────────────────────────────────────────

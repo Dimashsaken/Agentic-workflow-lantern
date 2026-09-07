@@ -47,6 +47,8 @@ from pipeline import (  # noqa: E402
     FEATURE_STAGES, STAGE_DIR, STAGE_RUNNER, advance, db_urls, est_cost_usd,
     log_event,
 )
+from orchestrator import ROLE_FOR_STAGE  # noqa: E402
+import chat  # noqa: E402
 import ui  # noqa: E402
 from ui import H, ago, chip, fmt_int, fmt_money, group_head, srail, strip, strip_header  # noqa: E402
 
@@ -60,6 +62,10 @@ for _s, _d, *_rest in FEATURE_STAGES:
 REPO = Path(__file__).resolve().parents[2]
 app = FastAPI(title="Lantern Mission Control")
 pool: asyncpg.Pool | None = None
+
+# Which consultable role owns each stage dir (run-page "consult about this run" links).
+DIR_ROLE = {d: ROLE_FOR_STAGE.get(d, "coding" if d == "03-coding" else None)
+            for d in dict.fromkeys(s[1] for s in FEATURE_STAGES)}
 
 SESSION_COOKIE = "lantern_session"
 SESSION_TTL = 7 * 24 * 3600
@@ -132,6 +138,31 @@ async def get_pool() -> asyncpg.Pool:
     if pool is None:
         pool = await asyncpg.create_pool(db_urls()[1], min_size=1, max_size=5)
     return pool
+
+
+# ── chat surface (docs/CHAT.md): routes live in chat.py, model work in
+# tools/azure-runner/chat_service.py. setup() hands chat our pool/auth/shell so
+# the login rules stay defined exactly once, here.
+
+def page_for_chat(title, body, user, active, clock, auto_reload=True):
+    return ui.page(title, body, user, active, clock, auto_reload=auto_reload)
+
+
+app.include_router(chat.setup(get_pool=get_pool, current_user=current_user,
+                              page=page_for_chat, render_markdown=lambda t: render_markdown(t)))
+
+
+@app.on_event("startup")
+async def _chat_startup() -> None:
+    try:
+        await chat.on_startup()     # idempotent schema upgrade + reap orphaned turns
+    except Exception as e:          # noqa: BLE001 — the board must come up even if
+        print(f"chat startup skipped: {e}", file=sys.stderr)  # Postgres is briefly away
+
+
+@app.on_event("shutdown")
+async def _chat_shutdown() -> None:
+    await chat.on_shutdown()        # close SSE streams so restarts don't hang on them
 
 
 # ── report honesty: what does the stage's own report say? ────────────────────
@@ -844,19 +875,33 @@ async def spend(request: Request):
             GROUP BY run_id, model
             ORDER BY coalesce(sum(total_tokens),0) DESC LIMIT 15""")
     alltime = await p.fetch(f"SELECT {cols} FROM stage_executions GROUP BY model")
+    # Consults burn credits too (D11/D13) — chat_turns sits in the same ledger.
+    chat_cols = cols.replace("total_tokens IS NULL",
+                             "total_tokens IS NULL AND status <> 'running'")
+    try:
+        chat_daily = await p.fetch(
+            f"""SELECT date_trunc('day', t.started_at)::date AS day, s.agent, {chat_cols}
+                FROM chat_turns t JOIN chat_sessions s ON s.id = t.session_id
+                WHERE t.started_at >= now() - interval '14 days'
+                GROUP BY 1, s.agent, model ORDER BY 1 DESC, s.agent""")
+        chat_alltime = await p.fetch(f"SELECT {chat_cols} FROM chat_turns GROUP BY model")
+    except asyncpg.PostgresError:          # database predates the chat tables
+        chat_daily, chat_alltime = [], []
     tripwire = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "50"))
 
-    total_cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"]) for r in alltime)
-    total_unmetered = sum(r["unmetered"] for r in alltime)
+    total_cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+                     for r in [*alltime, *chat_alltime])
+    total_unmetered = sum(r["unmetered"] for r in [*alltime, *chat_alltime])
     today_rows = [r for r in daily if r["day"] == now.date()]
-    today_cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"]) for r in today_rows)
+    today_cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+                     for r in [*today_rows, *[r for r in chat_daily if r["day"] == now.date()]])
 
     body = [f"""<section class='readout' style='grid-template-columns:repeat(3,1fr) auto'>
       <div><div class='caps'>Spent today</div>
         <div class='v'>{H(fmt_money(today_cost))}<small> / {tripwire:.0f}</small></div>
         <div class='d'>{min(today_cost / tripwire * 100, 999):.0f}% of the daily tripwire</div></div>
       <div><div class='caps'>Ledger total</div><div class='v'>{H(fmt_money(total_cost))}</div>
-        <div class='d'>every metered execution, all time · est.</div></div>
+        <div class='d'>every metered stage and consult, all time · est.</div></div>
       <div><div class='caps'>Unmetered</div>
         <div class='v{' bad' if total_unmetered else ''}'>{total_unmetered}</div>
         <div class='d'>executions with no token counts — real spend is higher</div></div>
@@ -909,6 +954,25 @@ async def spend(request: Request):
           <div class='stripwrap'><table class='spendtbl'>
           <tr><th>Run</th><th>Model</th><th class='r'>Stages</th><th class='r'>Input</th>
           <th class='r'>Output</th><th class='r'>Est. $</th></tr>{rows}</table></div>""")
+
+    if chat_daily:
+        rows = "".join(
+            f"<tr><td class='d'>{r['day']:%b %d}</td>"
+            f"<td><a href='/chat?agent={H(r['agent'])}'>{H(r['agent'])}</a></td>"
+            f"<td>{H(r['model'] or '— unmetered')}</td><td class='r'>{r['n']}</td>"
+            + (f"<td class='r'>{fmt_int(r['inp'])}</td><td class='r'>{fmt_int(r['outp'])}</td>"
+               f"<td class='r'>{H(fmt_money(est_cost_usd(r['inp'], r['cached'], r['outp'], r['model'])))}</td>"
+               if r["model"] or r["inp"] else
+               "<td class='r'>—</td><td class='r'>—</td><td class='r'>—</td>")
+            + "</tr>"
+            for r in chat_daily)
+        body.append(f"""<h2 class='sect'>Chat &amp; consults, last 14 days</h2>
+          <p class='sub'>Every web consult turn, by agent — same ledger, same rates
+          (docs/CHAT.md). CLI consults land in the events log, not here.</p>
+          <div class='stripwrap'><table class='spendtbl'>
+          <tr><th>Day</th><th>Agent</th><th>Model</th><th class='r'>Turns</th>
+          <th class='r'>Input</th><th class='r'>Output</th><th class='r'>Est. $</th></tr>
+          {rows}</table></div>""")
 
     p_in = os.environ.get("LANTERN_PRICE_IN_PER_M", "4")
     p_c = os.environ.get("LANTERN_PRICE_CACHED_IN_PER_M", "1")
@@ -980,7 +1044,10 @@ async def run_page(run_id: str, request: Request):
         <div class='meta'>brief <code>{H(run['brief'])}</code><br>
           started by <b>{H(run['created_by'])}</b> · {run['created_at']:%b %d %H:%M} UTC
           · last activity {ago((now - run['updated_at']).total_seconds())} ago<br>
-          product repo: {repo_bit}</div></div>
+          product repo: {repo_bit}<br>
+          <a href='/chat?agent=lantern&amp;run={H(run_id)}'
+             style='color:var(--dawn-3);text-decoration:underline;text-underline-offset:3px'>
+            💬 Ask Lantern about this run</a></div></div>
       <div class='totals'><div class='caps'>Est. spend</div>
         <div class='v'>{H(fmt_money(cost) if tot else '—')}</div>
         <div class='d'>{H(tok_line)}{unm_line}</div></div></div>"""]
@@ -1040,6 +1107,10 @@ async def run_page(run_id: str, request: Request):
                 f"{KIND_ICON.get(a['kind'], '')}{H(a['kind'])}</a>"
                 for a in stage_arts)
             bits.append(f"<div class='arts'>{links}</div>")
+        role = DIR_ROLE.get(d)
+        if role and tries:      # a stage that ran can be asked about (consult mode, D11)
+            bits.append(f"<div class='arts'><a href='/chat?agent={H(role)}&amp;run={H(run_id)}'>"
+                        f"💬 consult {H(role)} about this run</a></div>")
         body.append(f"<div class='{cls}'>{''.join(bits)}</div>")
 
     if events:
