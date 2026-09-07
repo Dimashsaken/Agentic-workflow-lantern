@@ -73,6 +73,12 @@ if [ -n "${LANTERN_PRODUCT_REPO:-}" ]; then
     git -C /work/product config user.name  "${LANTERN_GIT_AUTHOR_NAME:-lantern-bot}"
     git -C /work/product config user.email "${LANTERN_GIT_AUTHOR_EMAIL:-lantern-bot@users.noreply.github.com}"
     git -C /work/product config commit.gpgsign false
+    # D6 audit trail: every commit from this sandbox carries the agent trailer, whether
+    # or not the model remembers to write it.
+    HOOK=/work/product/.git/hooks/prepare-commit-msg
+    printf '%s\n' '#!/bin/sh' \
+      'grep -q "^Lantern-Agent:" "$1" || printf "\nLantern-Agent: coding\n" >> "$1"' > "$HOOK"
+    chmod +x "$HOOK"
     if git -C /work/product show-ref --verify --quiet "refs/remotes/origin/${LANTERN_CODING_BRANCH}"; then
       git -C /work/product checkout --quiet -b "${LANTERN_CODING_BRANCH}" "origin/${LANTERN_CODING_BRANCH}"
     else

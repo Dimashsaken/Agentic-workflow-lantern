@@ -834,6 +834,13 @@ def prepare_coding_checkout(checkout: Path, branch: str) -> None:
     _git("config", "user.name", GIT_AUTHOR_NAME, cwd=checkout)
     _git("config", "user.email", GIT_AUTHOR_EMAIL, cwd=checkout)
     _git("config", "commit.gpgsign", "false", cwd=checkout)
+    # D6 audit trail: the agent trailer on every commit, hook-enforced (same as the
+    # sandbox entrypoint) rather than left to the model's memory.
+    hook = checkout / ".git" / "hooks" / "prepare-commit-msg"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text('#!/bin/sh\ngrep -q "^Lantern-Agent:" "$1" || '
+                    'printf "\\nLantern-Agent: coding\\n" >> "$1"\n', encoding="utf-8", newline="\n")
+    hook.chmod(0o755)
     if _git("rev-parse", "--verify", "-q", f"refs/remotes/origin/{branch}", cwd=checkout).returncode == 0:
         r = _git("checkout", "-q", "-b", branch, f"origin/{branch}", cwd=checkout)
     else:

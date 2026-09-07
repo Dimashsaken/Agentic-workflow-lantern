@@ -155,6 +155,10 @@ def main() -> int:
     target.write_text("NEW = 2\n", encoding="utf-8")
     out = o._product_shell(f"git add -A && git commit -q -m '{RUN_ID}: task 1 — add NEW'")
     check("agent can commit through the shell", out.startswith("exit 0"), out[:200])
+    msg = git("log", "-1", "--format=%B", cwd=checkout)
+    check("commit carries the Lantern-Agent trailer (hook, D6)", "Lantern-Agent: coding" in msg, msg)
+    check("commit is authored by the bot identity",
+          git("log", "-1", "--format=%an", cwd=checkout) == p.GIT_AUTHOR_NAME)
     (checkout / "leftover.txt").write_text("forgot to commit me\n", encoding="utf-8")
     problems = o.finalize_coding(RUN_ID, "03-coding")
     check("finalize succeeds with commits", problems == [], problems)
