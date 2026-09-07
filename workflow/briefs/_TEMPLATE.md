@@ -7,6 +7,7 @@
 - **Target release:**
 - **Product repo:** <https://github.com/org/repo — which repository implements this>
 - **Base branch:** main
+- **Working branch:** <existing feat/* branch to continue on, or leave blank for a fresh one derived from the run id>
 - **Coding mode:** human   <!-- human = the assigned developer codes stage 3 in their own session; auto = the coding agent implements the approved plan and the pipeline opens the pull request (D14) -->
 
 ## Problem

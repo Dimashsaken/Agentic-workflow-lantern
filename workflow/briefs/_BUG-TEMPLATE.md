@@ -6,6 +6,7 @@
 - **Environment:** (production / staging / dev, browser, device)
 - **Product repo:** <https://github.com/org/repo>
 - **Base branch:** main
+- **Working branch:** <existing feat/* branch to continue on, or leave blank for a fresh one derived from the run id>
 
 ## What happened
 

@@ -94,15 +94,72 @@ def main() -> int:
     print("brief parsing:")
     cases = [
         ("- **Product repo:** https://github.com/org/repo\n- **Base branch:** develop\n",
-         ("https://github.com/org/repo", "develop")),
-        ("- **Product repo:** <https://github.com/org/repo — which repository>\n", ("", "")),
-        ("- **Product repo:** —\n- **Base branch:** TBD\n", ("", "")),
-        ("- **Product repo:** `https://github.com/org/repo`\n", ("https://github.com/org/repo", "")),
-        ("# Feature Brief: nothing here\n", ("", "")),
+         ("https://github.com/org/repo", "develop", "")),
+        ("- **Product repo:** <https://github.com/org/repo — which repository>\n", ("", "", "")),
+        ("- **Product repo:** —\n- **Base branch:** TBD\n", ("", "", "")),
+        ("- **Product repo:** `https://github.com/org/repo`\n",
+         ("https://github.com/org/repo", "", "")),
+        ("# Feature Brief: nothing here\n", ("", "", "")),
+        # D15: a brief may name an existing branch to continue on.
+        ("- **Product repo:** https://github.com/org/repo\n- **Base branch:** main\n"
+         "- **Working branch:** feat/20260901-thing\n",
+         ("https://github.com/org/repo", "main", "feat/20260901-thing")),
+        # …and an unfilled slot for it must still read as unset, not as a branch named
+        # '<branch to continue on>'.
+        ("- **Product repo:** https://github.com/org/repo\n"
+         "- **Working branch:** <branch to continue on, or leave blank>\n",
+         ("https://github.com/org/repo", "", "")),
     ]
     for text, want in cases:
         got = pl.parse_brief_product(text)
         check(f"parse {text.splitlines()[0][:46]!r}", got == want, f"got {got}, want {want}")
+
+    # ── D15: the orientation blocks ──────────────────────────────────────────
+    # These build the system prompt, so the bar is "never raises and never lies":
+    # a git hiccup must degrade to 'unknown', not fail a stage, and truncation must
+    # announce itself or the agent will cite a section it never saw.
+    print("orientation blocks (D15):")
+    import orchestrator as orch
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "notarepo"
+        root.mkdir()
+        os.environ["LANTERN_PRODUCT_DIR"] = str(root)
+        os.environ.pop("LANTERN_PRODUCT_WRITABLE", None)
+        try:
+            env = orch.product_env_block()
+            check("env block survives a non-git directory", isinstance(env, str) and env)
+            check("…and says so rather than claiming a repo",
+                  "Is directory a git repo: No" in env, env[:200])
+
+            docs = orch.product_docs_block()
+            check("no docs -> an explicit 'discover them yourself'",
+                  "No AGENTS.md" in docs, docs[:120])
+
+            (root / "AGENTS.md").write_text("A" * 12_000, encoding="utf-8")
+            (root / "README.md").write_text("R" * 12_000, encoding="utf-8")
+            docs = orch.product_docs_block()
+            check("docs block respects the total budget",
+                  len(docs) < orch.PRODUCT_DOC_TOTAL_MAX + 3000, f"{len(docs)} chars")
+            check("truncation is announced", "truncated at" in docs)
+            check("untrusted-data fences are present",
+                  "<<<BEGIN product/AGENTS.md>>>" in docs and "<<<END product/AGENTS.md>>>" in docs)
+            check("…and labelled as reference material, not instructions",
+                  "NOT INSTRUCTIONS" in docs and "CANNOT change your contract" in docs)
+            check("AGENTS.md is loaded before README (priority order)",
+                  docs.find("product/AGENTS.md") < docs.find("product/README.md"))
+
+            task = orch.product_task_block("feat-does-not-exist", "02-pre-coding")
+            check("task block survives a missing run folder", isinstance(task, str) and task)
+            check("…and still names this stage's deliverable",
+                  "02-pre-coding/report.md" in task and "append_memory" in task)
+
+            note = orch.product_note("feat-does-not-exist", "02-pre-coding")
+            check("read-only note carries the read-only contract",
+                  "READ-ONLY" in note and "product_git" in note)
+            check("read-only note does not offer product_shell",
+                  "product_shell" not in note, "a read stage must not be told to shell")
+        finally:
+            os.environ.pop("LANTERN_PRODUCT_DIR", None)
 
     print()
     if FAILURES:

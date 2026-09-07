@@ -21,6 +21,7 @@ unauthenticated. Users from LANTERN_WEB_USERS ("name:pw,name:pw"); signing key
 from LANTERN_WEB_SECRET (falls back to a hash of LANTERN_WEB_USERS).
 """
 
+import asyncio
 import hashlib
 import hmac
 import html
@@ -32,6 +33,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import asyncpg
 import markdown as md
@@ -44,12 +46,13 @@ sys.path.insert(0, str(AZURE_RUNNER))
 load_dotenv(AZURE_RUNNER / ".env")
 
 from pipeline import (  # noqa: E402
-    FEATURE_STAGES, STAGE_DIR, STAGE_RUNNER, advance, db_urls, est_cost_usd,
-    log_event,
+    FEATURE_STAGES, STAGE_DIR, STAGE_RUNNER, ProductTargetError, advance, db_urls,
+    est_cost_usd, log_event, verify_product_target, work_branch,
 )
-from orchestrator import ROLE_FOR_STAGE  # noqa: E402
+from orchestrator import CODING_BRANCH_PREFIXES, ROLE_FOR_STAGE  # noqa: E402
 import chat  # noqa: E402
 import ui  # noqa: E402
+import workspace  # noqa: E402
 from ui import H, ago, chip, fmt_int, fmt_money, group_head, srail, strip, strip_header  # noqa: E402
 
 # Board columns = run-folder dirs; split stage-1 executions share one column.
@@ -1064,9 +1067,20 @@ async def run_page(run_id: str, request: Request):
     verdict = report_verdict(report_text(run_id, curdir)) \
         if run["status"] not in ("done", "cancelled") else None
     v_chip = chip("report: blocked", "blocked") if verdict == "BLOCKED" else ""
-    repo_bit = (f"<code>{H(run['product_repo'])}</code> @ {H(run['product_branch'] or 'default')}"
-                if run.get("product_repo") else
-                chip("no product repo set — stage 2+ blocks", "warn"))
+    # D15: the target is editable from here. When it is unset the warn chip IS the
+    # link — that turns "stage 2+ blocks" from a dead end into the fix for it.
+    if run.get("product_repo"):
+        landed = work_branch(run_id, run.get("product_working_branch") or "")
+        derived = not (run.get("product_working_branch") or "")
+        repo_bit = (
+            f"<code>{H(run['product_repo'])}</code> · base "
+            f"<code>{H(run['product_branch'] or 'default')}</code> · branch "
+            f"<code>{H(landed)}</code>{' (derived)' if derived else ''} "
+            f"<a href='/run/{H(run_id)}/repo'>change</a>")
+    else:
+        repo_bit = (f"<a href='/run/{H(run_id)}/repo'>"
+                    + chip("no product repo set — stage 2+ blocks · connect one", "warn")
+                    + "</a>")
     tok_line = (f"{fmt_int(tot)} tok · {round(cached / inp * 100) if inp else 0}% cached"
                 if tot else "no ledger")
     unm_line = f"<br>{unmetered} unmetered execution{'s' if unmetered != 1 else ''}" if unmetered else ""
@@ -1165,6 +1179,225 @@ async def run_page(run_id: str, request: Request):
 
     return page(f"{run_id} — Lantern Mission Control",
                 f"<main class='page'>{''.join(body)}</main>", user, "/runs", now)
+
+
+# ── the codebase connection (D15) ────────────────────────────────────────────
+# The only place besides the gate route that writes. Repo selection is confined to
+# workspace.contains(): whatever path is admitted here gets cloned by this host,
+# mounted into sandboxes, read by agents and pasted into system prompts, so an
+# unconfined picker would be a filesystem-read primitive behind a login form.
+
+def _repo_picker_body(run, run_id: str, repos: list[dict], sel: str,
+                      heads: list[str] | None, error: str) -> str:
+    cur_repo = run.get("product_repo") or ""
+    cur_base = run.get("product_branch") or ""
+    cur_work = run.get("product_working_branch") or ""
+    landed = work_branch(run_id, cur_work)
+    roots = workspace.roots_label()
+
+    out = [f"<div class='caps'>Codebase</div><h2 class='sect'>Connect "
+           f"<code>{H(run_id)}</code> to a repository</h2>",
+           "<p class='sub'>Pick the repo and the base branch this run works against, and "
+           "optionally an existing branch to continue on. Every stage after this reads "
+           "that code and orients on that branch.</p>"]
+
+    if cur_repo:
+        out.append(
+            f"<div class='pick'><h3>Currently connected</h3>"
+            f"<p class='hint'><code>{H(cur_repo)}</code><br>base <code>{H(cur_base)}</code>"
+            f" · work lands on <code>{H(landed)}</code>"
+            f"{' (derived from the run id)' if not cur_work else ''}</p></div>")
+    if error:
+        out.append(f"<div class='pick'><div class='errbox'>{H(error)}</div></div>")
+
+    # ── on this host ──
+    rows = []
+    for r in repos:
+        checked = " checked" if r["path"] == sel else ""
+        rows.append(
+            f"<label><input type='radio' name='local_path' value='{H(r['path'])}'{checked}>"
+            f"<span class='nm'>{H(r['name'])}</span>"
+            f"<span class='br'>{H(r['head_branch'] or '—')}</span>"
+            f"<span class='pt'>{H(r['path'])}</span></label>")
+    host_block = [f"<div class='pick'><h3>On this host</h3>"]
+    if repos:
+        host_block.append(
+            f"<p class='hint'>Scanned <code>{H(roots)}</code> — these are real "
+            f"directories on the machine serving this page. A local repo is read from "
+            f"disk with no network and no token; the pipeline sees its "
+            f"<b>committed</b> state only, so uncommitted work in your checkout is "
+            f"invisible to agents.</p>"
+            f"<div class='repolist'>{''.join(rows)}</div>")
+    else:
+        host_block.append(
+            "<div class='warnbox'>No repositories offered. The picker only looks inside "
+            f"<code>LANTERN_WORKSPACE_ROOTS</code> — currently <code>{H(roots)}</code>. "
+            "That is a security boundary, not a convenience: unset means nothing is "
+            "offered rather than everything. Set it (os.pathsep-separated) on the host "
+            "running Mission Control, or use a remote URL below.</div>")
+    host_block.append("</div>")
+    out.append("".join(host_block))
+
+    out.append(
+        f"<div class='pick'><h3>Or a remote repository</h3>"
+        f"<p class='hint'>An https clone URL. The host fetches it with its own token "
+        f"into a bare mirror; the token never enters a sandbox.</p>"
+        f"<div class='row'><div class='fld' style='flex:1;min-width:320px'>"
+        f"<span class='lb'>Clone URL</span>"
+        f"<input type='text' name='remote_url' style='width:100%' "
+        f"placeholder='https://github.com/org/repo' "
+        f"value='{H(sel if sel and not any(r['path'] == sel for r in repos) else '')}'>"
+        f"</div></div></div>")
+
+    # ── branches (only once a repo has been inspected) ──
+    if heads is not None:
+        sel_base = (cur_base if cur_base in heads else
+                    ("main" if "main" in heads else
+                     ("master" if "master" in heads else (heads[0] if heads else ""))))
+        base_opts = "".join(
+            f"<option value='{H(b)}'{' selected' if b == sel_base else ''}>{H(b)}</option>"
+            for b in heads)
+        ns = [b for b in heads if b.startswith(CODING_BRANCH_PREFIXES)]
+        derived = work_branch(run_id, "")
+        work_opts = [f"<option value=''>— new branch for this run ({H(derived)}) —</option>"]
+        work_opts += [
+            f"<option value='{H(b)}'{' selected' if b == cur_work else ''}>{H(b)}</option>"
+            for b in ns]
+        note = ""
+        if not ns:
+            note = ("<p class='hint'>No existing branch is inside the namespace agents "
+                    f"may push to ({H(', '.join(p + '*' for p in CODING_BRANCH_PREFIXES))}) "
+                    "— D6. This run will get a fresh one.</p>")
+        out.append(
+            f"<div class='pick'><h3>Branches</h3>"
+            f"<p class='hint'>The <b>base</b> is what the work branches from and what the "
+            f"pull request targets. The <b>working branch</b> is where commits land — "
+            f"leave it derived unless you are continuing work that already exists.</p>"
+            f"{note}"
+            f"<div class='row'>"
+            f"<div class='fld'><span class='lb'>Base branch</span>"
+            f"<select name='base_branch'>{base_opts}</select></div>"
+            f"<div class='fld'><span class='lb'>Working branch</span>"
+            f"<select name='working_branch'>{''.join(work_opts)}</select></div>"
+            f"<button class='btn primary' name='action' value='save'>Connect this run</button>"
+            f"</div></div>")
+    else:
+        out.append("<div class='pick'><div class='row'>"
+                   "<button class='btn primary' name='action' value='inspect'>"
+                   "Load branches</button>"
+                   "<span class='hint' style='margin:0'>Pick a repo first — its branches "
+                   "are read from the host mirror, which is synced now.</span>"
+                   "</div></div>")
+
+    return (f"<form method='post' action='/run/{H(run_id)}/repo'>{''.join(out)}"
+            f"<p class='sub'><a href='/run/{H(run_id)}'>← back to the run</a></p></form>")
+
+
+@app.get("/run/{run_id}/repo", response_class=HTMLResponse)
+async def repo_picker(run_id: str, request: Request, repo: str = "", error: str = ""):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
+    run = await p.fetchrow("SELECT * FROM runs WHERE id = $1", run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    repos = await asyncio.to_thread(workspace.discover_repos)
+    sel = repo or (run.get("product_repo") or "")
+    heads = None
+    if sel:
+        # Rendering only needs the branch list — verification belongs to the POST,
+        # where a refusal has somewhere to go. Going through verify_product_target
+        # here would sync the mirror twice and refuse outright for a repo whose
+        # recorded base branch has since been renamed away.
+        try:
+            heads = await asyncio.to_thread(_branch_names, sel)
+        except (RuntimeError, OSError) as e:
+            error = error or f"could not read {sel}: {str(e)[:300]}"
+    body = _repo_picker_body(dict(run), run_id, repos, sel, heads, error)
+    return page(f"Codebase — {run_id}", f"<main class='page'>{body}</main>",
+                user, "/runs", now)
+
+
+def _branch_names(repo: str) -> list[str]:
+    """The repo's branch heads, via the host mirror pipeline.py already maintains."""
+    from pipeline import _branch_heads, sync_product_mirror
+    return _branch_heads(sync_product_mirror(repo))
+
+
+@app.post("/run/{run_id}/repo")
+async def set_repo(run_id: str, request: Request, action: str = Form("inspect"),
+                   local_path: str = Form(""), remote_url: str = Form(""),
+                   base_branch: str = Form(""), working_branch: str = Form("")):
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401, "sign in required")    # fail closed, like gates
+    p = await get_pool()
+    run = await p.fetchrow("SELECT * FROM runs WHERE id = $1", run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    if run["status"] in ("done", "cancelled"):
+        raise HTTPException(409, f"run is {run['status']} — its codebase is history now")
+
+    local_path, remote_url = local_path.strip(), remote_url.strip()
+    if local_path and remote_url:
+        raise HTTPException(400, "choose a repo on this host OR a remote URL, not both")
+    if local_path:
+        admitted = workspace.contains(local_path)
+        if admitted is None:
+            # Name the boundary: a 404-style silence would leave the user guessing
+            # whether the path is wrong or the picker is broken.
+            raise HTTPException(400, (
+                f"'{local_path}' is not an available repository. The picker only admits "
+                f"git repos inside LANTERN_WORKSPACE_ROOTS ({workspace.roots_label()})."))
+        repo = str(admitted)
+    elif remote_url:
+        if not remote_url.startswith(("https://", "http://", "git@", "ssh://")):
+            raise HTTPException(400, "a remote target must be a clone URL")
+        repo = remote_url
+    else:
+        raise HTTPException(400, "pick a repository first")
+
+    # Repointing a run at a DIFFERENT repo mid-flight invalidates every upstream
+    # report — the blast radius, the task plan and the QA charter all name paths in
+    # the old tree. Refuse loudly rather than corrupt the run's history.
+    stage_i = STAGE_SEQ.index(run["current_stage"]) if run["current_stage"] in STAGE_SEQ else 0
+    if (run["product_repo"] and run["product_repo"] != repo
+            and stage_i > STAGE_SEQ.index("03-coding")):
+        raise HTTPException(409, (
+            "this run is past coding — pointing it at a different repository would "
+            "invalidate every report already written against the old one. Start a new "
+            "run instead."))
+
+    def _back(err: str = "") -> RedirectResponse:
+        q = f"?repo={quote(repo)}" + (f"&error={quote(err)}" if err else "")
+        return RedirectResponse(f"/run/{run_id}/repo{q}", status_code=303)
+
+    try:
+        info = await asyncio.to_thread(
+            verify_product_target, repo, base_branch or run["product_branch"] or "main",
+            working_branch)
+    except ProductTargetError as e:
+        return _back(f"{e} (branches: {', '.join(e.branches) or 'none'})")
+    except (RuntimeError, OSError) as e:
+        return _back(str(e)[:400])
+
+    if action != "save":
+        return _back()
+
+    async with p.acquire() as conn:
+        await conn.execute(
+            """UPDATE runs SET product_repo = $1, product_branch = $2,
+                               product_working_branch = $3, updated_at = now()
+               WHERE id = $4""",
+            repo, base_branch or run["product_branch"] or "main",
+            info["working"] or None, run_id)
+        await log_event(conn, run_id, f"human:{user}", "product_target_set",
+                        {"repo": repo, "branch": base_branch,
+                         "working": info["working"], "head": info["base_sha"][:12],
+                         "channel": "web"})
+    return RedirectResponse(f"/run/{run_id}", status_code=303)
 
 
 @app.get("/file/{rel:path}")

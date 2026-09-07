@@ -37,7 +37,7 @@ from agents import Agent, Runner, set_default_openai_api, set_default_openai_cli
 from agents.extensions.memory import SQLAlchemySession
 
 from orchestrator import (
-    BROWSER_ROLES, check_coding_handoff, finalize_coding, max_turns_for, stage_tools, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
+    BROWSER_ROLES, CODING_BRANCH_PREFIXES, check_coding_handoff, finalize_coding, max_turns_for, stage_tools, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
     USAGE_MARKER, append_file, azure_v1_client, build_consult_instructions,
     build_instructions, check_postconditions, check_stage_inputs, collect_export,
     consult_roles, db_urls,
@@ -146,6 +146,16 @@ def coding_branch(run_id: str) -> str:
     return "feat/" + run_id
 
 
+def work_branch(run_id: str, working_branch: str = "") -> str:
+    """The branch this run's code lands on (D15).
+
+    A run may name an EXISTING branch to continue on; when it does not, the branch is
+    derived from the run id exactly as it always was. coding_branch() stays the pure
+    default so the derivation has one definition and one set of assertions.
+    """
+    return (working_branch or "").strip() or coding_branch(run_id)
+
+
 def parse_brief_coding_mode(text: str) -> str:
     """`- **Coding mode:** auto|human` in a brief; anything else reads as unset ('')."""
     m = re.search(r"^\s*-\s*\*\*Coding mode:\*\*\s*(.+?)\s*$", text, re.M | re.I)
@@ -155,8 +165,10 @@ def parse_brief_coding_mode(text: str) -> str:
     return v if v in CODING_MODES else ""
 
 
-def parse_brief_product(text: str) -> tuple[str, str]:
-    """Pull `- **Product repo:** <url>` / `- **Base branch:** <branch>` out of a brief.
+def parse_brief_product(text: str) -> tuple[str, str, str]:
+    """Pull `- **Product repo:**` / `- **Base branch:**` / `- **Working branch:**` out
+    of a brief. Returns (repo, base, working); working is '' when the run should get a
+    fresh branch derived from its id (D15).
 
     Placeholder values (em-dash, TBD, or an unfilled <angle-bracket> template slot)
     read as 'not set' — an unfilled template must not look like a configured target.
@@ -171,7 +183,7 @@ def parse_brief_product(text: str) -> tuple[str, str]:
         if v.startswith("<") and v.endswith(">"):
             return ""
         return v
-    return field("Product repo"), field("Base branch")
+    return field("Product repo"), field("Base branch"), field("Working branch")
 
 
 def _mirror_path(repo: str) -> Path:
@@ -236,15 +248,35 @@ async def product_target(conn, run_id: str) -> tuple[str, str]:
     return repo, (branch if repo else "")
 
 
-def product_mount_args(repo: str, branch: str) -> list[str]:
-    """Docker args that give a sandbox a read-only, credential-free product checkout."""
+async def product_work_branch(conn, run_id: str) -> str:
+    """The branch this run works ON, resolved (D15) — the chosen one, else derived.
+
+    A sibling of product_target() rather than a third tuple element on purpose: every
+    existing caller unpacks that 2-tuple, and an additive function is something a
+    long-lived daemon picks up on restart with no coordinated deploy.
+    """
+    wb = await conn.fetchval(
+        "SELECT product_working_branch FROM runs WHERE id = $1", run_id)
+    return work_branch(run_id, wb or "")
+
+
+def product_mount_args(repo: str, branch: str, work: str = "") -> list[str]:
+    """Docker args that give a sandbox a read-only, credential-free product checkout.
+
+    `work` (D15) is advisory for read stages: the entrypoint checks that branch out
+    when the origin already has it, so a stage sees the code the run is working on
+    rather than the base. Keyword-with-default keeps every pre-D15 caller valid.
+    """
     if not repo:
         return []
     mirror = sync_product_mirror(repo)
-    return ["-v", f"{mirror}:/product-src.git:ro",
+    args = ["-v", f"{mirror}:/product-src.git:ro",
             "-e", "LANTERN_PRODUCT_REPO=/product-src.git",
             "-e", f"LANTERN_PRODUCT_BRANCH={branch}",
             "-e", f"LANTERN_PRODUCT_ORIGIN={repo}"]
+    if work:
+        args += ["-e", f"LANTERN_PRODUCT_WORK_BRANCH={work}"]
+    return args
 
 
 # (stage key, run-folder dir, type, gate-after, runner). Human stages produce an
@@ -470,18 +502,26 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     # laptop/workstation runs see exactly what the box does (orchestrator reads
     # LANTERN_PRODUCT_DIR at call time).
     repo, branch = await product_target(conn, run_id)
-    for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH"):
+    work = await product_work_branch(conn, run_id) if repo else ""
+    for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
+                "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_CODING_START_SHA"):
         os.environ.pop(var, None)
     if stage == "03-coding" and not repo:
         raise RuntimeError("auto-coding needs a product repo — set one with "
-                           f"`pipeline.py set-product {run_id} --repo … --branch …`")
+                           f"`pipeline.py set-product {run_id} --repo … --branch …"
+                           " [--working-branch …]` or in Mission Control at "
+                           f"/run/{run_id}/repo")
     if repo:
-        checkout = await asyncio.to_thread(product_checkout, repo, branch, run_id)
+        checkout = await asyncio.to_thread(product_checkout, repo, branch, run_id, work)
         os.environ["LANTERN_PRODUCT_DIR"] = str(checkout)
         os.environ["LANTERN_PRODUCT_ORIGIN"], os.environ["LANTERN_PRODUCT_BRANCH"] = repo, branch
+        # D15: EVERY stage learns the working branch, not just coding — that is what
+        # lets stages 1-2 and 4-7 orient on the code the run is actually working on.
+        os.environ["LANTERN_PRODUCT_WORK_BRANCH"] = work
         if stage == "03-coding":   # D14: writable, on the run's branch, bot identity
-            await asyncio.to_thread(prepare_coding_checkout, checkout, coding_branch(run_id))
-            os.environ["LANTERN_CODING_BRANCH"] = coding_branch(run_id)
+            start = await asyncio.to_thread(prepare_coding_checkout, checkout, work)
+            os.environ["LANTERN_CODING_BRANCH"] = work
+            os.environ["LANTERN_CODING_START_SHA"] = start
             os.environ["LANTERN_PRODUCT_WRITABLE"] = "1"
     session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
 
@@ -521,7 +561,8 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     finally:
         for s in mcp_servers:
             await s.cleanup()
-        for var in ("LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH"):
+        for var in ("LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
+                    "LANTERN_CODING_START_SHA"):
             os.environ.pop(var, None)   # never leak writability into the next stage
 
     # Ledger before the postcondition verdict: tokens are spent either way (P0.4).
@@ -597,17 +638,20 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     # Product code (read-only, credential-free): the host refreshes its mirror and
     # bind-mounts it; the entrypoint clones /product-src.git into /work/product.
     repo, branch = await product_target(conn, run_id)
+    work = await product_work_branch(conn, run_id) if repo else ""
     if stage == "03-coding" and not repo:
         raise RuntimeError("auto-coding needs a product repo — set one with "
-                           f"`pipeline.py set-product {run_id} --repo … --branch …`")
-    cmd += await asyncio.to_thread(product_mount_args, repo, branch)
+                           f"`pipeline.py set-product {run_id} --repo … --branch …"
+                           " [--working-branch …]` or in Mission Control at "
+                           f"/run/{run_id}/repo")
+    cmd += await asyncio.to_thread(product_mount_args, repo, branch, work)
     timeout_min = STAGE_TIMEOUT_MIN
     if stage == "03-coding":
         # D14: the entrypoint puts the checkout on the run's branch and marks it
         # writable; commits carry the bot identity. Still no PAT in the container —
         # the bundle it writes into the run folder is the only way code leaves.
         timeout_min = CODING_TIMEOUT_MIN
-        cmd += ["-e", f"LANTERN_CODING_BRANCH={coding_branch(run_id)}",
+        cmd += ["-e", f"LANTERN_CODING_BRANCH={work}",
                 "-e", f"LANTERN_GIT_AUTHOR_NAME={GIT_AUTHOR_NAME}",
                 "-e", f"LANTERN_GIT_AUTHOR_EMAIL={GIT_AUTHOR_EMAIL}"]
         for var in ("LANTERN_CODING_MAX_TURNS", "LANTERN_PRODUCT_SHELL_TIMEOUT"):
@@ -734,7 +778,7 @@ def _open_or_find_pr(owner: str, name: str, branch: str, base: str, title: str, 
     return {"pr_url": pr["html_url"], "pr_number": pr["number"], "pr_reused": False}
 
 
-def _publish_branch(run_id: str, repo: str, base: str) -> dict:
+def _publish_branch(run_id: str, repo: str, base: str, work: str = "") -> dict:
     """Verify the coding handoff against the host mirror, land the branch in it, push it
     to the origin (https remotes; a local-path product repo is updated in place) and
     open or reuse the pull request. Returns the code_complete payload. Sync, testable."""
@@ -744,8 +788,9 @@ def _publish_branch(run_id: str, repo: str, base: str) -> dict:
         raise RuntimeError("no 03-coding/handoff.json — the coding stage produced no branch")
     handoff = json.loads(hf.read_text(encoding="utf-8"))
     branch = str(handoff.get("branch") or "")
-    if branch != coding_branch(run_id):
-        raise RuntimeError(f"handoff names branch '{branch}', expected '{coding_branch(run_id)}'")
+    expected = work_branch(run_id, work)
+    if branch != expected:
+        raise RuntimeError(f"handoff names branch '{branch}', expected '{expected}'")
     mirror = sync_product_mirror(repo)
     problems = check_coding_handoff(run_id, "03-coding", verify_in=mirror)
     if problems:
@@ -808,7 +853,8 @@ async def publish_coding_branch(conn, run_id: str) -> dict:
     repo, base = await product_target(conn, run_id)
     if not repo:
         raise RuntimeError("auto-coding produced a branch but the run has no product repo to push to")
-    payload = await asyncio.to_thread(_publish_branch, run_id, repo, base)
+    work = await product_work_branch(conn, run_id)
+    payload = await asyncio.to_thread(_publish_branch, run_id, repo, base, work)
     await insert_artifact(conn, run_id, "03-coding", "coding_branch", payload["bundle"],
                           {"branch": payload["branch"], "head_sha": payload["head_sha"],
                            "commits": payload["commit_count"]})
@@ -828,9 +874,12 @@ async def publish_coding_branch(conn, run_id: str) -> dict:
     return payload
 
 
-def prepare_coding_checkout(checkout: Path, branch: str) -> None:
+def prepare_coding_checkout(checkout: Path, branch: str) -> str:
     """In-process executor: put a fresh product checkout on the run's branch with the
-    bot identity — the same thing the sandbox entrypoint does for containers."""
+    bot identity — the same thing the sandbox entrypoint does for containers.
+
+    Returns the sha the branch is at BEFORE the agent runs (D15).
+    """
     _git("config", "user.name", GIT_AUTHOR_NAME, cwd=checkout)
     _git("config", "user.email", GIT_AUTHOR_EMAIL, cwd=checkout)
     _git("config", "commit.gpgsign", "false", cwd=checkout)
@@ -841,12 +890,20 @@ def prepare_coding_checkout(checkout: Path, branch: str) -> None:
     hook.write_text('#!/bin/sh\ngrep -q "^Lantern-Agent:" "$1" || '
                     'printf "\\nLantern-Agent: coding\\n" >> "$1"\n', encoding="utf-8", newline="\n")
     hook.chmod(0o755)
-    if _git("rev-parse", "--verify", "-q", f"refs/remotes/origin/{branch}", cwd=checkout).returncode == 0:
+    # Three-armed since D15: product_checkout may ALREADY have landed us on the
+    # working branch, and `checkout -b` on the current branch is a hard error.
+    if _git("rev-parse", "--abbrev-ref", "HEAD", cwd=checkout).stdout.strip() == branch:
+        r = _git("rev-parse", "HEAD", cwd=checkout)
+    elif _git("rev-parse", "--verify", "-q", f"refs/remotes/origin/{branch}", cwd=checkout).returncode == 0:
         r = _git("checkout", "-q", "-b", branch, f"origin/{branch}", cwd=checkout)
     else:
         r = _git("checkout", "-q", "-b", branch, cwd=checkout)
     if r.returncode != 0:
         raise RuntimeError(f"could not create branch {branch}: {r.stderr.strip()[-300:]}")
+    # D15: where THIS execution starts. The branch may already carry commits (a
+    # continued branch, or a retry), so "did this stage do work" cannot be answered
+    # against the base — see finalize_coding.
+    return _git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
 
 
 def _read_handoff(run_id: str, sdir: str) -> dict | None:
@@ -1052,7 +1109,7 @@ async def cmd_init_db() -> None:
 
 async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
                   product_repo: str = "", product_branch: str = "",
-                  coding_mode: str = "") -> None:
+                  coding_mode: str = "", working_branch: str = "") -> None:
     brief = Path(brief_path)
     if not brief.exists():
         sys.exit(f"brief not found: {brief_path}")
@@ -1060,9 +1117,12 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
     # Resolved at creation so the run records what it was pointed at, not what the
     # daemon's env happened to say three stages later.
     brief_text = brief.read_text(encoding="utf-8")
-    brief_repo, brief_branch = parse_brief_product(brief_text)
+    brief_repo, brief_branch, brief_work = parse_brief_product(brief_text)
     product_repo = product_repo or brief_repo or PRODUCT_REPO_DEFAULT
     product_branch = product_branch or brief_branch or PRODUCT_BRANCH_DEFAULT
+    # D15: no env default for the working branch on purpose — a box-wide one would
+    # silently land every run on the same branch, the opposite of what it is for.
+    working_branch = (working_branch or brief_work or "").strip()
     # Coding mode (D14): same precedence; 'human' unless someone asked for 'auto'.
     coding_mode = (coding_mode or parse_brief_coding_mode(brief_text) or "human").lower()
     if coding_mode not in CODING_MODES:
@@ -1072,11 +1132,16 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
                  "brief or pass --product-repo")
     if product_repo:
         # Fail here, not inside a container three stages later.
-        await asyncio.to_thread(sync_product_mirror, product_repo)
+        try:
+            await asyncio.to_thread(verify_product_target, product_repo,
+                                    product_branch, working_branch)
+        except ProductTargetError as e:
+            sys.exit(f"{e}\nbranches: {', '.join(e.branches) or '(none)'}")
     else:
         print("WARNING: no product repo for this run — stages 2+ will block asking for "
-              "one. Set it with `pipeline.py set-product <run-id> --repo … --branch …` "
-              "or add a `- **Product repo:**` line to the brief.", file=sys.stderr)
+              "one. Set it with `pipeline.py set-product <run-id> --repo … --branch … "
+              "[--working-branch …]`, add a `- **Product repo:**` line to the brief, or "
+              "pick one in Mission Control at /run/<run-id>/repo.", file=sys.stderr)
     if not run_id:
         run_id = f"feat-{datetime.now(timezone.utc):%Y%m%d}-{brief.stem.lstrip('_').lower()}"
     run_dir = REPO / "workflow" / "runs" / run_id
@@ -1086,15 +1151,19 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
     conn = await connect()
     await conn.execute(
         """INSERT INTO runs (id, brief, pipeline_version, current_stage, created_by,
-                             product_repo, product_branch, coding_mode)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
+                             product_repo, product_branch, product_working_branch,
+                             coding_mode)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
         run_id, str(brief), PIPELINE_VERSION, FEATURE_STAGES[0][0], by,
-        product_repo or None, product_branch or None, coding_mode)
+        product_repo or None, product_branch or None, working_branch or None, coding_mode)
     await log_event(conn, run_id, f"human:{by}", "run_created",
                     {"brief": str(brief), "product_repo": product_repo,
-                     "product_branch": product_branch, "coding_mode": coding_mode})
+                     "product_branch": product_branch,
+                     "product_working_branch": working_branch, "coding_mode": coding_mode})
     await render_runboard(conn)
     print(f"run {run_id} created (coding mode: {coding_mode}) — the pipeline takes it from here.")
+    if product_repo:
+        print(f"  work lands on: {work_branch(run_id, working_branch)}")
     if follow:
         local = os.environ.get("LANTERN_RUNNER", "ec2")
         waiting_on = None
@@ -1237,12 +1306,17 @@ async def cmd_decide(run_id: str, gate: str, by: str, note: str, approved: bool)
     await conn.close()
 
 
-def product_checkout(repo: str, branch: str, run_id: str) -> Path:
+def product_checkout(repo: str, branch: str, run_id: str, work: str = "") -> Path:
     """Host-side working checkout of the product for the in-process executor.
 
     Cloned fresh from the mirror every stage, so a stage can never read a tree some
     earlier stage left dirty. The docker executor does not use this — its container
     clones from the read-only mount instead.
+
+    `work` (D15) is the run's working branch: when the mirror already has it, land on
+    it so the stage reads the code the run is actually working on. When it does not
+    exist yet we stay on the base — creating it belongs to prepare_coding_checkout,
+    and a read-only stage has no business creating branches at all.
     """
     mirror = sync_product_mirror(repo)
     dest = PRODUCT_MIRROR_DIR / "checkouts" / run_id
@@ -1253,36 +1327,132 @@ def product_checkout(repo: str, branch: str, run_id: str) -> Path:
     if r.returncode != 0:
         raise RuntimeError(
             f"product checkout of branch '{branch}' failed: {_scrub(r.stderr)[-600:]}")
+    if work and work != branch and _git(
+            "rev-parse", "--verify", "-q", f"refs/remotes/origin/{work}",
+            cwd=dest).returncode == 0:
+        c = _git("checkout", "-q", work, cwd=dest)
+        if c.returncode != 0:
+            raise RuntimeError(
+                f"product checkout of working branch '{work}' failed: "
+                f"{_scrub(c.stderr)[-600:]}")
     return dest
 
 
-async def cmd_set_product(run_id: str, repo: str, branch: str) -> None:
-    """Point an existing run at a product repo/branch and verify the host can reach it.
+def cmd_repos() -> None:
+    """Git repos this host can offer as a product target (D15).
+
+    The same view Mission Control's picker shows, with no browser — and the quickest
+    way to find out why the picker is empty on a given box. `workspace` is imported
+    lazily and from mission-control on purpose: the daemon imports this module, and
+    the filesystem-walk surface has no business living in the daemon.
+    """
+    sys.path.insert(0, str(REPO / "tools" / "mission-control"))
+    import workspace   # noqa: PLC0415 — deliberately lazy, see above
+
+    roots = workspace.workspace_roots()
+    if not roots:
+        print("no workspace roots configured — the picker offers nothing.\n"
+              "Set LANTERN_WORKSPACE_ROOTS (os.pathsep-separated) to the directories "
+              "holding your repos,\nor create ~/work. This is a security boundary: "
+              "unset fails closed on purpose.")
+        return
+    print("roots: " + ", ".join(str(r) for r in roots))
+    repos = workspace.discover_repos(use_cache=False)
+    if not repos:
+        print("(no git repos found under those roots)")
+        return
+    width = max(len(r["name"]) for r in repos)
+    for r in repos:
+        print(f"  {r['name']:<{width}}  {r['head_branch'] or '?':<24}  {r['path']}")
+    print(f"\n{len(repos)} repo(s). Point a run at one with:\n"
+          f"  pipeline.py set-product <run-id> --repo <path> --branch <base> "
+          f"[--working-branch feat/…]")
+
+
+class ProductTargetError(RuntimeError):
+    """A product target that cannot be honoured. Carries the repo's branch list so a
+    caller (CLI or web) can show what WAS available instead of a bare refusal."""
+
+    def __init__(self, message: str, branches: list[str] | None = None):
+        super().__init__(message)
+        self.branches = branches or []
+
+
+def _branch_heads(mirror: Path) -> list[str]:
+    r = _git("for-each-ref", "--format=%(refname:short)", "refs/heads", cwd=mirror)
+    return sorted(b for b in r.stdout.split() if b)
+
+
+def verify_product_target(repo: str, base: str, working: str = "") -> dict:
+    """Sync the host mirror and prove the branches exist. Sync, no DB, testable.
 
     Verification is the point: a run recorded against a repo the box cannot clone
     would fail one stage later, inside a container, as an opaque sandbox error.
+
+    A MISSING working branch is not an error — it means "create it from the base when
+    coding starts", so working_sha comes back None. A working branch outside the
+    pushable namespace IS an error: D6 bounds what an agent may push to, and refusing
+    at selection time beats refusing three stages later at handoff.
+
+    Returns {'mirror', 'base_sha', 'working', 'working_sha', 'branches', 'local'}.
     """
+    if not repo:
+        raise ProductTargetError("no product repo given")
+    mirror = sync_product_mirror(repo)
+    heads = _branch_heads(mirror)
+    r = _git("rev-parse", "--verify", f"refs/heads/{base}", cwd=mirror)
+    if r.returncode != 0:
+        raise ProductTargetError(f"branch '{base}' not found in {repo}", heads)
+    working = (working or "").strip()
+    working_sha = None
+    if working:
+        if _git("check-ref-format", f"refs/heads/{working}").returncode != 0:
+            raise ProductTargetError(f"'{working}' is not a valid git branch name", heads)
+        if not working.startswith(CODING_BRANCH_PREFIXES):
+            ns = ", ".join(pre + "*" for pre in CODING_BRANCH_PREFIXES)
+            raise ProductTargetError(
+                f"working branch '{working}' is outside the namespace agents may push "
+                f"to ({ns}) — D6. Pick a branch in that namespace, or leave it unset to "
+                "get a fresh one derived from the run id.", heads)
+        w = _git("rev-parse", "--verify", f"refs/heads/{working}", cwd=mirror)
+        working_sha = w.stdout.strip() if w.returncode == 0 else None
+    return {"mirror": mirror, "base_sha": r.stdout.strip(), "working": working,
+            "working_sha": working_sha, "branches": heads,
+            "local": not repo.startswith(("http://", "https://", "git@", "ssh://"))}
+
+
+async def cmd_set_product(run_id: str, repo: str, branch: str, working: str = "") -> None:
+    """Point an existing run at a product repo/branch (and optionally an existing
+    working branch to continue on) and verify the host can reach it."""
     conn = await connect()
     if not await conn.fetchval("SELECT 1 FROM runs WHERE id = $1", run_id):
         await conn.close()
         sys.exit(f"unknown run: {run_id}")
     print(f"syncing host mirror for {repo} …")
-    mirror = await asyncio.to_thread(sync_product_mirror, repo)
-    r = _git("rev-parse", "--verify", f"refs/heads/{branch}", cwd=mirror)
-    if r.returncode != 0:
-        heads = _git("for-each-ref", "--format=%(refname:short)", "refs/heads", cwd=mirror)
+    try:
+        info = await asyncio.to_thread(verify_product_target, repo, branch, working)
+    except ProductTargetError as e:
         await conn.close()
-        sys.exit(f"branch '{branch}' not found in {repo}\n"
-                 f"branches: {', '.join(heads.stdout.split()) or '(none)'}")
+        sys.exit(f"{e}\nbranches: {', '.join(e.branches) or '(none)'}")
     await conn.execute(
-        "UPDATE runs SET product_repo = $1, product_branch = $2, updated_at = now() WHERE id = $3",
-        repo, branch, run_id)
+        """UPDATE runs SET product_repo = $1, product_branch = $2,
+                           product_working_branch = $3, updated_at = now()
+           WHERE id = $4""",
+        repo, branch, info["working"] or None, run_id)
     await log_event(conn, run_id, "human:cli", "product_target_set",
-                    {"repo": repo, "branch": branch, "head": r.stdout.strip()[:12]})
+                    {"repo": repo, "branch": branch, "working": info["working"],
+                     "head": info["base_sha"][:12], "channel": "cli"})
     await conn.close()
-    print(f"[{run_id}] product target set: {repo} @ {branch} ({r.stdout.strip()[:12]})\n"
-          f"  mirror: {mirror}\n"
+    landed = work_branch(run_id, info["working"])
+    fate = ("continues an existing branch" if info["working_sha"]
+            else "will be created at the first commit")
+    print(f"[{run_id}] product target set: {repo} @ {branch} ({info['base_sha'][:12]})\n"
+          f"  mirror: {info['mirror']}\n"
+          f"  work lands on: {landed} — {fate}\n"
           f"  stages from here on get it read-only at the `product/` prefix.")
+    if info["local"]:
+        print("  NOTE: a local-path target is never fetched — the pipeline sees COMMITTED\n"
+              "  state only. Uncommitted work in that checkout is invisible to agents.")
 
 
 async def cmd_publish(run_id: str) -> None:
@@ -1757,7 +1927,16 @@ async def cmd_usage_check() -> None:
     await conn.close()
 
 
+# Commands that touch neither a model nor the database, and so must not require Azure
+# credentials to be configured. `repos` answers "what can this host offer as a product
+# target" — often the first thing an operator runs on a box, before the fleet is wired.
+LOCAL_ONLY_CMDS = {"repos"}
+
+
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in LOCAL_ONLY_CMDS:
+        {"repos": cmd_repos}[sys.argv[1]]()
+        return
     set_default_openai_client(azure_v1_client())
     # Responses API — chat_completions drops image tool outputs, blinding vision
     # critique loops (see orchestrator.py for the full note).
@@ -1777,9 +1956,17 @@ def main() -> None:
     p.add_argument("--coding-mode", choices=CODING_MODES, default="",
                    help="human = the developer's own session (default); auto = the coding "
                         "agent implements the plan and the host opens a PR (D14)")
+    p.add_argument("--working-branch", default="",
+                   help="existing branch to continue on (feat/*|fix/*|proto/*); default: "
+                        "a fresh branch derived from the run id")
     p = sub.add_parser("set-product", help="point an existing run at a product repo/branch")
     p.add_argument("run_id"); p.add_argument("--repo", required=True)
-    p.add_argument("--branch", default=PRODUCT_BRANCH_DEFAULT)
+    p.add_argument("--branch", default=PRODUCT_BRANCH_DEFAULT, help="base branch")
+    p.add_argument("--working-branch", default="",
+                   help="existing branch to continue on (feat/*|fix/*|proto/*); default: "
+                        "a fresh branch derived from the run id")
+    p = sub.add_parser("repos", help="git repos this host can offer as a product target "
+                                     "(LANTERN_WORKSPACE_ROOTS)")
     p = sub.add_parser("set-coding-mode", help="human (developer's own session) or auto "
                                                "(the coding agent implements the plan → PR)")
     p.add_argument("run_id"); p.add_argument("mode", choices=CODING_MODES)
@@ -1816,8 +2003,11 @@ def main() -> None:
     match a.cmd:
         case "init-db": asyncio.run(cmd_init_db())
         case "run":     asyncio.run(cmd_run(a.brief, a.run_id, a.by, a.follow,
-                                            a.product_repo, a.product_branch, a.coding_mode))
-        case "set-product":   asyncio.run(cmd_set_product(a.run_id, a.repo, a.branch))
+                                            a.product_repo, a.product_branch, a.coding_mode,
+                                            a.working_branch))
+        case "set-product":   asyncio.run(cmd_set_product(a.run_id, a.repo, a.branch,
+                                                          a.working_branch))
+        case "repos":   cmd_repos()
         case "set-coding-mode": asyncio.run(cmd_set_coding_mode(a.run_id, a.mode))
         case "publish":       asyncio.run(cmd_publish(a.run_id))
         case "daemon":  asyncio.run(cmd_daemon(a.runner))

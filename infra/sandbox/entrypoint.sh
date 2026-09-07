@@ -16,6 +16,9 @@
 #                           and NOT credentialed: the host owns the PAT and the fetch
 #   LANTERN_PRODUCT_BRANCH  base branch to check out (default main)
 #   LANTERN_PRODUCT_ORIGIN  the real origin URL, for messages and the system prompt
+#   LANTERN_PRODUCT_WORK_BRANCH  (D15) the branch this RUN works on — checked out when
+#                           the origin already has it, so read stages orient on the
+#                           run's own code and not the base. Unset = stay on the base.
 set -euo pipefail
 RUN_ID="$1"; STAGE="$2"
 
@@ -64,6 +67,13 @@ if [ -n "${LANTERN_PRODUCT_REPO:-}" ]; then
          "against no product code at all." >&2
     exit 1
   fi
+  # D15: read stages see the run's working branch too, when the origin already has
+  # it. A run continuing an existing branch must not have its QA, security and
+  # post-coding stages silently reviewing the base instead.
+  if [ -n "${LANTERN_PRODUCT_WORK_BRANCH:-}" ] &&
+     git -C /work/product show-ref --verify --quiet          "refs/remotes/origin/${LANTERN_PRODUCT_WORK_BRANCH}"; then
+    git -C /work/product checkout --quiet "${LANTERN_PRODUCT_WORK_BRANCH}"
+  fi
   # Auto-coding (D14): the dispatcher names the run's branch. Put the checkout on it
   # (continuing an existing branch on retry), give commits the bot identity + trailer
   # convention, and mark the checkout writable for orchestrator.py. Still no
@@ -79,11 +89,21 @@ if [ -n "${LANTERN_PRODUCT_REPO:-}" ]; then
     printf '%s\n' '#!/bin/sh' \
       'grep -q "^Lantern-Agent:" "$1" || printf "\nLantern-Agent: coding\n" >> "$1"' > "$HOOK"
     chmod +x "$HOOK"
-    if git -C /work/product show-ref --verify --quiet "refs/remotes/origin/${LANTERN_CODING_BRANCH}"; then
-      git -C /work/product checkout --quiet -b "${LANTERN_CODING_BRANCH}" "origin/${LANTERN_CODING_BRANCH}"
-    else
-      git -C /work/product checkout --quiet -b "${LANTERN_CODING_BRANCH}"
+    # Idempotent since D15: the block above may already have landed us on this
+    # branch, and `checkout -b` on the current branch is a hard error.
+    if [ "$(git -C /work/product rev-parse --abbrev-ref HEAD)" != "${LANTERN_CODING_BRANCH}" ]; then
+      if git -C /work/product show-ref --verify --quiet "refs/remotes/origin/${LANTERN_CODING_BRANCH}"; then
+        git -C /work/product checkout --quiet -b "${LANTERN_CODING_BRANCH}" "origin/${LANTERN_CODING_BRANCH}"
+      else
+        git -C /work/product checkout --quiet -b "${LANTERN_CODING_BRANCH}"
+      fi
     fi
+    # D15: where THIS execution starts. A continued branch already carries commits, so
+    # "did this stage do work" cannot be answered against the base — finalize_coding
+    # diffs from here. Exported by the entrypoint because only it knows the sha; the
+    # exec below inherits it.
+    LANTERN_CODING_START_SHA="$(git -C /work/product rev-parse HEAD)"
+    export LANTERN_CODING_START_SHA
     export LANTERN_PRODUCT_WRITABLE=1
   fi
 fi

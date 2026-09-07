@@ -119,6 +119,12 @@ ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS total_tokens bigint;
 -- read-only. NULL = unset, and stage 2+ blocks asking for it rather than guessing.
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_repo text;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_branch text;
+-- D15: product_branch is the BASE branch. product_working_branch is the branch work
+-- actually lands on — NULL means "derive it from the run id" (coding_branch()), which
+-- is every run created before D15 and every run that wants a fresh branch. Kept as a
+-- separate nullable column so pre-D15 runs resolve to exactly what they resolve to
+-- today and a rolling restart needs no coordination.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_working_branch text;
 -- How stage 3 runs for this run (D14): 'human' = the developer's own session and the
 -- gate opens immediately (the original contract); 'auto' = the fleet's coding agent
 -- implements the approved plan in a sandbox, the host pushes the branch as the bot

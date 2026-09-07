@@ -224,7 +224,88 @@ def main() -> int:
     check("github url parsed", p._github_repo("https://github.com/Owner/Repo.git") == ("Owner", "Repo"))
     check("non-github url is not a PR target", p._github_repo("https://gitlab.com/o/r") is None)
 
-    print("7. the flag does not leak:")
+    # ── D15: continuing an EXISTING branch ───────────────────────────────────
+    print("7. base + working branch (D15):")
+    check("no working branch -> derived from the run id",
+          p.work_branch("feat-20260907-x") == "feat/20260907-x")
+    check("bug run, no working branch -> fix/",
+          p.work_branch("bug-20260907-x") == "fix/20260907-x")
+    check("a chosen working branch wins",
+          p.work_branch("feat-20260907-x", "feat/existing") == "feat/existing")
+    check("whitespace-only reads as unset",
+          p.work_branch("feat-20260907-x", "   ") == "feat/20260907-x")
+
+    # Build an origin whose feat/existing branch ALREADY carries work, the way a run
+    # continuing someone else's branch would find it.
+    tmp2 = Path(tempfile.mkdtemp(prefix="lantern-continue-"))
+    origin2, seedco = make_repos(tmp2)
+    git("checkout", "-q", "-b", "feat/existing", cwd=seedco)
+    git("config", "user.name", "seed", cwd=seedco)
+    git("config", "user.email", "seed@example.invalid", cwd=seedco)
+    for n in (1, 2):
+        (seedco / f"prior{n}.py").write_text(f"PRIOR = {n}\n", encoding="utf-8")
+        git("add", "-A", cwd=seedco)
+        git("commit", "-q", "-m", f"prior work {n}", cwd=seedco)
+    git("push", "-q", "origin", "feat/existing", cwd=seedco)
+
+    p.PRODUCT_MIRROR_DIR = tmp2 / "mirrors"
+    co = p.product_checkout(str(origin2), "main", "feat-20260907-continue", "feat/existing")
+    check("product_checkout lands on an existing working branch",
+          git("rev-parse", "--abbrev-ref", "HEAD", cwd=co) == "feat/existing")
+    before = git("rev-parse", "HEAD", cwd=co)
+    start = p.prepare_coding_checkout(co, "feat/existing")
+    check("prepare_coding_checkout is a no-op when HEAD is already there",
+          git("rev-parse", "--abbrev-ref", "HEAD", cwd=co) == "feat/existing")
+    check("...and returns the sha the stage starts from", start == before, f"{start} vs {before}")
+    check("a missing working branch leaves the checkout on the base",
+          git("rev-parse", "--abbrev-ref", "HEAD",
+              cwd=p.product_checkout(str(origin2), "main", "feat-20260907-fresh",
+                                     "feat/not-there")) == "main")
+
+    # THE regression this section exists for. finalize_coding's old "did this stage do
+    # work" test was `merge-base(base, HEAD)..HEAD is non-empty`. On a branch that
+    # already has commits that is true before the agent does anything — so a stage that
+    # produced NOTHING would pass, and the bundle would carry the prior commits into
+    # the PR as if the agent had written them.
+    run2 = "feat-20260907-continue"
+    (fake_repo / "workflow" / "runs" / run2 / "03-coding").mkdir(parents=True)
+    os.environ["LANTERN_PRODUCT_DIR"] = str(co)
+    os.environ["LANTERN_PRODUCT_BRANCH"] = "main"
+    os.environ["LANTERN_CODING_BRANCH"] = "feat/existing"
+
+    os.environ.pop("LANTERN_CODING_START_SHA", None)
+    probs_without = o.finalize_coding(run2, "03-coding")
+    check("WITHOUT a start sha the vacuous check passes an idle stage",
+          not probs_without, f"expected the old behaviour, got {probs_without}")
+
+    os.environ["LANTERN_CODING_START_SHA"] = start
+    probs_with = o.finalize_coding(run2, "03-coding")
+    check("WITH a start sha an idle stage is caught",
+          any("added no commits" in x for x in probs_with), probs_with)
+
+    (co / "new_work.py").write_text("NEW = 1\n", encoding="utf-8")
+    git("add", "-A", cwd=co)
+    git("commit", "-q", "-m", "the agent's own commit", cwd=co)
+    probs_real = o.finalize_coding(run2, "03-coding")
+    check("...and real work passes", not probs_real, probs_real)
+    hf2 = json.loads((fake_repo / "workflow" / "runs" / run2 / "03-coding"
+                      / "handoff.json").read_text(encoding="utf-8"))
+    check("handoff records the start sha", hf2.get("start_sha") == start, hf2.get("start_sha"))
+    check("the bundle still spans base..HEAD, so the PR shows the whole branch",
+          len(hf2["commits"]) == 3, [c["subject"] for c in hf2["commits"]])
+
+    check("_publish_branch accepts the run's chosen working branch",
+          p._publish_branch(run2, str(origin2), "main", "feat/existing")["branch"]
+          == "feat/existing")
+    check("...and still rejects a handoff naming a different branch",
+          raises(p._publish_branch, run2, str(origin2), "main", "feat/somewhere-else")
+          is not None)
+
+    os.environ.pop("LANTERN_CODING_START_SHA", None)
+    os.environ["LANTERN_PRODUCT_DIR"] = str(checkout)
+    shutil.rmtree(tmp2, ignore_errors=True)
+
+    print("8. the flag does not leak:")
     os.environ.pop("LANTERN_PRODUCT_WRITABLE", None)
     os.environ.pop("LANTERN_CODING_BRANCH", None)
     check("read-only again once the execution env is gone",

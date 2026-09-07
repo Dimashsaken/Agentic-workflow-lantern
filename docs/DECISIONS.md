@@ -326,3 +326,66 @@ item C2.3 designed it; this records what was built and the choices made on the w
   allowlist) are still open — auto mode is for trusted repos until they land; the
   sandbox image carries Python 3.12 + Node 22 + git only, so other toolchains need an
   image change; human-stage token capture is unchanged (unmetered).
+
+## D15 — 2026-09-07 — Codebase connection: a run points at a host-local repo, a base branch, and optionally a branch to continue on
+
+Before this, a run's product target was CLI-only (`pipeline.py run --product-repo`,
+`set-product`) and Mission Control showed it read-only. There was no way to see what
+repositories a machine actually had, and no way to work on a branch that already
+existed — `coding_branch(run_id)` always derived a fresh `feat/<date>-<slug>`. An agent
+starting a stage learned an origin, a base branch and one `git log -1` line, then spent
+a turn discovering the codebase's own conventions.
+
+- **Discovery is host-relative and root-confined.** The picker lists git repos on the
+  filesystem of whichever machine serves Mission Control — the box, a workstation, a
+  laptop — because "the repo I am working on" is a property of where the developer is,
+  not of where the fleet happens to run. `LANTERN_WORKSPACE_ROOTS` is the entire
+  boundary; unset means the picker offers **nothing**, falling back only to `~/work`
+  when it exists. Why it matters: a repo picker on a web UI is a filesystem-read
+  primitive — whatever path it admits gets cloned by the host, mounted into sandboxes,
+  read through `read_file('product/…')` and pasted into a system prompt. `contains()`
+  is the single admission point and resolves both sides before comparing, so a symlink
+  out of a root is not a bypass. Proof: `tools/mission-control/test_workspace.py`,
+  `test_repo_routes.py`.
+- **`product_branch` stays the BASE; `product_working_branch` is new and nullable.**
+  NULL means "derive from the run id", which is every pre-D15 run and every run that
+  wants a fresh branch — so old runs resolve to exactly what they resolved to before.
+  No rename: the daemon, `status --json`, Mission Control and `test_status_json.py`
+  all read the existing column name, and a rename would buy nothing. `work_branch()`
+  resolves the pair; `coding_branch()` stays the pure derivation so its assertions
+  keep meaning one thing.
+- **The chosen branch stays inside D6's push namespace.** `CODING_BRANCH_PREFIXES`
+  (`feat,fix,proto`, overridable) is now both the handoff guard and the filter the
+  picker offers branches through, so a branch that would be refused at handoff is
+  never selectable. Picking `develop` is refused at selection time, naming D6 — three
+  stages earlier than before, and widening the list is understood as a security
+  change, not a preference.
+- **"Did this stage do work?" is answered against a start sha, not the base.** The old
+  check — `merge-base(base, HEAD)..HEAD` non-empty — was sound only for a fresh branch.
+  On a branch that already carries commits it is true before the agent does anything,
+  so an idle coding stage would have passed and its bundle would have carried someone
+  else's commits into the PR as the agent's work. `LANTERN_CODING_START_SHA` is captured
+  after checkout and before the agent runs, by whichever side prepared the checkout; the
+  bundle still spans `base..HEAD` so the PR shows the whole branch. Absent (an older
+  sandbox image) it degrades to the old check rather than failing. Proof:
+  `test_coding_stage.py` asserts BOTH directions, so the fix cannot silently regress.
+- **The system prompt tells the agent where it is.** A Claude-Code-style `<env>` block
+  (working dir, repo, origin, base, current branch, access, working-tree state, recent
+  commits), the product's own `AGENTS.md`/`CLAUDE.md`/`README.md` auto-loaded and
+  capped, and a task block naming this stage's job from the brief and the approved
+  plan. It sits at the END of the prompt: it is now the most volatile text in it (git
+  status changes every stage), so keeping it ahead of the static charter/skills/memory
+  would invalidate the cached prefix for everything below. A stub at the old position
+  points at it.
+- **Auto-loaded product docs are untrusted data, and are fenced as such.** They come
+  from a repository a human pointed the run at, and they land in a system prompt above
+  the role's own charter. They are authoritative for *how* to write code here and
+  explicitly cannot change the contract — postconditions, the no-push rule, the gates,
+  the approved plan. Without the fences this feature would be a prompt-injection
+  channel. The fences mitigate; they do not eliminate.
+- **Residual risks, stated plainly:** (a) a local-path target is never fetched, so the
+  pipeline sees **committed** state only — uncommitted work in a developer's checkout is
+  invisible to agents; (b) `_publish_branch` fetches the bundle into a local-path repo,
+  and git refuses a fetch into a branch that repo has checked out; (c) the untrusted-doc
+  fences are mitigation, not a guarantee; (d) discovery under a root on a network drive
+  can be slow despite the time box.

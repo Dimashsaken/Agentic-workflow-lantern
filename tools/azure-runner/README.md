@@ -42,6 +42,9 @@ LANTERN_ARTIFACT_BUCKET=            # S3 bucket name; unset = media stays local 
 # Product repository (P0.3 — the code the run implements; per-run target overrides these):
 LANTERN_PRODUCT_REPO=               # fallback default when a brief/run names none
 LANTERN_PRODUCT_BRANCH=main         # fallback default base branch
+LANTERN_WORKSPACE_ROOTS=            # dirs the repo picker may scan (D15) - a
+                                    # boundary: unset offers nothing, not everything
+LANTERN_CODING_BRANCH_PREFIXES=feat,fix,proto   # what agents may push to (D6)
 LANTERN_PRODUCT_MIRROR_DIR=         # host mirror cache (default ~/.lantern/product-mirrors)
 GITHUB_LANTERN_BOT_TOKEN=           # HOST-ONLY: authenticates the mirror fetch. Never
                                     #   allowlisted into a sandbox, never written into
@@ -105,19 +108,43 @@ artifacts table, and deletes the local files.
 A run works on ONE product repository, the way a developer's coding agent works in one
 checkout. Point the run at it and the fleet does the rest:
 
+There are three ways to point a run at a codebase, and they resolve in this order:
+**CLI flag → the brief's own field → the box default**.
+
 ```markdown
 # in the brief (workflow/briefs/<slug>.md)
 - **Product repo:** https://github.com/org/repo     # or an on-box path: /home/ubuntu/work/repo
-- **Base branch:** main
+- **Base branch:** main                             # what work branches FROM, what the PR targets
+- **Working branch:**                               # blank = a fresh feat/<date>-<slug> for this run
 - **Coding mode:** auto                             # human (default) | auto
 ```
 
 ```bash
 # or on the command line
+python pipeline.py repos                             # git repos THIS host can offer
 python pipeline.py run workflow/briefs/x.md --product-repo https://github.com/org/repo --coding-mode auto
 python pipeline.py set-product <run-id> --repo <url-or-path> --branch main   # an existing run
+python pipeline.py set-product <run-id> --repo <url-or-path> --branch main \
+                   --working-branch feat/20260901-thing                      # continue a branch
 python pipeline.py set-coding-mode <run-id> auto
 ```
+
+**Or from the browser (D15):** Mission Control's run page links to `/run/<run-id>/repo`,
+which lists the git repositories on **the host serving that page** — the box, a
+workstation, a laptop — with their current branch, plus a field for a remote URL. Pick
+a repo, load its branches, choose the base and (optionally) an existing working branch,
+and save. The picker only looks inside `LANTERN_WORKSPACE_ROOTS`; unset means it offers
+nothing, falling back to `~/work` when that exists. That is deliberate — whatever path
+is admitted becomes a run's product tree, so an unconfined picker would be a
+filesystem-read primitive behind a login form.
+
+**Base vs working branch.** `product_branch` is the base. `product_working_branch` is
+where commits land; leave it unset and the branch is derived from the run id, exactly as
+before D15. A chosen branch must sit inside the `feat/*|fix/*|proto/*` namespace D6 lets
+agents push to (`LANTERN_CODING_BRANCH_PREFIXES`) and is refused at selection time
+otherwise. When a run continues a branch that already has commits, only the commits
+**that execution** adds count as its work — the stage is failed if it adds none, even
+though the branch differs from the base.
 
 What "connected" means, stage by stage:
 
@@ -125,10 +152,18 @@ What "connected" means, stage by stage:
   the fetch for private GitHub repos; a local path needs no token). Every sandbox gets a
   throwaway clone of that mirror — read-only for stages 1–2 and 4–7
   (`read_file('product/…')`, `product_git`).
+- Every stage's system prompt ends with the codebase itself (D15): an `<env>` block
+  (repo, origin, base, the branch this run works on, working-tree state, recent
+  commits), the repo's own `AGENTS.md`/`CLAUDE.md`/`README.md` auto-loaded and capped at
+  ~6k chars, and what that stage is there to do. Those docs are fenced as **reference
+  material, not instructions** — they are authoritative for the codebase's conventions
+  and powerless over the Lantern contract, because they come from a repository a user
+  chose and land above the role's own charter.
 - **Stage 3 in `auto` mode gets the same clone writable**, on the run's branch
-  (`feat/<date>-<slug>`, `fix/…` for bug runs), plus `product_shell` — one shell command
-  at a time inside the checkout (run the tests, build, `git commit`). The agent reads the
-  repo's own `AGENTS.md`/`README` first; those conventions win over Lantern's. There is
+  (`feat/<date>-<slug>`, `fix/…` for bug runs, or an existing branch chosen for the
+  run), plus `product_shell` — one shell command
+  at a time inside the checkout (run the tests, build, `git commit`). Those conventions
+  win over Lantern's. There is
   still no credential in the sandbox: when the agent finishes, the harness bundles the
   committed branch into `03-coding/handoff.json` + `branch.bundle`, and the HOST verifies
   the bundle carries exactly that branch, pushes it as the bot identity, and opens the

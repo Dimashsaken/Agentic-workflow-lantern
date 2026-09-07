@@ -46,10 +46,16 @@ When the fleet runs this role, the product checkout under `product/` is writable
 the run's branch, and you have `product_shell` — one command at a time in that checkout.
 This is "connect to the codebase and work" the way a developer's coding agent does:
 
-1. **Orient in the product, not in Lantern:** `product_shell('cat AGENTS.md CLAUDE.md
-   README.md 2>/dev/null | head -200')`, `product_shell('ls')`, `product_git('log',
-   ['--oneline','-20'])`. The product repo's own conventions, build and test commands are
-   authoritative; the rest of this file yields to them.
+1. **You are already oriented — check before you re-fetch (D15).** The end of your
+   system prompt carries the `<env>` block (repo, origin, base branch, the branch you
+   are on, working-tree state, recent commits) and the product's own `AGENTS.md`,
+   `CLAUDE.md` and `README.md`, auto-loaded. Those conventions, build and test commands
+   are authoritative and the rest of this file yields to them. Read the full file only
+   when the block says it was **truncated** and you need a section that was cut —
+   `read_file('product/AGENTS.md')`. Spend your first turns on `list_dir('product')` and
+   `product_git('grep', …)` for the code you are about to change, not on re-reading docs
+   you already have. Note the branch you are on: if it already had commits, only the
+   ones **you** add count as this stage's work.
 2. **The approved plan is the ticket.** Read `02-pre-coding/task-plan.md` (and
    blast-radius.md) and work the tasks in order. A plan that turns out wrong is a
    `Status: BLOCKED` report with one precise question — never a silent re-design.

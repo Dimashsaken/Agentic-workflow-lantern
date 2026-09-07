@@ -124,6 +124,38 @@ input[type=text],input[type=password]{background:var(--surface-0);color:var(--te
   border:1px solid var(--edge);border-radius:var(--r-sm);padding:8px 11px;
   font-family:var(--font-ui);font-size:var(--text-sm)}
 input::placeholder{color:var(--text-dim)}
+select{background:var(--surface-0);color:var(--text);border:1px solid var(--edge);
+  border-radius:var(--r-sm);padding:8px 11px;font-family:var(--font-ui);
+  font-size:var(--text-sm);min-width:240px}
+
+/* codebase connection: the product-target picker (D15) */
+.pick{border:1px solid var(--edge);border-radius:var(--r-md);padding:16px 18px;
+  margin:14px 0;background:var(--surface-1)}
+.pick h3{font-family:var(--font-label);text-transform:uppercase;letter-spacing:.14em;
+  font-size:var(--text-caps);color:var(--text-muted);margin:0 0 4px;font-weight:600}
+.pick .hint{font-size:var(--text-xs);color:var(--text-dim);margin:0 0 12px;line-height:1.6}
+.pick .hint code{font-family:var(--font-mono)}
+.repolist{display:flex;flex-direction:column;gap:2px;max-height:340px;overflow-y:auto;
+  margin:0 0 12px}
+.repolist label{display:flex;align-items:baseline;gap:10px;padding:8px 10px;
+  border-radius:var(--r-sm);cursor:pointer;border:1px solid transparent}
+.repolist label:hover{background:var(--surface-2);border-color:var(--edge)}
+.repolist .nm{font-weight:600;font-size:var(--text-sm)}
+.repolist .br{font-family:var(--font-mono);font-size:var(--text-caps);
+  color:var(--gold-deep)}
+.repolist .pt{font-family:var(--font-mono);font-size:var(--text-caps);
+  color:var(--text-dim);margin-left:auto;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;max-width:46%}
+.pick .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+.pick .fld{display:flex;flex-direction:column;gap:5px}
+.pick .fld .lb{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.12em;font-size:var(--text-caps);color:var(--text-dim)}
+.pick .warnbox{border:1px solid #3A2A1E;background:var(--warning-soft);
+  color:var(--warning);border-radius:var(--r-sm);padding:10px 12px;
+  font-size:var(--text-xs);line-height:1.6;margin:0 0 12px}
+.pick .errbox{border:1px solid #3A211E;background:var(--danger-soft,transparent);
+  color:var(--danger);border-radius:var(--r-sm);padding:10px 12px;
+  font-size:var(--text-xs);line-height:1.6;margin:0 0 12px}
 
 /* progress = ordered quantity → night→dawn ramp; accent stays scarce */
 .srail{display:flex;width:100%;gap:2px;height:4px;border-radius:var(--r-pill);
