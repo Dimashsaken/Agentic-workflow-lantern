@@ -398,6 +398,11 @@ class TestRoutes(unittest.TestCase):
         self.assertIn("waiting 20h", html)
         self.assertIn("/gate/7/approve", html)
 
+    def test_gates_redirects_anonymous(self):
+        resp = get(mc.gates, Req(), pool=FakePool())
+        self.assertEqual(resp.status_code, 303)
+        self.assertEqual(resp.headers["location"], "/login")
+
     def test_run_detail_still_shows_pending_age_no_median_context(self):
         run = run_row()
         pool = FakePool(runs=[run], pend=[live_approval(20 * 3600)])
