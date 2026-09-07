@@ -14,3 +14,4 @@ customer data. Target: under ~200 lines after consolidation.
 
 <!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
 
+- 2026-09-07 [feat-20260907-pipeline-smoke · 07-qa-staging] 2026-09-07: For a staging smoke run of an already-deployed read-only dashboard feature, verify deployment identity indirectly with newly staging-specific data (here the staging-deploy cohort changed from n=0 in dev to n=1 in staging) because identical static copy alone does not prove the staging database and deployment path are live.

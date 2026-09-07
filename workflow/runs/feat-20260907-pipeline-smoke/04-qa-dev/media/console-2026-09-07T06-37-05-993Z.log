@@ -1,0 +1,2 @@
+[     110ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://host.docker.internal:8080/login:0
+[   34935ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://host.docker.internal:8080/login?error=Wrong+username+or+password:0

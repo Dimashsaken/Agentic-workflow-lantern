@@ -1,0 +1,7 @@
+- generic [ref=e2]:
+  - heading "Mission Control" [level=1] [ref=e4]
+  - paragraph [ref=e5]: The control room for the agent fleet. Sign in to see runs and decide gates.
+  - generic [ref=e6]:
+    - textbox "username" [active] [ref=e7]
+    - textbox "password" [ref=e8]
+    - button "Sign in" [ref=e9] [cursor=pointer]

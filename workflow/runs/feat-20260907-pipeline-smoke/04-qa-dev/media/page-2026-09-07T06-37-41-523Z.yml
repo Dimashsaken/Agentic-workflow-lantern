@@ -1,0 +1,8 @@
+- generic [ref=f1e2]:
+  - heading "Mission Control" [level=1] [ref=f1e4]
+  - paragraph [ref=f1e5]: The control room for the agent fleet. Sign in to see runs and decide gates.
+  - paragraph [ref=f1e6]: Wrong username or password
+  - generic [ref=f1e7]:
+    - textbox "username" [active] [ref=f1e8]
+    - textbox "password" [ref=f1e9]
+    - button "Sign in" [ref=f1e10] [cursor=pointer]

@@ -1,0 +1,601 @@
+- generic [active] [ref=f3e1]:
+  - banner [ref=f3e2]:
+    - link "Lantern" [ref=f3e3] [cursor=pointer]:
+      - /url: /
+    - navigation [ref=f3e4]:
+      - link "Board" [ref=f3e5] [cursor=pointer]:
+        - /url: /
+      - link "Chat" [ref=f3e6] [cursor=pointer]:
+        - /url: /chat
+      - link "Gates" [ref=f3e7] [cursor=pointer]:
+        - /url: /gates
+      - link "Runs" [ref=f3e8] [cursor=pointer]:
+        - /url: /runs
+      - link "Agents" [ref=f3e9] [cursor=pointer]:
+        - /url: /agents
+      - link "Spend" [ref=f3e10] [cursor=pointer]:
+        - /url: /spend
+    - generic [ref=f3e11]:
+      - generic [ref=f3e12]:
+        - generic [ref=f3e14]: Live
+        - text: · 06:48 UTC
+      - generic [ref=f3e15]: qa-dev
+      - link "log out" [ref=f3e16] [cursor=pointer]:
+        - /url: /logout
+  - main [ref=f3e17]:
+    - generic [ref=f3e18]:
+      - generic [ref=f3e19]:
+        - generic [ref=f3e20]: Run · pipeline v2
+        - heading "feat-20260831-gate-latency" [level=1] [ref=f3e21]
+        - generic [ref=f3e22]: Waiting on a human
+        - generic [ref=f3e24]:
+          - text: brief
+          - code [ref=f3e25]: ../../workflow/briefs/gate-latency.md
+          - text: "started by dimash · Aug 31 03:45 UTC · last activity 6d 1h ago product repo:"
+          - code [ref=f3e26]: https://github.com/Dimashsaken/Agentic-workflow-lantern
+          - text: "@ main"
+          - link "💬 Ask Lantern about this run" [ref=f3e27] [cursor=pointer]:
+            - /url: /chat?agent=lantern&run=feat-20260831-gate-latency
+      - generic [ref=f3e28]:
+        - generic [ref=f3e29]: Est. spend
+        - generic [ref=f3e30]: $23.25
+        - generic [ref=f3e31]: 15,450,891 tok · 85% cached
+    - generic [ref=f3e32]:
+      - generic [ref=f3e33]:
+        - generic [ref=f3e34]:
+          - generic [ref=f3e35]:
+            - link "feat-20260831-gate-latency" [ref=f3e36] [cursor=pointer]:
+              - /url: /run/feat-20260831-gate-latency
+            - text: · after 03-coding
+          - heading "Code-complete?" [level=2] [ref=f3e37]
+        - generic [ref=f3e38]: waiting 6d 1h opened Sep 01 05:02 UTC
+      - paragraph [ref=f3e39]: Every planned task is done and tests are green — the developer confirms it, or in auto mode you review the coding agent's pull request and approve here.
+      - group [ref=f3e40]:
+        - generic "The report being approved — 03-coding/report.md" [ref=f3e41] [cursor=pointer]
+        - generic [ref=f3e42]:
+          - 'heading "Stage Report: 03-coding — feat-20260831-gate-latency" [level=1] [ref=f3e43]'
+          - list [ref=f3e44]:
+            - listitem [ref=f3e45]:
+              - strong [ref=f3e46]: "Agent/author:"
+              - text: dimash (developer session — Claude Code on the laptop, branch
+              - code [ref=f3e47]: claude/gate-latency-statusline-ledger-9189b4
+              - text: )
+            - listitem [ref=f3e48]:
+              - strong [ref=f3e49]: "Date:"
+              - text: 2026-09-01
+            - listitem [ref=f3e50]:
+              - strong [ref=f3e51]: "Status:"
+              - text: PASS-WITH-NOTES
+          - heading "Summary" [level=2] [ref=f3e52]
+          - paragraph [ref=f3e53]:
+            - text: The approved
+            - code [ref=f3e54]: statusline-ledger
+            - text: "UX is implemented: the Board renders a full-width per-gate 30-day median ledger between the statusline and the five columns, every pending Review card shows its age, and cards strictly older than 24h get an explicit"
+            - code [ref=f3e55]: STALE
+            - text: warning treatment. All 34 new behavior tests plus the existing repository tests pass; the two checks that needed a live Postgres were initially deferred and then
+            - strong [ref=f3e56]: closed same-day against the box's database over SSH
+            - text: — query plan needs no index (Finding 1) and
+            - code [ref=f3e57]: test_verification.py
+            - text: passes (Finding 2).
+          - heading "Work performed" [level=2] [ref=f3e58]
+          - paragraph [ref=f3e59]:
+            - text: Six tasks, one commit each, tests first (
+            - code [ref=f3e60]: a0d9fda
+            - text: →
+            - code [ref=f3e61]: 717dad6
+            - text: "):"
+          - list [ref=f3e62]:
+            - listitem [ref=f3e63]:
+              - strong [ref=f3e64]:
+                - code [ref=f3e65]: tools/mission-control/test_gate_latency.py
+              - text: (task 1) — 34 stdlib
+              - code [ref=f3e66]: unittest
+              - text: cases; no DB, no HTTP client, no new packages. Routes are exercised by calling the coroutine endpoints directly with a signed session cookie and a
+              - code [ref=f3e67]: FakePool
+              - text: that answers
+              - code [ref=f3e68]: snapshot()
+              - text: "'s queries and records every SQL statement."
+            - listitem [ref=f3e69]:
+              - strong [ref=f3e70]: Data assembly
+              - text: (task 2) —
+              - code [ref=f3e71]: snapshot()
+              - text: "'s unused all-time scalar"
+              - code [ref=f3e72]: decided
+              - text: fetchrow is replaced by one grouped query (
+              - code [ref=f3e73]: LATENCY_SQL
+              - text: "): per-gate"
+              - code [ref=f3e74]: percentile_cont(0.5)
+              - text: of
+              - code [ref=f3e75]: decided_at - requested_at
+              - text: seconds plus count, over approvals with
+              - code [ref=f3e76]: status IN ('approved','rejected') AND decided_at IS NOT NULL AND decided_at >= now() - interval '30 days'
+              - text: .
+              - code [ref=f3e77]: gate_latency_rows()
+              - text: normalizes to
+              - code [ref=f3e78]: GATE_META
+              - text: order and keeps unknown historical gates;
+              - code [ref=f3e79]: ledger_metrics()
+              - text: formats display values;
+              - code [ref=f3e80]: is_stale()
+              - text: is strictly
+              - code [ref=f3e81]: "> 24*3600"
+              - text: . A
+              - code [ref=f3e82]: PostgresError
+              - text: on this one query degrades to
+              - code [ref=f3e83]: gate_latency=None
+              - text: .
+            - listitem [ref=f3e84]:
+              - strong [ref=f3e85]: Ledger render
+              - text: (task 3) —
+              - code [ref=f3e86]: ui.gate_ledger()
+              - text: +
+              - code [ref=f3e87]: .ledger
+              - text: CSS (existing tokens only), wired into
+              - code [ref=f3e88]: board()
+              - text: between statusline and
+              - code [ref=f3e89]: .kb
+              - text: ". Stage-1 wording exactly:"
+              - code [ref=f3e90]: GATE LATENCY · LAST 30 DAYS
+              - text: ","
+              - code [ref=f3e91]: Median time to decision · UTC
+              - text: ","
+              - code [ref=f3e92]: <gate> · n=<k>
+              - text: ", and"
+              - code [ref=f3e93]: — · no decisions · n=0
+              - text: for empty cohorts — never
+              - code [ref=f3e94]: 0h
+              - text: . Medians over 24h render in
+              - code [ref=f3e95]: "--warning"
+              - text: .
+            - listitem [ref=f3e96]:
+              - strong [ref=f3e97]: Stale Review cards
+              - text: (task 4) —
+              - code [ref=f3e98]: build_card()
+              - text: computes waited seconds once from
+              - code [ref=f3e99]: approvals.requested_at
+              - text: ; strictly over 24h adds a
+              - code [ref=f3e100]: STALE
+              - text: warn chip and a
+              - code [ref=f3e101]: stale
+              - text: card class (
+              - code [ref=f3e102]: "--warning"
+              - text: border, warning-colored age). Approve/Reject forms, evidence link, stage rail, cost footer, and report-blocked precedence are unchanged.
+              - code [ref=f3e103]: gate_card()
+              - text: "on"
+              - code [ref=f3e104]: /gates
+              - text: and
+              - code [ref=f3e105]: "/run/{id}"
+              - text: untouched.
+            - listitem [ref=f3e106]:
+              - strong [ref=f3e107]: Failure isolation + verification
+              - text: (task 5) — isolation and route regressions were specified in task 1 and went green as tasks 2–4 landed. Browser verification (real
+              - code [ref=f3e108]: board()
+              - text: output rendered through the test fakes at 1440px and 720px) caught the ledger 36px over at 1440; gap 44→32px fixed it. At 720px the strip scrolls internally, the page body never scrolls horizontally, and the last metric is reachable. Degraded and zero-decision states render their exact copy.
+            - listitem [ref=f3e109]:
+              - strong [ref=f3e110]: Docs + self-review
+              - text: (task 6) —
+              - code [ref=f3e111]: tools/mission-control/README.md
+              - text: and
+              - code [ref=f3e112]: docs/MISSION-CONTROL.md
+              - text: updated; whole-diff review done (one PEP8 blank-line fix).
+          - paragraph [ref=f3e113]: "Definition-of-code-complete checklist from the task plan: all boxes hold, including \"query plan is acceptable without schema changes\" (Finding 1). Verified explicitly: constant query count regardless of cards/gate types (asserted by test), no new package/write/alert/client-clock/threshold-config/ chart/analytics code anywhere in the diff."
+          - heading "Findings / results" [level=2] [ref=f3e114]
+          - list [ref=f3e115]:
+            - listitem [ref=f3e116]:
+              - strong [ref=f3e117]:
+                - text: "[resolved 2026-09-01]"
+                - code [ref=f3e118]: EXPLAIN (ANALYZE, BUFFERS)
+                - text: run on the box
+              - text: (
+              - code [ref=f3e119]: lantern-fleet
+              - text: ", the live"
+              - code [ref=f3e120]: lantern
+              - text: DB) — evidence in
+              - code [ref=f3e121]: explain-latency.txt
+              - text: ". Real data (10 approvals): seq scan, 0.183 ms. At production-like volume (20 000 synthetic approvals inserted in a transaction and"
+              - strong [ref=f3e122]: rolled back
+              - text: "— post-check confirms the table back at 10 rows): seq scan + quicksort, 11.5 ms, 261 shared-hit buffers, no I/O. One such query per board load is negligible;"
+              - strong [ref=f3e123]: no index is required, so no schema approval is triggered.
+            - listitem [ref=f3e124]:
+              - strong [ref=f3e125]:
+                - text: "[resolved 2026-09-01]"
+                - code [ref=f3e126]: tools/azure-runner/test_verification.py
+                - text: run on the box
+              - text: against the live DB (it self-cleans its
+              - code [ref=f3e127]: test-verification-role
+              - text: "rows): all checks pass — \"the new postcondition is sound where the old one was not\"."
+              - code [ref=f3e128]: test_product_access.py
+              - text: (no DB) also passes locally.
+            - listitem [ref=f3e129]:
+              - strong [ref=f3e130]: "[note] SQL semantics are unit-tested as a query contract"
+              - text: (assertions on
+              - code [ref=f3e131]: LATENCY_SQL
+              - text: "'s clauses), not against a live database — the honest limit of the no-DB test design the plan prescribed. The DB-level behaviors (30-day boundary row inclusion, interpolated medians) are exactly what the QA charter should exercise with seeded approvals."
+            - listitem [ref=f3e132]:
+              - strong [ref=f3e133]: "[note] Theme modes:"
+              - text: the deployed app is dark-only (single
+              - code [ref=f3e134]: :root
+              - text: palette in
+              - code [ref=f3e135]: ui.py
+              - text: ); there is no light mode to verify, so "both theme modes if supported" is vacuously satisfied.
+            - listitem [ref=f3e136]:
+              - strong [ref=f3e137]:
+                - text: "[note]"
+                - code [ref=f3e138]: /runs
+                - text: strips intentionally carry no stale treatment
+              - text: — the plan scopes stale visuals to Board Review cards; strips already show elapsed time.
+          - heading "Artifacts" [level=2] [ref=f3e139]
+          - list [ref=f3e140]:
+            - listitem [ref=f3e141]:
+              - text: Branch
+              - code [ref=f3e142]: claude/gate-latency-statusline-ledger-9189b4
+              - text: ", commits"
+              - code [ref=f3e143]: a0d9fda
+              - text: ","
+              - code [ref=f3e144]: 49e9c4d
+              - text: ","
+              - code [ref=f3e145]: fa693e8
+              - text: ","
+              - code [ref=f3e146]: ab05cf3
+              - text: ","
+              - code [ref=f3e147]: 622eba3
+              - text: ","
+              - code [ref=f3e148]: 717dad6
+              - text: (one per task).
+            - listitem [ref=f3e149]:
+              - code [ref=f3e150]: tools/mission-control/test_gate_latency.py
+              - text: — the executable behavior contract;
+              - code [ref=f3e151]: python -m unittest test_gate_latency
+              - text: from
+              - code [ref=f3e152]: tools/mission-control
+              - text: "using the azure-runner venv. Result this session:"
+              - strong [ref=f3e153]: 34/34 OK
+              - text: (plus
+              - code [ref=f3e154]: test_product_access.py
+              - text: all-pass).
+            - listitem [ref=f3e155]:
+              - code [ref=f3e156]: explain-latency.txt
+              - text: —
+              - code [ref=f3e157]: EXPLAIN (ANALYZE, BUFFERS)
+              - text: of
+              - code [ref=f3e158]: LATENCY_SQL
+              - text: "on the box DB: real data plus 20k-row rolled-back synthetic volume (Finding 1)."
+            - listitem [ref=f3e159]: No videos this stage (developer stage; QA records video in 04).
+          - heading "Handoff notes for the next stage" [level=2] [ref=f3e160]
+          - list [ref=f3e161]:
+            - listitem [ref=f3e162]:
+              - strong [ref=f3e163]: "QA entry point:"
+              - text: seed decided approvals across ≥2 gate types with known timestamps, including one exactly 24h pending, one just over, one decided 31 days ago (must be excluded), one expired and one pending decision (both must be excluded from medians), and an even-sized cohort (median should interpolate). The live board is
+              - code [ref=f3e164]: LANTERN_QA_DEV_BASE_URL
+              - text: .
+            - listitem [ref=f3e165]:
+              - strong [ref=f3e166]: QA confidence map
+              - text: "(where I am least/most confident):"
+            - listitem [ref=f3e167]:
+              - emphasis [ref=f3e168]: Median cohort semantics against a real DB
+              - text: —
+              - strong [ref=f3e169]: medium
+              - text: ": clause-level unit coverage only (Finding 3); highest-value QA target."
+            - listitem [ref=f3e170]:
+              - emphasis [ref=f3e171]: 24h boundary
+              - text: —
+              - strong [ref=f3e172]: high
+              - text: ": strictness is pinned at helper, card, and route levels; exact-24h and future-timestamp cases are tested."
+            - listitem [ref=f3e173]:
+              - emphasis [ref=f3e174]: Board layout
+              - text: —
+              - strong [ref=f3e175]: medium-high
+              - text: ": verified in a real browser at 1440/720 with overflow measurements, but only on Chromium and only with 2 populated + 3 empty metrics; a board with five long medians ("
+              - code [ref=f3e176]: "\"23h 59m\""
+              - text: "-shaped values) and an unknown sixth gate is worth one look, as is Firefox."
+            - listitem [ref=f3e177]:
+              - emphasis [ref=f3e178]: Failure isolation
+              - text: —
+              - strong [ref=f3e179]: high
+              - text: at the unit/route level, but the injected failure is a
+              - code [ref=f3e180]: PostgresError
+              - text: on one query; a real outage takes the whole snapshot down (pre-existing behavior, unchanged by design).
+            - listitem [ref=f3e181]:
+              - code [ref=f3e182]: snapshot()
+              - text: also runs the latency query for
+              - code [ref=f3e183]: /runs
+              - text: (shared batch, per the blast-radius design); its result is simply unused there.
+          - heading "Open questions (BLOCKED status must have exactly one)" [level=2] [ref=f3e184]
+          - paragraph [ref=f3e185]: None.
+          - heading "Memory candidates" [level=2] [ref=f3e186]
+          - paragraph [ref=f3e187]:
+            - text: Recorded here for the postmortem trail — this developer session runs outside the orchestrator, so the
+            - code [ref=f3e188]: append_memory
+            - text: "tool is not wired in this harness; the learnings below should ride along when the stage is recorded (same convention as prior stage-3 sessions):"
+          - list [ref=f3e189]:
+            - listitem [ref=f3e190]:
+              - text: "2026-09-01: Mission Control behavior tests need neither Postgres nor httpx — the route coroutines take a stub"
+              - code [ref=f3e191]: Request
+              - text: (cookies only) and
+              - code [ref=f3e192]: app.pool
+              - text: can be swapped for a query-dispatching fake; asserting on a module-level SQL constant pins query semantics without a DB. Pattern lives in
+              - code [ref=f3e193]: test_gate_latency.py
+              - text: .
+            - listitem [ref=f3e194]:
+              - text: "2026-09-01: ui.py's flight-strip caps labels are wide — a flex strip of five caps-labeled metrics at 44px gaps overflows a 1440px viewport by ~36px. Measure"
+              - code [ref=f3e195]: scrollWidth
+              - text: in a real browser before calling a full-width strip done.
+      - generic [ref=f3e196]:
+        - generic [ref=f3e197]:
+          - textbox "decision note — recorded in the audit log" [ref=f3e198]
+          - button "Approve — starts 4 · QA in dev" [ref=f3e199] [cursor=pointer]
+        - button "Reject — stop for rework" [ref=f3e201] [cursor=pointer]
+    - generic [ref=f3e202]:
+      - generic [ref=f3e203]:
+        - generic [ref=f3e204]: 1 · UI/UX design
+        - generic [ref=f3e205]: 🤖 agent · ec2 · design
+        - generic [ref=f3e206]: Succeeded
+        - generic [ref=f3e207]: 4m14,060,961 tok · $21.15
+      - generic [ref=f3e208]: Explores 2–3 flow options, builds a prototype, records a walkthrough video.
+      - generic [ref=f3e209]:
+        - generic [ref=f3e210]: attempt 5 · succeeded · workstation · 4m
+        - generic [ref=f3e211]: "attempt 4 · failed · workstation · 2m · postconditions failed: stage reported Status: BLOCKED, so it did not complete — no gate is"
+        - generic [ref=f3e212]: "attempt 3 · failed · workstation · 2m · postconditions failed: stage reported Status: BLOCKED, so it did not complete — no gate is"
+        - generic [ref=f3e213]: "attempt 2 · failed · workstation · 5m · postconditions failed: stage reported Status: BLOCKED, so it did not complete — no gate is"
+        - generic [ref=f3e214]: "attempt 1 · failed · workstation · 11m · postconditions failed: jsx/ has 1 files for 3 presented options — one per frame"
+        - generic [ref=f3e215]: attempt 1 · succeeded · ec2 · 2m
+      - group [ref=f3e216]:
+        - 'generic "report.md — report status: PASS-WITH-NOTES" [ref=f3e217] [cursor=pointer]'
+      - generic [ref=f3e218]:
+        - link "📄 report" [ref=f3e219] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/01-ui-ux/report.md
+        - link "📄 report" [ref=f3e220] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/01-ui-ux/report.md
+        - link "📦 design_handoff" [ref=f3e221] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/01-ui-ux/handoff.json
+        - link "🎨 paper_file" [ref=f3e222] [cursor=pointer]:
+          - /url: https://app.paper.design/file/01M0W444P0FVBY0PKRDYAPYDWH/8-0
+        - link "🗺 flow_spec" [ref=f3e223] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/01-ui-ux/flow-spec.md
+        - link "🖼 design_png" [ref=f3e224] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/01-ui-ux/statusline-ledger@2x.png
+        - link "🖼 design_png" [ref=f3e225] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/01-ui-ux/review-lane-summary@2x.png
+        - link "🖼 design_png" [ref=f3e226] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/01-ui-ux/run-detail-context@2x.png
+      - link "💬 consult ui-ux about this run" [ref=f3e228] [cursor=pointer]:
+        - /url: /chat?agent=ui-ux&run=feat-20260831-gate-latency
+    - generic [ref=f3e229]:
+      - generic [ref=f3e230]:
+        - generic [ref=f3e231]: 2 · Planning
+        - generic [ref=f3e232]: 🤖 agent · ec2
+        - generic [ref=f3e233]: Succeeded
+        - generic [ref=f3e234]: 1m1,389,930 tok · $2.10
+      - generic [ref=f3e235]: Blast-radius analysis, schema plan, ordered task plan.
+      - generic [ref=f3e236]:
+        - generic [ref=f3e237]: attempt 2 · succeeded · ec2 · 1m
+        - generic [ref=f3e238]: attempt 1 · succeeded · ec2 · 1m
+      - group [ref=f3e239]:
+        - 'generic "report.md — report status: PASS-WITH-NOTES" [ref=f3e240] [cursor=pointer]'
+      - generic [ref=f3e241]:
+        - link "📄 report" [ref=f3e242] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/02-pre-coding/report.md
+        - link "📄 report" [ref=f3e243] [cursor=pointer]:
+          - /url: /file/workflow/runs/feat-20260831-gate-latency/02-pre-coding/report.md
+      - link "💬 consult pre-coding about this run" [ref=f3e245] [cursor=pointer]:
+        - /url: /chat?agent=pre-coding&run=feat-20260831-gate-latency
+    - generic [ref=f3e246]:
+      - generic [ref=f3e247]:
+        - generic [ref=f3e248]: 3 · Coding
+        - generic [ref=f3e249]: 👤 human · ec2
+        - generic [ref=f3e250]: Not started
+        - generic [ref=f3e251]: current
+      - generic [ref=f3e252]: The plan is implemented — by the assigned developer in their own session, or in auto mode by the coding agent, which ends in a pull request.
+      - group [ref=f3e253]:
+        - 'generic "report.md — report status: PASS-WITH-NOTES" [ref=f3e254] [cursor=pointer]'
+    - generic [ref=f3e255]:
+      - generic [ref=f3e256]:
+        - generic [ref=f3e257]: 4 · QA in dev
+        - generic [ref=f3e258]: 🤖 agent · ec2
+        - generic [ref=f3e259]: Not started
+      - generic [ref=f3e260]: Executes a test charter against the dev build — every session on video.
+      - group [ref=f3e261]:
+        - 'generic "report.md — report status: PASS-WITH-NOTES" [ref=f3e262] [cursor=pointer]'
+    - generic [ref=f3e263]:
+      - generic [ref=f3e264]:
+        - generic [ref=f3e265]: 5 · Code review
+        - generic [ref=f3e266]: 🤖 agent · ec2
+        - generic [ref=f3e267]: Not started
+      - generic [ref=f3e268]: Cleanliness, hidden tech debt, backward compatibility.
+      - group [ref=f3e269]:
+        - 'generic "report.md — report status: PASS-WITH-NOTES" [ref=f3e270] [cursor=pointer]'
+    - generic [ref=f3e271]:
+      - generic [ref=f3e272]:
+        - generic [ref=f3e273]: 6 · Security & deploy risk
+        - generic [ref=f3e274]: 🤖 agent · ec2
+        - generic [ref=f3e275]: Not started
+      - generic [ref=f3e276]: Vulnerabilities, dependency audit, go/no-go for staging.
+    - generic [ref=f3e277]:
+      - generic [ref=f3e278]:
+        - generic [ref=f3e279]: 7 · QA in staging
+        - generic [ref=f3e280]: 🤖 agent · ec2
+        - generic [ref=f3e281]: Not started
+      - generic [ref=f3e282]: Re-runs the charter on staging, verifies analytics events, videos for sign-off.
+    - heading "Audit log" [level=2] [ref=f3e283]
+    - paragraph [ref=f3e284]: Every action on this run, newest first — 30 shown.
+    - generic [ref=f3e285]:
+      - generic [ref=f3e286]:
+        - generic [ref=f3e287]: Sep 01 05:02:20
+        - generic [ref=f3e288]: orchestrator
+        - generic [ref=f3e289]:
+          - text: gate opened
+          - generic [ref=f3e290]: "{\"gate\": \"code_complete\", \"after_stage\": \"03-coding\"}"
+      - generic [ref=f3e291]:
+        - generic [ref=f3e292]: Sep 01 05:02:16
+        - generic [ref=f3e293]: human:dimash
+        - generic [ref=f3e294]:
+          - text: gate approved
+          - generic [ref=f3e295]: "{\"gate\": \"plan_signoff\", \"note\": \"statusline-ledger plan: no schema change, tests-first, snapshot() risk acknowledged\"}"
+      - generic [ref=f3e296]:
+        - generic [ref=f3e297]: Sep 01 04:50:08
+        - generic [ref=f3e298]: orchestrator
+        - generic [ref=f3e299]:
+          - text: gate opened
+          - generic [ref=f3e300]: "{\"gate\": \"plan_signoff\", \"after_stage\": \"02-pre-coding\"}"
+      - generic [ref=f3e301]:
+        - generic [ref=f3e302]: Sep 01 04:50:08
+        - generic [ref=f3e303]: agent:pre-coding
+        - generic [ref=f3e304]:
+          - text: stage succeeded
+          - generic [ref=f3e305]: "{\"stage\": \"02-pre-coding\"}"
+      - generic [ref=f3e306]:
+        - generic [ref=f3e307]: Sep 01 04:48:39
+        - generic [ref=f3e308]: orchestrator
+        - generic [ref=f3e309]:
+          - text: stage started
+          - generic [ref=f3e310]: "{\"stage\": \"02-pre-coding\", \"runner\": \"ec2\", \"attempt\": 2, \"executor\": \"docker\"}"
+      - generic [ref=f3e311]:
+        - generic [ref=f3e312]: Sep 01 04:48:34
+        - generic [ref=f3e313]: human:cli
+        - generic [ref=f3e314]:
+          - text: run retried
+          - generic [ref=f3e315]: "{}"
+      - generic [ref=f3e316]:
+        - generic [ref=f3e317]: Sep 01 04:48:29
+        - generic [ref=f3e318]: human:dimash
+        - generic [ref=f3e319]:
+          - text: gate rejected
+          - generic [ref=f3e320]: "{\"gate\": \"plan_signoff\", \"note\": \"Plan targets run-detail-context; the ux_signoff choice is corrected to statusline-ledg"
+      - generic [ref=f3e321]:
+        - generic [ref=f3e322]: Aug 31 09:42:46
+        - generic [ref=f3e323]: orchestrator
+        - generic [ref=f3e324]:
+          - text: gate opened
+          - generic [ref=f3e325]: "{\"gate\": \"plan_signoff\", \"after_stage\": \"02-pre-coding\"}"
+      - generic [ref=f3e326]:
+        - generic [ref=f3e327]: Aug 31 09:42:46
+        - generic [ref=f3e328]: agent:pre-coding
+        - generic [ref=f3e329]:
+          - text: stage succeeded
+          - generic [ref=f3e330]: "{\"stage\": \"02-pre-coding\"}"
+      - generic [ref=f3e331]:
+        - generic [ref=f3e332]: Aug 31 09:41:17
+        - generic [ref=f3e333]: orchestrator
+        - generic [ref=f3e334]:
+          - text: stage started
+          - generic [ref=f3e335]: "{\"stage\": \"02-pre-coding\", \"runner\": \"ec2\", \"attempt\": 1, \"executor\": \"docker\"}"
+      - generic [ref=f3e336]:
+        - generic [ref=f3e337]: Aug 31 09:41:14
+        - generic [ref=f3e338]: human:claude-for-dimash
+        - generic [ref=f3e339]:
+          - text: gate approved
+          - generic [ref=f3e340]: "{\"gate\": \"ux_signoff\", \"note\": \"Option: run-detail-context — decision given by dimash in chat 2026-08-31: just approve b"
+      - generic [ref=f3e341]:
+        - generic [ref=f3e342]: Aug 31 09:40:47
+        - generic [ref=f3e343]: human:cli
+        - generic [ref=f3e344]:
+          - text: product target set
+          - generic [ref=f3e345]: "{\"head\": \"799724786355\", \"repo\": \"https://github.com/Dimashsaken/Agentic-workflow-lantern\", \"branch\": \"main\"}"
+      - generic [ref=f3e346]:
+        - generic [ref=f3e347]: Aug 31 04:52:43
+        - generic [ref=f3e348]: orchestrator
+        - generic [ref=f3e349]:
+          - text: gate opened
+          - generic [ref=f3e350]: "{\"gate\": \"ux_signoff\", \"after_stage\": \"01-ui-ux.design\"}"
+      - generic [ref=f3e351]:
+        - generic [ref=f3e352]: Aug 31 04:52:41
+        - generic [ref=f3e353]: agent:ui-ux
+        - generic [ref=f3e354]:
+          - text: stage succeeded
+          - generic [ref=f3e355]: "{\"stage\": \"01-ui-ux.design\"}"
+      - generic [ref=f3e356]:
+        - generic [ref=f3e357]: Aug 31 04:48:12
+        - generic [ref=f3e358]: orchestrator
+        - generic [ref=f3e359]:
+          - text: stage started
+          - generic [ref=f3e360]: "{\"stage\": \"01-ui-ux.design\", \"runner\": \"workstation\", \"attempt\": 5}"
+      - generic [ref=f3e361]:
+        - generic [ref=f3e362]: Aug 31 04:48:02
+        - generic [ref=f3e363]: human:cli
+        - generic [ref=f3e364]:
+          - text: run retried
+          - generic [ref=f3e365]: "{}"
+      - generic [ref=f3e366]:
+        - generic [ref=f3e367]: Aug 31 04:46:17
+        - generic [ref=f3e368]: orchestrator
+        - generic [ref=f3e369]:
+          - text: stage failed
+          - generic [ref=f3e370]: "{\"error\": \"postconditions failed: stage reported Status: BLOCKED, so it did not complete — no gate is opened for a block"
+      - generic [ref=f3e371]:
+        - generic [ref=f3e372]: Aug 31 04:43:47
+        - generic [ref=f3e373]: orchestrator
+        - generic [ref=f3e374]:
+          - text: stage started
+          - generic [ref=f3e375]: "{\"stage\": \"01-ui-ux.design\", \"runner\": \"workstation\", \"attempt\": 4}"
+      - generic [ref=f3e376]:
+        - generic [ref=f3e377]: Aug 31 04:43:33
+        - generic [ref=f3e378]: human:cli
+        - generic [ref=f3e379]:
+          - text: run retried
+          - generic [ref=f3e380]: "{}"
+      - generic [ref=f3e381]:
+        - generic [ref=f3e382]: Aug 31 04:39:27
+        - generic [ref=f3e383]: orchestrator
+        - generic [ref=f3e384]:
+          - text: stage failed
+          - generic [ref=f3e385]: "{\"error\": \"postconditions failed: stage reported Status: BLOCKED, so it did not complete — no gate is opened for a block"
+      - generic [ref=f3e386]:
+        - generic [ref=f3e387]: Aug 31 04:37:22
+        - generic [ref=f3e388]: orchestrator
+        - generic [ref=f3e389]:
+          - text: stage started
+          - generic [ref=f3e390]: "{\"stage\": \"01-ui-ux.design\", \"runner\": \"workstation\", \"attempt\": 3}"
+      - generic [ref=f3e391]:
+        - generic [ref=f3e392]: Aug 31 04:37:12
+        - generic [ref=f3e393]: human:cli
+        - generic [ref=f3e394]:
+          - text: run retried
+          - generic [ref=f3e395]: "{}"
+      - generic [ref=f3e396]:
+        - generic [ref=f3e397]: Aug 31 04:36:00
+        - generic [ref=f3e398]: orchestrator
+        - generic [ref=f3e399]:
+          - text: stage failed
+          - generic [ref=f3e400]: "{\"error\": \"postconditions failed: stage reported Status: BLOCKED, so it did not complete — no gate is opened for a block"
+      - generic [ref=f3e401]:
+        - generic [ref=f3e402]: Aug 31 04:30:40
+        - generic [ref=f3e403]: orchestrator
+        - generic [ref=f3e404]:
+          - text: stage started
+          - generic [ref=f3e405]: "{\"stage\": \"01-ui-ux.design\", \"runner\": \"workstation\", \"attempt\": 2}"
+      - generic [ref=f3e406]:
+        - generic [ref=f3e407]: Aug 31 04:30:28
+        - generic [ref=f3e408]: human:cli
+        - generic [ref=f3e409]:
+          - text: run retried
+          - generic [ref=f3e410]: "{}"
+      - generic [ref=f3e411]:
+        - generic [ref=f3e412]: Aug 31 04:17:28
+        - generic [ref=f3e413]: orchestrator
+        - generic [ref=f3e414]:
+          - text: stage failed
+          - generic [ref=f3e415]: "{\"error\": \"postconditions failed: jsx/ has 1 files for 3 presented options — one per frame\", \"stage\": \"01-ui-ux.design\"}"
+      - generic [ref=f3e416]:
+        - generic [ref=f3e417]: Aug 31 04:06:13
+        - generic [ref=f3e418]: orchestrator
+        - generic [ref=f3e419]:
+          - text: stage started
+          - generic [ref=f3e420]: "{\"stage\": \"01-ui-ux.design\", \"runner\": \"workstation\", \"attempt\": 1}"
+      - generic [ref=f3e421]:
+        - generic [ref=f3e422]: Aug 31 03:48:15
+        - generic [ref=f3e423]: agent:ui-ux
+        - generic [ref=f3e424]:
+          - text: stage succeeded
+          - generic [ref=f3e425]: "{\"stage\": \"01-ui-ux.diverge\"}"
+      - generic [ref=f3e426]:
+        - generic [ref=f3e427]: Aug 31 03:45:52
+        - generic [ref=f3e428]: orchestrator
+        - generic [ref=f3e429]:
+          - text: stage started
+          - generic [ref=f3e430]: "{\"stage\": \"01-ui-ux.diverge\", \"runner\": \"ec2\", \"attempt\": 1, \"executor\": \"docker\"}"
+      - generic [ref=f3e431]:
+        - generic [ref=f3e432]: Aug 31 03:45:49
+        - generic [ref=f3e433]: human:dimash
+        - generic [ref=f3e434]:
+          - text: run created
+          - generic [ref=f3e435]: "{\"brief\": \"../../workflow/briefs/gate-latency.md\", \"product_repo\": \"https://github.com/Dimashsaken/Agentic-workflow-lant"

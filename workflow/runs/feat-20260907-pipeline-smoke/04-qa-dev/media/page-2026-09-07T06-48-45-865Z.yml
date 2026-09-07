@@ -1,0 +1,562 @@
+- generic [active] [ref=f2e1]:
+  - banner [ref=f2e2]:
+    - link "Lantern" [ref=f2e3] [cursor=pointer]:
+      - /url: /
+    - navigation [ref=f2e4]:
+      - link "Board" [ref=f2e5] [cursor=pointer]:
+        - /url: /
+      - link "Chat" [ref=f2e6] [cursor=pointer]:
+        - /url: /chat
+      - link "Gates" [ref=f2e7] [cursor=pointer]:
+        - /url: /gates
+      - link "Runs" [ref=f2e8] [cursor=pointer]:
+        - /url: /runs
+      - link "Agents" [ref=f2e9] [cursor=pointer]:
+        - /url: /agents
+      - link "Spend" [ref=f2e10] [cursor=pointer]:
+        - /url: /spend
+    - generic [ref=f2e11]:
+      - generic [ref=f2e12]:
+        - generic [ref=f2e14]: Live
+        - text: · 06:48 UTC
+      - generic [ref=f2e15]: qa-dev
+      - link "log out" [ref=f2e16] [cursor=pointer]:
+        - /url: /logout
+  - main [ref=f2e17]:
+    - heading "2 gates waiting, oldest first" [level=2] [ref=f2e18]
+    - paragraph [ref=f2e19]: Approving advances the run; rejecting stops it for rework. Every decision lands in the audit log with your name on it.
+    - generic [ref=f2e20]:
+      - generic [ref=f2e21]:
+        - generic [ref=f2e22]:
+          - generic [ref=f2e23]:
+            - link "feat-20260831-gate-latency" [ref=f2e24] [cursor=pointer]:
+              - /url: /run/feat-20260831-gate-latency
+            - text: · after 03-coding
+          - heading "Code-complete?" [level=2] [ref=f2e25]
+        - generic [ref=f2e26]: waiting 6d 1h opened Sep 01 05:02 UTC
+      - paragraph [ref=f2e27]: Every planned task is done and tests are green — the developer confirms it, or in auto mode you review the coding agent's pull request and approve here.
+      - group [ref=f2e28]:
+        - generic "The report being approved — 03-coding/report.md" [ref=f2e29] [cursor=pointer]
+        - generic [ref=f2e30]:
+          - 'heading "Stage Report: 03-coding — feat-20260831-gate-latency" [level=1] [ref=f2e31]'
+          - list [ref=f2e32]:
+            - listitem [ref=f2e33]:
+              - strong [ref=f2e34]: "Agent/author:"
+              - text: dimash (developer session — Claude Code on the laptop, branch
+              - code [ref=f2e35]: claude/gate-latency-statusline-ledger-9189b4
+              - text: )
+            - listitem [ref=f2e36]:
+              - strong [ref=f2e37]: "Date:"
+              - text: 2026-09-01
+            - listitem [ref=f2e38]:
+              - strong [ref=f2e39]: "Status:"
+              - text: PASS-WITH-NOTES
+          - heading "Summary" [level=2] [ref=f2e40]
+          - paragraph [ref=f2e41]:
+            - text: The approved
+            - code [ref=f2e42]: statusline-ledger
+            - text: "UX is implemented: the Board renders a full-width per-gate 30-day median ledger between the statusline and the five columns, every pending Review card shows its age, and cards strictly older than 24h get an explicit"
+            - code [ref=f2e43]: STALE
+            - text: warning treatment. All 34 new behavior tests plus the existing repository tests pass; the two checks that needed a live Postgres were initially deferred and then
+            - strong [ref=f2e44]: closed same-day against the box's database over SSH
+            - text: — query plan needs no index (Finding 1) and
+            - code [ref=f2e45]: test_verification.py
+            - text: passes (Finding 2).
+          - heading "Work performed" [level=2] [ref=f2e46]
+          - paragraph [ref=f2e47]:
+            - text: Six tasks, one commit each, tests first (
+            - code [ref=f2e48]: a0d9fda
+            - text: →
+            - code [ref=f2e49]: 717dad6
+            - text: "):"
+          - list [ref=f2e50]:
+            - listitem [ref=f2e51]:
+              - strong [ref=f2e52]:
+                - code [ref=f2e53]: tools/mission-control/test_gate_latency.py
+              - text: (task 1) — 34 stdlib
+              - code [ref=f2e54]: unittest
+              - text: cases; no DB, no HTTP client, no new packages. Routes are exercised by calling the coroutine endpoints directly with a signed session cookie and a
+              - code [ref=f2e55]: FakePool
+              - text: that answers
+              - code [ref=f2e56]: snapshot()
+              - text: "'s queries and records every SQL statement."
+            - listitem [ref=f2e57]:
+              - strong [ref=f2e58]: Data assembly
+              - text: (task 2) —
+              - code [ref=f2e59]: snapshot()
+              - text: "'s unused all-time scalar"
+              - code [ref=f2e60]: decided
+              - text: fetchrow is replaced by one grouped query (
+              - code [ref=f2e61]: LATENCY_SQL
+              - text: "): per-gate"
+              - code [ref=f2e62]: percentile_cont(0.5)
+              - text: of
+              - code [ref=f2e63]: decided_at - requested_at
+              - text: seconds plus count, over approvals with
+              - code [ref=f2e64]: status IN ('approved','rejected') AND decided_at IS NOT NULL AND decided_at >= now() - interval '30 days'
+              - text: .
+              - code [ref=f2e65]: gate_latency_rows()
+              - text: normalizes to
+              - code [ref=f2e66]: GATE_META
+              - text: order and keeps unknown historical gates;
+              - code [ref=f2e67]: ledger_metrics()
+              - text: formats display values;
+              - code [ref=f2e68]: is_stale()
+              - text: is strictly
+              - code [ref=f2e69]: "> 24*3600"
+              - text: . A
+              - code [ref=f2e70]: PostgresError
+              - text: on this one query degrades to
+              - code [ref=f2e71]: gate_latency=None
+              - text: .
+            - listitem [ref=f2e72]:
+              - strong [ref=f2e73]: Ledger render
+              - text: (task 3) —
+              - code [ref=f2e74]: ui.gate_ledger()
+              - text: +
+              - code [ref=f2e75]: .ledger
+              - text: CSS (existing tokens only), wired into
+              - code [ref=f2e76]: board()
+              - text: between statusline and
+              - code [ref=f2e77]: .kb
+              - text: ". Stage-1 wording exactly:"
+              - code [ref=f2e78]: GATE LATENCY · LAST 30 DAYS
+              - text: ","
+              - code [ref=f2e79]: Median time to decision · UTC
+              - text: ","
+              - code [ref=f2e80]: <gate> · n=<k>
+              - text: ", and"
+              - code [ref=f2e81]: — · no decisions · n=0
+              - text: for empty cohorts — never
+              - code [ref=f2e82]: 0h
+              - text: . Medians over 24h render in
+              - code [ref=f2e83]: "--warning"
+              - text: .
+            - listitem [ref=f2e84]:
+              - strong [ref=f2e85]: Stale Review cards
+              - text: (task 4) —
+              - code [ref=f2e86]: build_card()
+              - text: computes waited seconds once from
+              - code [ref=f2e87]: approvals.requested_at
+              - text: ; strictly over 24h adds a
+              - code [ref=f2e88]: STALE
+              - text: warn chip and a
+              - code [ref=f2e89]: stale
+              - text: card class (
+              - code [ref=f2e90]: "--warning"
+              - text: border, warning-colored age). Approve/Reject forms, evidence link, stage rail, cost footer, and report-blocked precedence are unchanged.
+              - code [ref=f2e91]: gate_card()
+              - text: "on"
+              - code [ref=f2e92]: /gates
+              - text: and
+              - code [ref=f2e93]: "/run/{id}"
+              - text: untouched.
+            - listitem [ref=f2e94]:
+              - strong [ref=f2e95]: Failure isolation + verification
+              - text: (task 5) — isolation and route regressions were specified in task 1 and went green as tasks 2–4 landed. Browser verification (real
+              - code [ref=f2e96]: board()
+              - text: output rendered through the test fakes at 1440px and 720px) caught the ledger 36px over at 1440; gap 44→32px fixed it. At 720px the strip scrolls internally, the page body never scrolls horizontally, and the last metric is reachable. Degraded and zero-decision states render their exact copy.
+            - listitem [ref=f2e97]:
+              - strong [ref=f2e98]: Docs + self-review
+              - text: (task 6) —
+              - code [ref=f2e99]: tools/mission-control/README.md
+              - text: and
+              - code [ref=f2e100]: docs/MISSION-CONTROL.md
+              - text: updated; whole-diff review done (one PEP8 blank-line fix).
+          - paragraph [ref=f2e101]: "Definition-of-code-complete checklist from the task plan: all boxes hold, including \"query plan is acceptable without schema changes\" (Finding 1). Verified explicitly: constant query count regardless of cards/gate types (asserted by test), no new package/write/alert/client-clock/threshold-config/ chart/analytics code anywhere in the diff."
+          - heading "Findings / results" [level=2] [ref=f2e102]
+          - list [ref=f2e103]:
+            - listitem [ref=f2e104]:
+              - strong [ref=f2e105]:
+                - text: "[resolved 2026-09-01]"
+                - code [ref=f2e106]: EXPLAIN (ANALYZE, BUFFERS)
+                - text: run on the box
+              - text: (
+              - code [ref=f2e107]: lantern-fleet
+              - text: ", the live"
+              - code [ref=f2e108]: lantern
+              - text: DB) — evidence in
+              - code [ref=f2e109]: explain-latency.txt
+              - text: ". Real data (10 approvals): seq scan, 0.183 ms. At production-like volume (20 000 synthetic approvals inserted in a transaction and"
+              - strong [ref=f2e110]: rolled back
+              - text: "— post-check confirms the table back at 10 rows): seq scan + quicksort, 11.5 ms, 261 shared-hit buffers, no I/O. One such query per board load is negligible;"
+              - strong [ref=f2e111]: no index is required, so no schema approval is triggered.
+            - listitem [ref=f2e112]:
+              - strong [ref=f2e113]:
+                - text: "[resolved 2026-09-01]"
+                - code [ref=f2e114]: tools/azure-runner/test_verification.py
+                - text: run on the box
+              - text: against the live DB (it self-cleans its
+              - code [ref=f2e115]: test-verification-role
+              - text: "rows): all checks pass — \"the new postcondition is sound where the old one was not\"."
+              - code [ref=f2e116]: test_product_access.py
+              - text: (no DB) also passes locally.
+            - listitem [ref=f2e117]:
+              - strong [ref=f2e118]: "[note] SQL semantics are unit-tested as a query contract"
+              - text: (assertions on
+              - code [ref=f2e119]: LATENCY_SQL
+              - text: "'s clauses), not against a live database — the honest limit of the no-DB test design the plan prescribed. The DB-level behaviors (30-day boundary row inclusion, interpolated medians) are exactly what the QA charter should exercise with seeded approvals."
+            - listitem [ref=f2e120]:
+              - strong [ref=f2e121]: "[note] Theme modes:"
+              - text: the deployed app is dark-only (single
+              - code [ref=f2e122]: :root
+              - text: palette in
+              - code [ref=f2e123]: ui.py
+              - text: ); there is no light mode to verify, so "both theme modes if supported" is vacuously satisfied.
+            - listitem [ref=f2e124]:
+              - strong [ref=f2e125]:
+                - text: "[note]"
+                - code [ref=f2e126]: /runs
+                - text: strips intentionally carry no stale treatment
+              - text: — the plan scopes stale visuals to Board Review cards; strips already show elapsed time.
+          - heading "Artifacts" [level=2] [ref=f2e127]
+          - list [ref=f2e128]:
+            - listitem [ref=f2e129]:
+              - text: Branch
+              - code [ref=f2e130]: claude/gate-latency-statusline-ledger-9189b4
+              - text: ", commits"
+              - code [ref=f2e131]: a0d9fda
+              - text: ","
+              - code [ref=f2e132]: 49e9c4d
+              - text: ","
+              - code [ref=f2e133]: fa693e8
+              - text: ","
+              - code [ref=f2e134]: ab05cf3
+              - text: ","
+              - code [ref=f2e135]: 622eba3
+              - text: ","
+              - code [ref=f2e136]: 717dad6
+              - text: (one per task).
+            - listitem [ref=f2e137]:
+              - code [ref=f2e138]: tools/mission-control/test_gate_latency.py
+              - text: — the executable behavior contract;
+              - code [ref=f2e139]: python -m unittest test_gate_latency
+              - text: from
+              - code [ref=f2e140]: tools/mission-control
+              - text: "using the azure-runner venv. Result this session:"
+              - strong [ref=f2e141]: 34/34 OK
+              - text: (plus
+              - code [ref=f2e142]: test_product_access.py
+              - text: all-pass).
+            - listitem [ref=f2e143]:
+              - code [ref=f2e144]: explain-latency.txt
+              - text: —
+              - code [ref=f2e145]: EXPLAIN (ANALYZE, BUFFERS)
+              - text: of
+              - code [ref=f2e146]: LATENCY_SQL
+              - text: "on the box DB: real data plus 20k-row rolled-back synthetic volume (Finding 1)."
+            - listitem [ref=f2e147]: No videos this stage (developer stage; QA records video in 04).
+          - heading "Handoff notes for the next stage" [level=2] [ref=f2e148]
+          - list [ref=f2e149]:
+            - listitem [ref=f2e150]:
+              - strong [ref=f2e151]: "QA entry point:"
+              - text: seed decided approvals across ≥2 gate types with known timestamps, including one exactly 24h pending, one just over, one decided 31 days ago (must be excluded), one expired and one pending decision (both must be excluded from medians), and an even-sized cohort (median should interpolate). The live board is
+              - code [ref=f2e152]: LANTERN_QA_DEV_BASE_URL
+              - text: .
+            - listitem [ref=f2e153]:
+              - strong [ref=f2e154]: QA confidence map
+              - text: "(where I am least/most confident):"
+            - listitem [ref=f2e155]:
+              - emphasis [ref=f2e156]: Median cohort semantics against a real DB
+              - text: —
+              - strong [ref=f2e157]: medium
+              - text: ": clause-level unit coverage only (Finding 3); highest-value QA target."
+            - listitem [ref=f2e158]:
+              - emphasis [ref=f2e159]: 24h boundary
+              - text: —
+              - strong [ref=f2e160]: high
+              - text: ": strictness is pinned at helper, card, and route levels; exact-24h and future-timestamp cases are tested."
+            - listitem [ref=f2e161]:
+              - emphasis [ref=f2e162]: Board layout
+              - text: —
+              - strong [ref=f2e163]: medium-high
+              - text: ": verified in a real browser at 1440/720 with overflow measurements, but only on Chromium and only with 2 populated + 3 empty metrics; a board with five long medians ("
+              - code [ref=f2e164]: "\"23h 59m\""
+              - text: "-shaped values) and an unknown sixth gate is worth one look, as is Firefox."
+            - listitem [ref=f2e165]:
+              - emphasis [ref=f2e166]: Failure isolation
+              - text: —
+              - strong [ref=f2e167]: high
+              - text: at the unit/route level, but the injected failure is a
+              - code [ref=f2e168]: PostgresError
+              - text: on one query; a real outage takes the whole snapshot down (pre-existing behavior, unchanged by design).
+            - listitem [ref=f2e169]:
+              - code [ref=f2e170]: snapshot()
+              - text: also runs the latency query for
+              - code [ref=f2e171]: /runs
+              - text: (shared batch, per the blast-radius design); its result is simply unused there.
+          - heading "Open questions (BLOCKED status must have exactly one)" [level=2] [ref=f2e172]
+          - paragraph [ref=f2e173]: None.
+          - heading "Memory candidates" [level=2] [ref=f2e174]
+          - paragraph [ref=f2e175]:
+            - text: Recorded here for the postmortem trail — this developer session runs outside the orchestrator, so the
+            - code [ref=f2e176]: append_memory
+            - text: "tool is not wired in this harness; the learnings below should ride along when the stage is recorded (same convention as prior stage-3 sessions):"
+          - list [ref=f2e177]:
+            - listitem [ref=f2e178]:
+              - text: "2026-09-01: Mission Control behavior tests need neither Postgres nor httpx — the route coroutines take a stub"
+              - code [ref=f2e179]: Request
+              - text: (cookies only) and
+              - code [ref=f2e180]: app.pool
+              - text: can be swapped for a query-dispatching fake; asserting on a module-level SQL constant pins query semantics without a DB. Pattern lives in
+              - code [ref=f2e181]: test_gate_latency.py
+              - text: .
+            - listitem [ref=f2e182]:
+              - text: "2026-09-01: ui.py's flight-strip caps labels are wide — a flex strip of five caps-labeled metrics at 44px gaps overflows a 1440px viewport by ~36px. Measure"
+              - code [ref=f2e183]: scrollWidth
+              - text: in a real browser before calling a full-width strip done.
+      - generic [ref=f2e184]:
+        - generic [ref=f2e185]:
+          - textbox "decision note — recorded in the audit log" [ref=f2e186]
+          - button "Approve — starts 4 · QA in dev" [ref=f2e187] [cursor=pointer]
+        - button "Reject — stop for rework" [ref=f2e189] [cursor=pointer]
+    - generic [ref=f2e190]:
+      - generic [ref=f2e191]:
+        - generic [ref=f2e192]:
+          - generic [ref=f2e193]:
+            - link "feat-20260907-status-json" [ref=f2e194] [cursor=pointer]:
+              - /url: /run/feat-20260907-status-json
+            - text: · after 03-coding
+          - heading "Code-complete?" [level=2] [ref=f2e195]
+        - generic [ref=f2e196]: waiting 45m opened Sep 07 06:03 UTC
+      - paragraph [ref=f2e197]: Every planned task is done and tests are green — the developer confirms it, or in auto mode you review the coding agent's pull request and approve here.
+      - generic [ref=f2e198]:
+        - 'link "open pull request #1 ↗" [ref=f2e199] [cursor=pointer]':
+          - /url: https://github.com/Dimashsaken/Agentic-workflow-lantern/pull/1
+        - text: · branch
+        - code [ref=f2e200]: feat/20260907-status-json
+        - text: →
+        - code [ref=f2e201]: main
+        - text: ·
+        - generic [ref=f2e202]: "3"
+        - text: commits
+      - list [ref=f2e203]:
+        - listitem [ref=f2e204]:
+          - code [ref=f2e205]: dd62c336
+          - text: "feat-20260907-status-json: task 1 — lock status output contract"
+        - listitem [ref=f2e206]:
+          - code [ref=f2e207]: 40df07cf
+          - text: "feat-20260907-status-json: task 2 — add JSON status output"
+        - listitem [ref=f2e208]:
+          - code [ref=f2e209]: b192ee93
+          - text: "feat-20260907-status-json: task 3 — document JSON status output"
+      - group [ref=f2e210]:
+        - generic "The coding report — 03-coding/report.md" [ref=f2e211] [cursor=pointer]
+        - generic [ref=f2e212]:
+          - 'heading "Stage Report: 03-coding — feat-20260907-status-json" [level=1] [ref=f2e213]'
+          - list [ref=f2e214]:
+            - listitem [ref=f2e215]:
+              - strong [ref=f2e216]: "Agent/author:"
+              - text: coding
+            - listitem [ref=f2e217]:
+              - strong [ref=f2e218]: "Date:"
+              - text: 2026-09-07
+            - listitem [ref=f2e219]:
+              - strong [ref=f2e220]: "Status:"
+              - text: PASS
+          - heading "Summary" [level=2] [ref=f2e221]
+          - paragraph [ref=f2e222]:
+            - text: Implemented and documented
+            - code [ref=f2e223]: pipeline.py status --json
+            - text: with a pure payload shaper and focused behavior tests. The command retains exactly two database queries and the legacy human output is regression-tested. All focused tests pass; the committed branch is ready for human code review and QA.
+          - heading "Work performed" [level=2] [ref=f2e224]
+          - list [ref=f2e225]:
+            - listitem [ref=f2e226]:
+              - text: Added
+              - code [ref=f2e227]: tools/azure-runner/test_status_json.py
+              - text: to cover exact payload keys, UTC ISO-8601 timestamps, nullable repository values, empty inputs, query count/selection, parseable JSON-only stdout, and exact legacy stdout.
+            - listitem [ref=f2e228]:
+              - text: Added
+              - code [ref=f2e229]: status_payload
+              - text: ", the"
+              - code [ref=f2e230]: "--json"
+              - text: argparse flag, JSON dispatch, and
+              - code [ref=f2e231]: product_repo
+              - text: to the existing runs query in
+              - code [ref=f2e232]: tools/azure-runner/pipeline.py
+              - text: .
+            - listitem [ref=f2e233]:
+              - text: Documented the JSON form beside the status command in
+              - code [ref=f2e234]: tools/azure-runner/README.md
+              - text: .
+            - listitem [ref=f2e235]:
+              - text: Self-reviewed the complete diff from
+              - code [ref=f2e236]: 8e0094c
+              - text: through
+              - code [ref=f2e237]: b192ee9
+              - text: ; only the three approved product paths changed and the working tree is clean.
+          - heading "Findings / results" [level=2] [ref=f2e238]
+          - list [ref=f2e239]:
+            - listitem [ref=f2e240]:
+              - strong [ref=f2e241]: "PASS:"
+              - code [ref=f2e242]: cd tools/azure-runner && /tmp/status-json-venv/bin/python -m unittest test_status_json -v
+              - text: — 5 tests passed.
+            - listitem [ref=f2e243]:
+              - strong [ref=f2e244]: "PASS:"
+              - code [ref=f2e245]: cd tools/azure-runner && /tmp/status-json-venv/bin/python test_coding_stage.py
+              - text: — all auto-coding properties hold.
+            - listitem [ref=f2e246]:
+              - strong [ref=f2e247]: "PASS:"
+              - code [ref=f2e248]: python3 -m py_compile tools/azure-runner/pipeline.py tools/azure-runner/test_status_json.py
+              - text: and
+              - code [ref=f2e249]: git diff --check 8e0094c..HEAD
+              - text: .
+            - listitem [ref=f2e250]:
+              - strong [ref=f2e251]: "Environment note:"
+              - text: the system Python lacked the repository dependencies, so focused tests used a temporary virtual environment populated from
+              - code [ref=f2e252]: tools/azure-runner/requirements.txt
+              - text: ; no product dependency files changed.
+          - heading "Artifacts" [level=2] [ref=f2e253]
+          - list [ref=f2e254]:
+            - listitem [ref=f2e255]:
+              - code [ref=f2e256]: report.md
+              - text: — implementation and QA handoff.
+            - listitem [ref=f2e257]: "Product commits:"
+            - listitem [ref=f2e258]:
+              - code [ref=f2e259]: dd62c33
+              - text: "— task 1: lock status output contract."
+            - listitem [ref=f2e260]:
+              - code [ref=f2e261]: 40df07c
+              - text: "— task 2: add JSON status output."
+            - listitem [ref=f2e262]:
+              - code [ref=f2e263]: b192ee9
+              - text: "— task 3: document JSON status output."
+          - heading "Deviations" [level=2] [ref=f2e264]
+          - paragraph [ref=f2e265]: None.
+          - heading "QA confidence map" [level=2] [ref=f2e266]
+          - list [ref=f2e267]:
+            - listitem [ref=f2e268]:
+              - strong [ref=f2e269]: "Highest risk — legacy stdout compatibility:"
+              - text: exercise empty, human-mode, auto-mode, and pending-gate rows; exact representative strings are covered, but production row combinations remain worth checking.
+            - listitem [ref=f2e270]:
+              - strong [ref=f2e271]: "JSON timestamp assumptions:"
+              - text: verify real asyncpg
+              - code [ref=f2e272]: timestamptz
+              - text: rows carry UTC-aware datetimes and render the expected
+              - code [ref=f2e273]: +00:00
+              - text: suffix.
+            - listitem [ref=f2e274]:
+              - strong [ref=f2e275]: "CLI/database integration:"
+              - text: run both
+              - code [ref=f2e276]: status
+              - text: and
+              - code [ref=f2e277]: status --json
+              - text: against a populated development database to confirm parser dispatch, row access, and clean stdout end to end.
+          - heading "Handoff notes for the next stage" [level=2] [ref=f2e278]
+          - paragraph [ref=f2e279]:
+            - text: Start with
+            - code [ref=f2e280]: tools/azure-runner/test_status_json.py
+            - text: ", then compare both CLI modes against a populated development database. No schema, package, query-count, sorting, Mission Control, chat, or runboard behavior changed."
+          - heading "Open questions (BLOCKED status must have exactly one)" [level=2] [ref=f2e281]
+          - paragraph [ref=f2e282]: None.
+          - heading "Memory candidates" [level=2] [ref=f2e283]
+          - paragraph [ref=f2e284]: "2026-09-07: For a CLI machine-output mode, execute shared database reads before branching into renderers and freeze legacy stdout with exact-string tests, because this preserves query parity and catches accidental compatibility changes."
+      - generic [ref=f2e285]:
+        - generic [ref=f2e286]:
+          - textbox "decision note — recorded in the audit log" [ref=f2e287]
+          - button "Approve — starts 4 · QA in dev" [ref=f2e288] [cursor=pointer]
+        - button "Reject — stop for rework" [ref=f2e290] [cursor=pointer]
+    - generic [ref=f2e291]:
+      - generic [ref=f2e292]:
+        - generic [ref=f2e293]: Decided · most recent
+        - generic [ref=f2e294]: 10 shown
+      - generic [ref=f2e295]:
+        - generic [ref=f2e296]: Sep 07 05:57
+        - generic [ref=f2e297]:
+          - link "status-json" [ref=f2e298] [cursor=pointer]:
+            - /url: /run/feat-20260907-status-json
+          - text: · plan sign-off
+        - generic [ref=f2e299]: "D14 proof run: plan matches the brief (3 tasks, tests first, no schema, no packages). Approved by the Claude session driving the proof, on dimash's be"
+        - generic [ref=f2e300]:
+          - generic [ref=f2e301]: approved
+          - text: claude-for-dimash
+      - generic [ref=f2e302]:
+        - generic [ref=f2e303]: Sep 01 05:02
+        - generic [ref=f2e304]:
+          - link "gate-latency" [ref=f2e305] [cursor=pointer]:
+            - /url: /run/feat-20260831-gate-latency
+          - text: · plan sign-off
+        - generic [ref=f2e306]: "statusline-ledger plan: no schema change, tests-first, snapshot() risk acknowledged"
+        - generic [ref=f2e307]:
+          - generic [ref=f2e308]: approved
+          - text: dimash
+      - generic [ref=f2e309]:
+        - generic [ref=f2e310]: Sep 01 04:48
+        - generic [ref=f2e311]:
+          - link "gate-latency" [ref=f2e312] [cursor=pointer]:
+            - /url: /run/feat-20260831-gate-latency
+          - text: · plan sign-off
+        - generic [ref=f2e313]: Plan targets run-detail-context; the ux_signoff choice is corrected to statusline-ledger. Re-plan stage 2 for statusline-ledger as primary (board ledg
+        - generic [ref=f2e314]:
+          - generic [ref=f2e315]: rejected
+          - text: dimash
+      - generic [ref=f2e316]:
+        - generic [ref=f2e317]: Aug 31 09:41
+        - generic [ref=f2e318]:
+          - link "gate-latency" [ref=f2e319] [cursor=pointer]:
+            - /url: /run/feat-20260831-gate-latency
+          - text: · UX sign-off
+        - generic [ref=f2e320]: "Option: statusline-ledger — corrected 2026-08-31 ~10:5x UTC: dimash chose statusline-ledger (the stage-1 recommendation, judge 20/20) explicitly in th"
+        - generic [ref=f2e321]:
+          - generic [ref=f2e322]: approved
+          - text: claude-for-dimash
+      - generic [ref=f2e323]:
+        - generic [ref=f2e324]: Aug 31 03:10
+        - generic [ref=f2e325]:
+          - link "role-health" [ref=f2e326] [cursor=pointer]:
+            - /url: /run/feat-20260825-role-health
+          - text: · plan sign-off
+        - generic [ref=f2e327]: "Vacuous gate: the 02-pre-coding execution returned Status: BLOCKED (no product repo/branch on the run) and the gate opened before the 5f3f653 fix that"
+        - generic [ref=f2e328]:
+          - generic [ref=f2e329]: rejected
+          - text: claude-for-dimash
+      - generic [ref=f2e330]:
+        - generic [ref=f2e331]: Aug 31 03:10
+        - generic [ref=f2e332]:
+          - link "candidate-compare" [ref=f2e333] [cursor=pointer]:
+            - /url: /run/feat-20260825-candidate-compare
+          - text: · plan sign-off
+        - generic [ref=f2e334]: "Vacuous gate: the 02-pre-coding execution returned Status: BLOCKED (no product repo/branch on the run) and the gate opened before the 5f3f653 fix that"
+        - generic [ref=f2e335]:
+          - generic [ref=f2e336]: rejected
+          - text: claude-for-dimash
+      - generic [ref=f2e337]:
+        - generic [ref=f2e338]: Aug 27 02:04
+        - generic [ref=f2e339]:
+          - link "role-health" [ref=f2e340] [cursor=pointer]:
+            - /url: /run/feat-20260825-role-health
+          - text: · UX sign-off
+        - generic [ref=f2e341]: "Option: diagnosis-brief (recommended). Approved by Claude on dimash explicit authorization 2026-08-27. Reviewed option PNGs + critique-log: diagnosis-"
+        - generic [ref=f2e342]:
+          - generic [ref=f2e343]: approved
+          - text: claude-for-dimash
+      - generic [ref=f2e344]:
+        - generic [ref=f2e345]: Aug 27 02:04
+        - generic [ref=f2e346]:
+          - link "candidate-compare" [ref=f2e347] [cursor=pointer]:
+            - /url: /run/feat-20260825-candidate-compare
+          - text: · UX sign-off
+        - generic [ref=f2e348]: "Option: verdict (recommended). Approved by Claude on dimash explicit authorization 2026-08-27. Reviewed the three option PNGs: decision-first hierarch"
+        - generic [ref=f2e349]:
+          - generic [ref=f2e350]: approved
+          - text: claude-for-dimash
+      - generic [ref=f2e351]:
+        - generic [ref=f2e352]: Aug 26 05:52
+        - generic [ref=f2e353]:
+          - link "demo-sso" [ref=f2e354] [cursor=pointer]:
+            - /url: /run/feat-20260820-demo-sso
+          - text: · staging deploy
+        - generic [ref=f2e355]: demo seed data
+        - generic [ref=f2e356]:
+          - generic [ref=f2e357]: expired
+          - text: cleanup
+      - generic [ref=f2e358]:
+        - generic [ref=f2e359]: Aug 26 05:52
+        - generic [ref=f2e360]:
+          - link "demo-export" [ref=f2e361] [cursor=pointer]:
+            - /url: /run/feat-20260825-demo-export
+          - text: · UX sign-off
+        - generic [ref=f2e362]: demo seed data
+        - generic [ref=f2e363]:
+          - generic [ref=f2e364]: expired
+          - text: cleanup

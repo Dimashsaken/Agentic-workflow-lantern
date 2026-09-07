@@ -1,0 +1,20 @@
+{
+  "uploaded": [
+    {
+      "uri": "s3://lantern-artifacts-379197596491/lantern/feat-20260907-pipeline-smoke/04-qa-dev/attempt-2/feat-20260907-pipeline-smoke--04-qa-dev--session-1.webm",
+      "bytes": 4133316,
+      "attempt": 2,
+      "session": 1,
+      "local_name": "page@79a1e45066866767a920e1d89fcd3978.webm",
+      "at": "2026-09-07T06:50:03+00:00"
+    },
+    {
+      "uri": "s3://lantern-artifacts-379197596491/lantern/feat-20260907-pipeline-smoke/04-qa-dev/attempt-2/feat-20260907-pipeline-smoke--04-qa-dev--session-2.webm",
+      "bytes": 3539315,
+      "attempt": 2,
+      "session": 2,
+      "local_name": "page@10b5f7171f24db083abef1d5c53c2ed3.webm",
+      "at": "2026-09-07T06:50:04+00:00"
+    }
+  ]
+}

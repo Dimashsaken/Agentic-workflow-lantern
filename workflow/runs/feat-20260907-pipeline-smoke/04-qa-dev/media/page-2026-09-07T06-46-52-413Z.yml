@@ -1,0 +1,146 @@
+- generic [active] [ref=f4e1]:
+  - banner [ref=f4e2]:
+    - link "Lantern" [ref=f4e3] [cursor=pointer]:
+      - /url: /
+    - navigation [ref=f4e4]:
+      - link "Board" [ref=f4e5] [cursor=pointer]:
+        - /url: /
+      - link "Chat" [ref=f4e6] [cursor=pointer]:
+        - /url: /chat
+      - link "Gates" [ref=f4e7] [cursor=pointer]:
+        - /url: /gates
+      - link "Runs" [ref=f4e8] [cursor=pointer]:
+        - /url: /runs
+      - link "Agents" [ref=f4e9] [cursor=pointer]:
+        - /url: /agents
+      - link "Spend" [ref=f4e10] [cursor=pointer]:
+        - /url: /spend
+    - generic [ref=f4e11]:
+      - generic [ref=f4e12]:
+        - generic [ref=f4e14]: Live
+        - text: · 06:46 UTC
+      - generic [ref=f4e15]: qa-dev
+      - link "log out" [ref=f4e16] [cursor=pointer]:
+        - /url: /logout
+  - main [ref=f4e17]:
+    - generic [ref=f4e18]:
+      - generic [ref=f4e19]:
+        - generic [ref=f4e20]: Run · pipeline v2
+        - heading "feat-20260907-pipeline-smoke" [level=1] [ref=f4e21]
+        - generic [ref=f4e22]:
+          - generic [ref=f4e23]: Running
+          - generic [ref=f4e24]: "report: blocked"
+        - generic [ref=f4e25]:
+          - text: brief
+          - code [ref=f4e26]: workflow/runs/feat-20260907-pipeline-smoke/brief.md
+          - text: "started by dimash · Sep 07 06:36 UTC · last activity 1m ago product repo:"
+          - code [ref=f4e27]: https://github.com/Dimashsaken/Agentic-workflow-lantern
+          - text: "@ main"
+          - link "💬 Ask Lantern about this run" [ref=f4e28] [cursor=pointer]:
+            - /url: /chat?agent=lantern&run=feat-20260907-pipeline-smoke
+      - generic [ref=f4e29]:
+        - generic [ref=f4e30]: Est. spend
+        - generic [ref=f4e31]: $0.49
+        - generic [ref=f4e32]: 351,102 tok · 91% cached1 unmetered execution
+    - generic [ref=f4e33]:
+      - generic [ref=f4e34]:
+        - generic [ref=f4e35]: 1 · UI/UX design
+        - generic [ref=f4e36]: 🤖 agent · ec2
+        - generic [ref=f4e37]: Not started
+      - generic [ref=f4e38]: Explores 2–3 flow options, builds a prototype, records a walkthrough video.
+      - group [ref=f4e39]:
+        - 'generic "report.md — report status: PASS-WITH-NOTES" [ref=f4e40] [cursor=pointer]'
+    - generic [ref=f4e41]:
+      - generic [ref=f4e42]:
+        - generic [ref=f4e43]: 2 · Planning
+        - generic [ref=f4e44]: 🤖 agent · ec2
+        - generic [ref=f4e45]: Not started
+      - generic [ref=f4e46]: Blast-radius analysis, schema plan, ordered task plan.
+      - group [ref=f4e47]:
+        - 'generic "report.md — report status: PASS-WITH-NOTES" [ref=f4e48] [cursor=pointer]'
+    - generic [ref=f4e49]:
+      - generic [ref=f4e50]:
+        - generic [ref=f4e51]: 3 · Coding
+        - generic [ref=f4e52]: 👤 human · ec2
+        - generic [ref=f4e53]: Not started
+      - generic [ref=f4e54]: The plan is implemented — by the assigned developer in their own session, or in auto mode by the coding agent, which ends in a pull request.
+      - group [ref=f4e55]:
+        - 'generic "report.md — report status: PASS-WITH-NOTES" [ref=f4e56] [cursor=pointer]'
+    - generic [ref=f4e57]:
+      - generic [ref=f4e58]:
+        - generic [ref=f4e59]: 4 · QA in dev
+        - generic [ref=f4e60]: 🤖 agent · ec2
+        - generic [ref=f4e61]: Running
+        - generic [ref=f4e62]: current
+        - generic [ref=f4e63]: 1m351,102 tok · $0.49
+      - generic [ref=f4e64]: Executes a test charter against the dev build — every session on video.
+      - generic [ref=f4e65]:
+        - generic [ref=f4e66]: attempt 2 · running · ec2 · 1m
+        - generic [ref=f4e67]: "attempt 1 · failed · ec2 · 1m · sandbox exited 1: POSTCONDITIONS FAILED:"
+      - group [ref=f4e68]:
+        - 'generic "report.md — report status: BLOCKED" [ref=f4e69] [cursor=pointer]'
+      - link "💬 consult qa-dev about this run" [ref=f4e71] [cursor=pointer]:
+        - /url: /chat?agent=qa-dev&run=feat-20260907-pipeline-smoke
+    - generic [ref=f4e72]:
+      - generic [ref=f4e73]:
+        - generic [ref=f4e74]: 5 · Code review
+        - generic [ref=f4e75]: 🤖 agent · ec2
+        - generic [ref=f4e76]: Not started
+      - generic [ref=f4e77]: Cleanliness, hidden tech debt, backward compatibility.
+    - generic [ref=f4e78]:
+      - generic [ref=f4e79]:
+        - generic [ref=f4e80]: 6 · Security & deploy risk
+        - generic [ref=f4e81]: 🤖 agent · ec2
+        - generic [ref=f4e82]: Not started
+      - generic [ref=f4e83]: Vulnerabilities, dependency audit, go/no-go for staging.
+    - generic [ref=f4e84]:
+      - generic [ref=f4e85]:
+        - generic [ref=f4e86]: 7 · QA in staging
+        - generic [ref=f4e87]: 🤖 agent · ec2
+        - generic [ref=f4e88]: Not started
+      - generic [ref=f4e89]: Re-runs the charter on staging, verifies analytics events, videos for sign-off.
+    - heading "Audit log" [level=2] [ref=f4e90]
+    - paragraph [ref=f4e91]: Every action on this run, newest first — 7 shown.
+    - generic [ref=f4e92]:
+      - generic [ref=f4e93]:
+        - generic [ref=f4e94]: Sep 07 06:45:07
+        - generic [ref=f4e95]: orchestrator
+        - generic [ref=f4e96]:
+          - text: stage started
+          - generic [ref=f4e97]: "{\"stage\": \"04-qa-dev\", \"runner\": \"ec2\", \"attempt\": 2, \"executor\": \"docker\"}"
+      - generic [ref=f4e98]:
+        - generic [ref=f4e99]: Sep 07 06:45:05
+        - generic [ref=f4e100]: human:cli
+        - generic [ref=f4e101]:
+          - text: run retried
+          - generic [ref=f4e102]: "{}"
+      - generic [ref=f4e103]:
+        - generic [ref=f4e104]: Sep 07 06:38:08
+        - generic [ref=f4e105]: orchestrator
+        - generic [ref=f4e106]:
+          - text: stage failed
+          - generic [ref=f4e107]: "{\"error\": \"sandbox exited 1: POSTCONDITIONS FAILED:\\n- stage reported Status: BLOCKED, so it did not complete — no gate"
+      - generic [ref=f4e108]:
+        - generic [ref=f4e109]: Sep 07 06:36:32
+        - generic [ref=f4e110]: orchestrator
+        - generic [ref=f4e111]:
+          - text: stage started
+          - generic [ref=f4e112]: "{\"stage\": \"04-qa-dev\", \"runner\": \"ec2\", \"attempt\": 1, \"executor\": \"docker\"}"
+      - generic [ref=f4e113]:
+        - generic [ref=f4e114]: Sep 07 06:36:32
+        - generic [ref=f4e115]: human:cli
+        - generic [ref=f4e116]:
+          - text: run retried
+          - generic [ref=f4e117]: "{}"
+      - generic [ref=f4e118]:
+        - generic [ref=f4e119]: Sep 07 06:36:28
+        - generic [ref=f4e120]: human:cli
+        - generic [ref=f4e121]:
+          - text: product target set
+          - generic [ref=f4e122]: "{\"head\": \"2df71ec1a8bb\", \"repo\": \"https://github.com/Dimashsaken/Agentic-workflow-lantern\", \"branch\": \"main\"}"
+      - generic [ref=f4e123]:
+        - generic [ref=f4e124]: Sep 07 06:36:24
+        - generic [ref=f4e125]: human:dimash
+        - generic [ref=f4e126]:
+          - text: run imported
+          - generic [ref=f4e127]: "{\"stage\": \"04-qa-dev\", \"status\": \"failed\"}"

@@ -1,0 +1,20 @@
+{
+  "uploaded": [
+    {
+      "uri": "s3://lantern-artifacts-379197596491/lantern/feat-20260907-pipeline-smoke/07-qa-staging/attempt-1/feat-20260907-pipeline-smoke--07-qa-staging--session-1.webm",
+      "bytes": 3564718,
+      "attempt": 1,
+      "session": 1,
+      "local_name": "page@2a59825f5ff968db55f843c1c4f7b81a.webm",
+      "at": "2026-09-07T06:57:35+00:00"
+    },
+    {
+      "uri": "s3://lantern-artifacts-379197596491/lantern/feat-20260907-pipeline-smoke/07-qa-staging/attempt-1/feat-20260907-pipeline-smoke--07-qa-staging--session-2.webm",
+      "bytes": 3654127,
+      "attempt": 1,
+      "session": 2,
+      "local_name": "page@e3267f21cb637264b0c3c8e7db7a05eb.webm",
+      "at": "2026-09-07T06:57:36+00:00"
+    }
+  ]
+}

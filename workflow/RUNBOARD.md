@@ -18,4 +18,4 @@ thing every agent reads after its role files (orientation step 1 —
 
 | Run ID | What | Completed |
 |--------|------|-----------|
-| — | | |
+| feat-20260907-pipeline-smoke | Feature Brief: Gate latency on the board (pipeline smoke run, stages 4–7 on the box) | 2026-09-07 |

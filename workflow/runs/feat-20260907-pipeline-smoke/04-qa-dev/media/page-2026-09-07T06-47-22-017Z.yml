@@ -1,0 +1,148 @@
+- generic [active] [ref=f6e1]:
+  - banner [ref=f6e2]:
+    - link "Lantern" [ref=f6e3] [cursor=pointer]:
+      - /url: /
+    - navigation [ref=f6e4]:
+      - link "Board" [ref=f6e5] [cursor=pointer]:
+        - /url: /
+      - link "Chat" [ref=f6e6] [cursor=pointer]:
+        - /url: /chat
+      - link "Gates" [ref=f6e7] [cursor=pointer]:
+        - /url: /gates
+      - link "Runs" [ref=f6e8] [cursor=pointer]:
+        - /url: /runs
+      - link "Agents" [ref=f6e9] [cursor=pointer]:
+        - /url: /agents
+      - link "Spend" [ref=f6e10] [cursor=pointer]:
+        - /url: /spend
+    - generic [ref=f6e11]:
+      - generic [ref=f6e12]:
+        - generic [ref=f6e14]: Live
+        - text: · 06:47 UTC
+      - generic [ref=f6e15]: qa-dev
+      - link "log out" [ref=f6e16] [cursor=pointer]:
+        - /url: /logout
+  - generic [ref=f6e17]:
+    - generic [ref=f6e18]: 2 waiting on you
+    - generic [ref=f6e19]: ·
+    - generic [ref=f6e20]: 1 running
+    - generic [ref=f6e21]: ·
+    - generic [ref=f6e22]: spent today $1.73 of $50
+    - generic [ref=f6e23]: ·
+    - generic [ref=f6e24]: ec2 live
+    - generic [ref=f6e25]: ·
+    - generic [ref=f6e26]: workstation offline — stage 1 can't start
+  - generic [ref=f6e27]:
+    - generic [ref=f6e28]:
+      - generic [ref=f6e29]: GATE LATENCY · LAST 30 DAYS
+      - generic [ref=f6e30]: Median time to decision · UTC
+    - generic [ref=f6e31]:
+      - generic [ref=f6e32]: 20h 15m
+      - generic [ref=f6e33]: UX sign-off · n=3
+    - generic [ref=f6e34]:
+      - generic [ref=f6e35]: 19h 05m
+      - generic [ref=f6e36]: plan sign-off · n=5
+    - generic [ref=f6e37]:
+      - generic [ref=f6e38]: —
+      - generic [ref=f6e39]: code-complete · no decisions · n=0
+    - generic [ref=f6e40]:
+      - generic [ref=f6e41]: —
+      - generic [ref=f6e42]: staging deploy · no decisions · n=0
+    - generic [ref=f6e43]:
+      - generic [ref=f6e44]: —
+      - generic [ref=f6e45]: prod sign-off · no decisions · n=0
+  - generic [ref=f6e46]:
+    - generic [ref=f6e47]:
+      - generic [ref=f6e48]:
+        - generic [ref=f6e49]: Queued
+        - generic [ref=f6e50]: "0"
+      - paragraph [ref=f6e51]: Empty. Runs wait here for a runner slot before an agent picks them up.
+    - generic [ref=f6e52]:
+      - generic [ref=f6e53]:
+        - generic [ref=f6e54]: Running
+        - generic [ref=f6e55]: "1"
+      - generic [ref=f6e56]:
+        - link "pipeline-smoke" [ref=f6e57] [cursor=pointer]:
+          - /url: /run/feat-20260907-pipeline-smoke
+        - generic [ref=f6e58]: feat-20260907 · dimash
+        - generic [ref=f6e59]:
+          - generic [ref=f6e60]: stage 4/7 · qa-dev
+          - generic [ref=f6e61]: 2m
+        - generic [ref=f6e70]: gpt-5.6-sol working on ec2 · heartbeat 2m ago
+        - generic [ref=f6e71]:
+          - generic [ref=f6e72]: $0.49
+          - generic [ref=f6e73]: gpt-5.6-sol · 351k tok · 91% cached
+    - generic [ref=f6e74]:
+      - generic [ref=f6e75]:
+        - generic [ref=f6e76]: Blocked
+        - generic [ref=f6e77]: "2"
+      - generic [ref=f6e78]:
+        - link "candidate-compare" [ref=f6e79] [cursor=pointer]:
+          - /url: /run/feat-20260825-candidate-compare
+        - generic [ref=f6e80]: feat-20260825 · justin
+        - generic [ref=f6e81]: failed
+        - generic [ref=f6e83]:
+          - generic [ref=f6e84]: stage 2/7 · pre-coding
+          - generic [ref=f6e85]: 7d 3h
+        - generic [ref=f6e94]: Needs rework — fix, then retry from the run page.
+        - generic [ref=f6e95]: "sandbox exited 1: POSTCONDITIONS FAILED:"
+        - generic [ref=f6e96]:
+          - generic [ref=f6e97]: $1.24
+          - generic [ref=f6e98]: gpt-5.6-sol · 801k tok · 87% cached
+      - generic [ref=f6e99]:
+        - link "role-health" [ref=f6e100] [cursor=pointer]:
+          - /url: /run/feat-20260825-role-health
+        - generic [ref=f6e101]: feat-20260825 · justin
+        - generic [ref=f6e102]: failed
+        - generic [ref=f6e104]:
+          - generic [ref=f6e105]: stage 2/7 · pre-coding
+          - generic [ref=f6e106]: 7d 3h
+        - generic [ref=f6e115]: Needs rework — fix, then retry from the run page.
+        - generic [ref=f6e116]:
+          - generic [ref=f6e117]: $0.58
+          - generic [ref=f6e118]: gpt-5.6-sol · 338k tok · 84% cached
+    - generic [ref=f6e119]:
+      - generic [ref=f6e120]:
+        - generic [ref=f6e121]: Review
+        - generic [ref=f6e122]: "2"
+      - generic [ref=f6e123]:
+        - link "status-json" [ref=f6e124] [cursor=pointer]:
+          - /url: /run/feat-20260907-status-json
+        - generic [ref=f6e125]: feat-20260907 · dimash
+        - generic [ref=f6e126]: code-complete
+        - generic [ref=f6e128]:
+          - generic [ref=f6e129]: stage 3/7 · coding
+          - generic [ref=f6e130]: 43m
+        - generic [ref=f6e139]: Waiting on you — review the evidence, then decide.
+        - generic [ref=f6e140]:
+          - generic [ref=f6e141]: $1.24
+          - generic [ref=f6e142]: gpt-5.6-sol · 768k tok · 87% cached
+        - generic [ref=f6e143]:
+          - button "Approve" [ref=f6e145] [cursor=pointer]
+          - button "Reject" [ref=f6e147] [cursor=pointer]
+          - link "evidence →" [ref=f6e148] [cursor=pointer]:
+            - /url: /gates
+      - generic [ref=f6e149]:
+        - link "gate-latency" [ref=f6e150] [cursor=pointer]:
+          - /url: /run/feat-20260831-gate-latency
+        - generic [ref=f6e151]: feat-20260831 · dimash
+        - generic [ref=f6e152]:
+          - generic [ref=f6e153]: STALE
+          - generic [ref=f6e154]: code-complete
+        - generic [ref=f6e155]:
+          - generic [ref=f6e156]: stage 3/7 · coding
+          - generic [ref=f6e157]: 6d 1h
+        - generic [ref=f6e166]: Waiting on you — review the evidence, then decide.
+        - generic [ref=f6e167]:
+          - generic [ref=f6e168]: $23.25
+          - generic [ref=f6e169]: gpt-5.6-sol · 15,451k tok · 85% cached
+        - generic [ref=f6e170]:
+          - button "Approve" [ref=f6e172] [cursor=pointer]
+          - button "Reject" [ref=f6e174] [cursor=pointer]
+          - link "evidence →" [ref=f6e175] [cursor=pointer]:
+            - /url: /gates
+    - generic [ref=f6e176]:
+      - generic [ref=f6e177]:
+        - generic [ref=f6e178]: Done
+        - generic [ref=f6e179]: "0"
+      - paragraph [ref=f6e180]: Nothing closed in the last 48 hours.
