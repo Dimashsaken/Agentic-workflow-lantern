@@ -779,16 +779,28 @@ def _publish_branch(run_id: str, repo: str, base: str) -> dict:
             payload["compare_url"] = f"https://github.com/{gh[0]}/{gh[1]}/compare/{base}...{branch}"
             if GIT_TOKEN:
                 title = f"{run_id}: {_run_title(run_id) or 'feature'}"[:250]
-                payload.update(_open_or_find_pr(gh[0], gh[1], branch, base, title,
-                                                pr_body(run_id, handoff, base)))
+                try:
+                    payload.update(_open_or_find_pr(gh[0], gh[1], branch, base, title,
+                                                    pr_body(run_id, handoff, base)))
+                except (RuntimeError, urllib.error.URLError, OSError, KeyError, TypeError) as e:
+                    # The code is done and pushed; a PR-API refusal (a token without
+                    # pull-request permission, an outage) must not fail the stage.
+                    # The gate opens on the branch + compare link, the reason is on
+                    # record, and `pipeline.py publish <run-id>` retries the PR later.
+                    payload["pr_error"] = _scrub(str(e))[:500]
+            else:
+                payload["pr_error"] = "no GITHUB_LANTERN_BOT_TOKEN on the host — branch pushed, PR not opened"
     # D4: the branch/PR facts reach the run folder, not only the approvals row.
-    handoff.update({k: payload[k] for k in ("pushed", "pr_url", "pr_number") if k in payload})
+    handoff.update({k: payload[k] for k in ("pushed", "pr_url", "pr_number", "pr_error") if k in payload})
     hf.write_text(json.dumps(handoff, indent=2), encoding="utf-8")
     (sdir / "pr.md").write_text(
         f"# Branch published — {run_id}\n\n- **Branch:** `{branch}` → `{base}`\n"
         f"- **Head:** `{head}`\n- **Pushed:** {payload['pushed']}\n"
-        f"- **Pull request:** {payload.get('pr_url') or '(none — non-GitHub remote)'}\n"
-        f"- **Commits:** {payload['commit_count']}\n", encoding="utf-8")
+        f"- **Pull request:** {payload.get('pr_url') or '(none)'}\n"
+        + (f"- **Compare:** {payload['compare_url']}\n" if payload.get("compare_url") else "")
+        + (f"- **PR not opened:** {payload['pr_error']} — fix the cause, then "
+           f"`pipeline.py publish {run_id}`\n" if payload.get("pr_error") else "")
+        + f"- **Commits:** {payload['commit_count']}\n", encoding="utf-8")
     return payload
 
 
@@ -806,6 +818,11 @@ async def publish_coding_branch(conn, run_id: str) -> dict:
     await log_event(conn, run_id, "orchestrator", "branch_published",
                     {"branch": payload["branch"], "head_sha": payload["head_sha"],
                      "pushed": payload["pushed"], "pr_url": payload.get("pr_url")})
+    if payload.get("pr_error"):
+        await log_event(conn, run_id, "orchestrator", "pr_not_opened",
+                        {"branch": payload["branch"], "error": payload["pr_error"]})
+        print(f"[{run_id}] branch pushed but the PR was not opened: {payload['pr_error']}",
+              file=sys.stderr)
     print(f"[{run_id}] branch {payload['branch']} published"
           + (f" — PR {payload['pr_url']}" if payload.get("pr_url") else ""))
     return payload
@@ -1261,6 +1278,56 @@ async def cmd_set_product(run_id: str, repo: str, branch: str) -> None:
           f"  stages from here on get it read-only at the `product/` prefix.")
 
 
+async def cmd_publish(run_id: str) -> None:
+    """(Re)publish an auto-coding run's branch and PR from its 03-coding handoff (D14).
+
+    For the two ways the last step can fall behind the code: the stage failed AFTER the
+    agent's work was bundled (a push or API refusal), or the gate opened without a PR
+    (`pr_error` in its payload — e.g. a token that cannot open pull requests). Pushes
+    are idempotent; an existing open PR is reused; a pending code_complete gate gets
+    its payload refreshed instead of a duplicate row."""
+    conn = await connect()
+    row = await conn.fetchrow(
+        "SELECT status, current_stage, coding_mode FROM runs WHERE id = $1", run_id)
+    if not row:
+        await conn.close()
+        sys.exit(f"unknown run: {run_id}")
+    if row["current_stage"] != "03-coding" or row["coding_mode"] != "auto":
+        await conn.close()
+        sys.exit(f"{run_id} is not an auto-coding run at 03-coding "
+                 f"(stage {row['current_stage']}, mode {row['coding_mode']})")
+    payload = await publish_coding_branch(conn, run_id)
+    pending = await conn.fetchrow(
+        "SELECT id, payload FROM approvals WHERE run_id = $1 AND gate = 'code_complete' "
+        "AND status = 'pending'", run_id)
+    if pending:
+        merged = _payload_dict(pending["payload"])
+        merged.pop("pr_error", None)
+        merged.update(payload)
+        await conn.execute(
+            "UPDATE approvals SET payload = $1, external_ref = $2 WHERE id = $3",
+            json.dumps(merged), payload.get("pr_url"), pending["id"])
+        await log_event(conn, run_id, "human:cli", "gate_payload_refreshed",
+                        {"gate": "code_complete", "pr_url": payload.get("pr_url")})
+        print(f"[{run_id}] code_complete gate refreshed"
+              + (f" — PR {payload['pr_url']}" if payload.get("pr_url") else ""))
+    else:
+        await open_gate(conn, run_id, "03-coding", "code_complete", payload, payload.get("pr_url"))
+    await render_runboard(conn)
+    await conn.close()
+    if payload.get("pr_error"):
+        print(f"[{run_id}] PR still not opened: {payload['pr_error']}", file=sys.stderr)
+
+
+def _payload_dict(raw) -> dict:
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return {}
+    return dict(raw or {})
+
+
 async def cmd_set_coding_mode(run_id: str, mode: str) -> None:
     """Switch stage 3 of an existing run between the developer's own session and the
     fleet's coding agent (D14). Allowed until the run has passed stage 3."""
@@ -1663,6 +1730,9 @@ def main() -> None:
     p = sub.add_parser("set-coding-mode", help="human (developer's own session) or auto "
                                                "(the coding agent implements the plan → PR)")
     p.add_argument("run_id"); p.add_argument("mode", choices=CODING_MODES)
+    p = sub.add_parser("publish", help="(re)push an auto-coding run's branch and open/refresh "
+                                       "its PR from the 03-coding handoff")
+    p.add_argument("run_id")
     p = sub.add_parser("daemon")
     p.add_argument("--runner", choices=["ec2", "workstation"],
                    default=os.environ.get("LANTERN_RUNNER", "ec2"))
@@ -1696,6 +1766,7 @@ def main() -> None:
                                             a.product_repo, a.product_branch, a.coding_mode))
         case "set-product":   asyncio.run(cmd_set_product(a.run_id, a.repo, a.branch))
         case "set-coding-mode": asyncio.run(cmd_set_coding_mode(a.run_id, a.mode))
+        case "publish":       asyncio.run(cmd_publish(a.run_id))
         case "daemon":  asyncio.run(cmd_daemon(a.runner))
         case "approve": asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, True))
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))

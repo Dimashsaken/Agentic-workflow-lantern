@@ -546,9 +546,19 @@ def gate_card(a, run, now, inline: bool = True) -> str:
             for c in commits[:12])
         more = f"<li>… {n - 12} more</li>" if n > 12 else ""
         pr = payload.get("pr_url")
-        link = (f"<a href='{H(pr)}' target='_blank' style='color:var(--dawn-3)'>"
-                f"open pull request #{H(str(payload.get('pr_number', '')))} ↗</a>" if pr
-                else "<span style='color:var(--text-dim)'>no pull request (non-GitHub remote) — review the branch</span>")
+        if pr:
+            link = (f"<a href='{H(pr)}' target='_blank' style='color:var(--dawn-3)'>"
+                    f"open pull request #{H(str(payload.get('pr_number', '')))} ↗</a>")
+        elif payload.get("compare_url"):
+            link = (f"<a href='{H(payload['compare_url'])}' target='_blank' "
+                    f"style='color:var(--dawn-3)'>compare the pushed branch ↗</a>")
+        else:
+            link = "<span style='color:var(--text-dim)'>no pull request (non-GitHub remote) — review the branch</span>"
+        if payload.get("pr_error"):
+            bits.append(f"<div class='blockwarn'><b>The branch is pushed but the pull request "
+                        f"was not opened.</b> {H(payload['pr_error'])} — fix the cause "
+                        f"(usually the bot token's pull-request permission), then run "
+                        f"<code>pipeline.py publish {H(a['run_id'])}</code>.</div>")
         bits.append(
             f"<div class='gmeta'>{link} · branch <code>{H(payload['branch'])}</code> → "
             f"<code>{H(payload.get('base', ''))}</code> · <b>{n}</b> commit{'s' if n != 1 else ''}"

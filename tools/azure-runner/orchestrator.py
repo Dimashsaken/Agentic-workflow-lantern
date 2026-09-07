@@ -775,7 +775,11 @@ def coding_product_note() -> str:
         "Limits: no network credentials in this sandbox (pushes/publishes fail by design), "
         "no package installs that run arbitrary scripts unless the plan requires them "
         "(prefer `--ignore-scripts`), wall clock is bounded — keep commands short and "
-        "output filtered. Every path you cite in the report must be one you opened here.")
+        "output filtered. Every path you cite in the report must be one you opened here.\n"
+        "Sandbox facts: Python 3.12 (`python3`), Node 22, git; a Python venv with Lantern's "
+        "own dependencies already exists at `/opt/lantern/venv` (use it when the product "
+        "IS Lantern; otherwise create one under `/work`). `/work` is scratch; only commits "
+        "on your branch and files in your run folder survive.")
 
 
 def product_note() -> str:
