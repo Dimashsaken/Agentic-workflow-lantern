@@ -199,7 +199,7 @@ class TestGateLatencyRows(unittest.TestCase):
 
 class TestLedgerMetrics(unittest.TestCase):
     def one(self, gate, med, n) -> dict:
-        return mc.ledger_metrics([latency_row(gate, med, n)])[0]
+        return mc.gate_latency_metrics([latency_row(gate, med, n)])[0]
 
     def test_zero_samples_show_dash_never_zero_hours(self):
         m = self.one("code_complete", None, 0)
@@ -309,7 +309,7 @@ class TestGateCardPreserved(unittest.TestCase):
 
 class TestLedgerRender(unittest.TestCase):
     def test_header_wording_and_all_known_gates(self):
-        html = ui.gate_ledger(mc.ledger_metrics(mc.gate_latency_rows(
+        html = ui.gate_ledger(mc.gate_latency_metrics(mc.gate_latency_rows(
             [latency_row("ux_signoff", 72000.0, 2),
              latency_row("plan_signoff", 4 * DAY + 0.0, 2)])))
         self.assertIn("GATE LATENCY · LAST 30 DAYS", html)
@@ -321,7 +321,7 @@ class TestLedgerRender(unittest.TestCase):
             self.assertIn(label, html)
 
     def test_zero_state_copy(self):
-        html = ui.gate_ledger(mc.ledger_metrics(mc.gate_latency_rows([])))
+        html = ui.gate_ledger(mc.gate_latency_metrics(mc.gate_latency_rows([])))
         self.assertIn("—", html)
         self.assertIn("no decisions · n=0", html)
         self.assertNotIn("0h", html)

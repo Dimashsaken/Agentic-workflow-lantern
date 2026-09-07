@@ -74,7 +74,7 @@ EC2_SLOTS = 2            # daemon concurrency cap (docs/ORCHESTRATION.md, D10)
 STAGE_META = {
     "01-ui-ux":       ("1 · UI/UX design",         "agent",  "Explores 2–3 flow options, builds a prototype, records a walkthrough video."),
     "02-pre-coding":  ("2 · Planning",              "agent",  "Blast-radius analysis, schema plan, ordered task plan."),
-    "03-coding":      ("3 · Coding",                "human",  "The assigned developer implements the plan (Codex CLI on their laptop)."),
+    "03-coding":      ("3 · Coding",                "human",  "The plan is implemented — by the assigned developer in their own session, or in auto mode by the coding agent, which ends in a pull request."),
     "04-qa-dev":      ("4 · QA in dev",             "agent",  "Executes a test charter against the dev build — every session on video."),
     "05-post-coding": ("5 · Code review",           "agent",  "Cleanliness, hidden tech debt, backward compatibility."),
     "06-security":    ("6 · Security & deploy risk","agent",  "Vulnerabilities, dependency audit, go/no-go for staging."),
@@ -83,7 +83,7 @@ STAGE_META = {
 GATE_META = {
     "ux_signoff":     ("Pick the UX option",     "Watch the walkthrough, then approve the recommended flow (or reject with a note)."),
     "plan_signoff":   ("Approve plan & schema",  "Schema changes always need a human yes before any code is written."),
-    "code_complete":  ("Code-complete?",         "The developer confirms every planned task is done and tests are green."),
+    "code_complete":  ("Code-complete?",         "Every planned task is done and tests are green — the developer confirms it, or in auto mode you review the coding agent's pull request and approve here."),
     "staging_deploy": ("Deploy to staging",      "Security said GO — a human performs the staging deploy, then approves here."),
     "prod_signoff":   ("Ship to production",     "The final human decision. Review the staging QA videos first."),
 }
@@ -240,7 +240,7 @@ def gate_latency_rows(rows) -> list[dict]:
     return out
 
 
-def ledger_metrics(rows: list[dict]) -> list[dict]:
+def gate_latency_metrics(rows: list[dict]) -> list[dict]:
     """Display form of normalized latency rows: value/kind/sub per gate.
     Zero-sample cohorts show '—', never '0h'; medians over the 24h staffing
     threshold get the warning kind."""
@@ -288,7 +288,8 @@ async def snapshot(p) -> dict:
         "SELECT * FROM approvals WHERE status='pending' ORDER BY requested_at")
     try:
         gate_latency = gate_latency_rows(await p.fetch(LATENCY_SQL))
-    except asyncpg.PostgresError:       # the ledger degrades; the board must not
+    except asyncpg.PostgresError as e:  # the ledger degrades; the board must not
+        print(f"gate latency query failed: {e}", file=sys.stderr)   # post-coding F1
         gate_latency = None
     try:
         runner_rows = await p.fetch(
@@ -534,6 +535,29 @@ def gate_card(a, run, now, inline: bool = True) -> str:
             f"video: <b>{H(str(h['video']))}</b>" if h.get("video")
             else "no walkthrough video recorded")
         bits.append(f"<div class='gmeta'>{' · '.join(meta_bits)}</div>")
+    elif payload.get("branch") and payload.get("commits") is not None:
+        # code_complete after an AUTO coding stage (D14): the pull request is the
+        # payload — link it, list the commits, and keep the coding report inline
+        # so the reviewer sees the deviations and the confidence map next to it.
+        commits = payload.get("commits") or []
+        n = payload.get("commit_count", len(commits))
+        rows = "".join(
+            f"<li><code>{H(str(c.get('sha', ''))[:8])}</code> {H(c.get('subject', ''))}</li>"
+            for c in commits[:12])
+        more = f"<li>… {n - 12} more</li>" if n > 12 else ""
+        pr = payload.get("pr_url")
+        link = (f"<a href='{H(pr)}' target='_blank' style='color:var(--dawn-3)'>"
+                f"open pull request #{H(str(payload.get('pr_number', '')))} ↗</a>" if pr
+                else "<span style='color:var(--text-dim)'>no pull request (non-GitHub remote) — review the branch</span>")
+        bits.append(
+            f"<div class='gmeta'>{link} · branch <code>{H(payload['branch'])}</code> → "
+            f"<code>{H(payload.get('base', ''))}</code> · <b>{n}</b> commit{'s' if n != 1 else ''}"
+            f"{' · <b>auto-committed leftovers</b>' if payload.get('auto_committed') else ''}</div>"
+            f"<ul class='commits'>{rows}{more}</ul>")
+        if text:
+            bits.append(f"<details class='report' open><summary>The coding report — "
+                        f"{H(dir_)}/report.md</summary>"
+                        f"<div class='prose'>{render_markdown(text)}</div></details>")
     elif text and inline:                        # plan_signoff etc: the report IS the payload
         bits.append(f"<details class='report' open><summary>The report being approved — "
                     f"{H(dir_)}/report.md</summary>"
@@ -759,7 +783,7 @@ async def board(request: Request):
         f"<span>{ec2_bit}</span>{sep}<span>{ws_bit}</span></div>")
 
     lat = snap["gate_latency"]
-    lat_html = ui.gate_ledger(ledger_metrics(lat) if lat is not None else None)
+    lat_html = ui.gate_ledger(gate_latency_metrics(lat) if lat is not None else None)
 
     COLS = [
         ("queued",  "Queued",  "Empty. Runs wait here for a runner slot before an agent picks them up."),
