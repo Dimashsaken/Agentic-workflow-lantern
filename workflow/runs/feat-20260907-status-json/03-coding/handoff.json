@@ -1,0 +1,34 @@
+{
+  "kind": "coding_branch",
+  "run_id": "feat-20260907-status-json",
+  "branch": "feat/20260907-status-json",
+  "base": "main",
+  "base_sha": "8e0094c1461f682f14c63616e7d42e0bfc0468e6",
+  "head_sha": "b192ee9388b37e75a1f92a41ffc64fad48aee92e",
+  "commits": [
+    {
+      "sha": "dd62c336b50fcb536643c13f7d65aebbd60d7934",
+      "subject": "feat-20260907-status-json: task 1 \u2014 lock status output contract"
+    },
+    {
+      "sha": "40df07cf70809ac3473e68a88ae3a0679720c37f",
+      "subject": "feat-20260907-status-json: task 2 \u2014 add JSON status output"
+    },
+    {
+      "sha": "b192ee9388b37e75a1f92a41ffc64fad48aee92e",
+      "subject": "feat-20260907-status-json: task 3 \u2014 document JSON status output"
+    }
+  ],
+  "bundle": "workflow/runs/feat-20260907-status-json/03-coding/branch.bundle",
+  "auto_committed": false,
+  "diffstat": "tools/azure-runner/README.md           |   4 +\n tools/azure-runner/pipeline.py         |  52 ++++++++++---\n tools/azure-runner/test_status_json.py | 137 +++++++++++++++++++++++++++++++++\n 3 files changed, 181 insertions(+), 12 deletions(-)",
+  "files_changed": [
+    "tools/azure-runner/README.md",
+    "tools/azure-runner/pipeline.py",
+    "tools/azure-runner/test_status_json.py"
+  ],
+  "pushed": true,
+  "pr_url": "https://github.com/Dimashsaken/Agentic-workflow-lantern/pull/1",
+  "pr_number": 1,
+  "pr_error": "GitHub refused to open the PR (403): {\"message\": \"Resource not accessible by personal access token\", \"documentation_url\": \"https://docs.github.com/rest/pulls/pulls#create-a-pull-request\", \"status\": \"403\"}"
+}
