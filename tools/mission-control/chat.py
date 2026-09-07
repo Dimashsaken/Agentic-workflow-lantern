@@ -13,6 +13,7 @@ import cycle and the login/gate rules stay defined in exactly one place.
 import asyncio
 import json
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -520,9 +521,9 @@ async def chat_new(request: Request, agent: str = Form(...), text: str = Form(""
         raise HTTPException(401, "sign in required")
     ok, why = cs.chat_configured()
     if not ok:
-        return RedirectResponse(f"/chat?error={H(why)}", status_code=303)
+        return RedirectResponse(f"/chat?error={quote(why)}", status_code=303)
     if not text.strip():
-        return RedirectResponse(f"/chat?agent={agent}&run={run_id}", status_code=303)
+        return RedirectResponse(f"/chat?agent={quote(agent)}&run={quote(run_id)}", status_code=303)
     p = await _pool()
     async with p.acquire() as conn:
         directory = await cs.agent_directory(conn)
@@ -872,7 +873,7 @@ async def agents_new(request: Request, name: str = Form(...), purpose: str = For
             slug = await cs.create_custom_agent(conn, name, purpose, instructions,
                                                 model_pref, user)
         except ValueError as e:
-            return RedirectResponse(f"/agents?error={H(str(e))}", status_code=303)
+            return RedirectResponse(f"/agents?error={quote(str(e))}", status_code=303)
     return RedirectResponse(f"/chat?agent={slug}", status_code=303)
 
 
