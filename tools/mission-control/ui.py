@@ -436,9 +436,13 @@ h2.sect{font-size:var(--text-md);font-weight:600;margin:30px 0 4px}
 p.sub{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 10px}
 
 /* ── chat: the conversation shell (docs/CHAT.md) ──────────────────────── */
+/* The shell is a fixed frame: the two columns scroll inside it, the page
+   itself never does. Without min-height:0 a grid/flex child floors at its
+   content height, so a long transcript pushed the whole window around
+   instead of scrolling under a pinned header and composer. */
 .chatwrap{display:grid;grid-template-columns:288px minmax(0,1fr);
-  height:calc(100vh - 54px)}
-.chatside{border-right:1px solid var(--edge);overflow-y:auto;
+  height:calc(100vh - 54px);min-height:0;overflow:hidden}
+.chatside{border-right:1px solid var(--edge);overflow-y:auto;min-height:0;
   padding:16px 14px 24px;display:flex;flex-direction:column;gap:2px}
 .chatside .newchat{display:block;text-align:center;margin-bottom:12px;
   padding:9px 12px;border:1px solid var(--edge);border-radius:var(--r-sm);
@@ -463,7 +467,7 @@ p.sub{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 10px}
 .sideempty{font-size:var(--text-xs);color:var(--text-dim);line-height:1.6;
   padding:8px 10px}
 
-.chatmain{display:flex;flex-direction:column;min-width:0}
+.chatmain{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
 .chathead{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;
   padding:16px 28px 13px;border-bottom:1px solid var(--edge)}
 .chathead .anm{font-family:var(--font-label);text-transform:uppercase;
@@ -484,8 +488,13 @@ p.sub{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 10px}
 .chathead input.ttl:focus{border-color:var(--edge);outline:none;
   background:var(--surface-1)}
 
-.transcript{flex:1;overflow-y:auto;padding:6px 28px 26px;scroll-behavior:smooth}
+.transcript{flex:1;min-height:0;overflow-y:auto;padding:6px 28px 26px;
+  overflow-anchor:none;overscroll-behavior:contain}
+.tinner{max-width:920px;margin:0 auto}
 .turn{max-width:920px;margin:0 auto}
+/* Grows so the newest question can sit at the top of the window, shrinks as
+   the answer fills it — the frame stays still while text streams in. */
+.tailpad{height:0}
 .msg{padding:16px 0 4px}
 .msg .who{font-family:var(--font-label);text-transform:uppercase;
   letter-spacing:.15em;font-size:var(--text-caps);color:var(--text-dim);
@@ -493,11 +502,17 @@ p.sub{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 10px}
 .msg .who .tm{font-family:var(--font-mono);letter-spacing:0;margin-left:auto}
 .msg.you .who{color:var(--night-3)}
 .msg.agent .who{color:var(--dawn-3)}
+.msg .who .copy{margin-left:auto;background:none;border:1px solid transparent;
+  border-radius:var(--r-pill);color:var(--text-dim);cursor:pointer;
+  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.13em;
+  font-size:var(--text-caps);padding:2px 9px;opacity:0;transition:opacity .12s}
+.msg.agent:hover .who .copy,.msg .who .copy:focus{opacity:1}
+.msg .who .copy:hover{color:var(--text-muted);border-color:var(--edge)}
 .msg .utext{font-size:var(--text-base);color:var(--text);line-height:1.6;
   margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere}
 .msg .atext{margin-top:6px}
 .msg .atext.streaming{white-space:pre-wrap;font-size:var(--text-sm);
-  line-height:1.65;color:var(--text)}
+  line-height:1.65;color:var(--text-muted);max-width:92ch}
 .msg .atext.streaming::after{content:'▌';color:var(--dawn-3);
   animation:caret 1.1s steps(2) infinite}
 @keyframes caret{50%{opacity:0}}
@@ -512,6 +527,14 @@ p.sub{font-size:var(--text-xs);color:var(--text-muted);margin:0 0 10px}
 .tl .ta{color:var(--text-dim);white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;min-width:0}
 .tl.spec .g{color:var(--night-3)}
+details.workfold{margin:10px 0 2px}
+details.workfold>summary{cursor:pointer;font-family:var(--font-mono);
+  font-size:var(--text-caps);color:var(--text-dim);list-style:none;
+  padding:2px 0 2px 16px}
+details.workfold>summary:hover{color:var(--text-muted)}
+details.workfold>summary::before{content:'▸ '}
+details.workfold[open]>summary::before{content:'▾ '}
+details.workfold .work{margin-top:4px}
 details.tlo{margin:-1px 0 2px 20px}
 details.tlo summary{cursor:pointer;font-family:var(--font-mono);
   font-size:var(--text-caps);color:var(--text-dim);list-style:none}
@@ -537,13 +560,32 @@ details.tlo pre{background:var(--surface-0);border:1px solid var(--edge);
   font-size:var(--text-caps);color:var(--accent)}
 .workingline .dot{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);
   animation:caret 1.2s steps(2) infinite}
+.workingline .hint{color:var(--text-dim);letter-spacing:.11em}
 .workingline .stop{margin-left:6px;background:none;border:1px solid var(--edge);
   border-radius:var(--r-pill);color:var(--text-muted);cursor:pointer;
   font-family:var(--font-label);text-transform:uppercase;letter-spacing:.11em;
   font-size:var(--text-caps);padding:3px 10px}
 .workingline .stop:hover{color:var(--danger);border-color:#3A211E}
 
-.composer{border-top:1px solid var(--edge);padding:14px 28px 10px}
+.composer{border-top:1px solid var(--edge);padding:14px 28px 10px;position:relative}
+.jumplatest{position:absolute;left:50%;top:-46px;transform:translateX(-50%);
+  display:none;background:var(--surface-2);border:1px solid var(--edge);
+  border-radius:var(--r-pill);color:var(--text-muted);cursor:pointer;
+  font-family:var(--font-label);text-transform:uppercase;letter-spacing:.13em;
+  font-size:var(--text-caps);padding:6px 14px;box-shadow:0 6px 18px #00000059}
+.jumplatest.on{display:block}
+.jumplatest:hover{background:var(--surface-3);color:var(--text)}
+.queued{display:none;flex-direction:column;gap:5px;margin-bottom:8px}
+.queued.on{display:flex}
+.qchip{display:flex;align-items:baseline;gap:9px;background:var(--surface-1);
+  border:1px dashed var(--edge);border-radius:var(--r-sm);padding:6px 10px}
+.qchip .ql{font-family:var(--font-label);text-transform:uppercase;
+  letter-spacing:.13em;font-size:var(--text-caps);color:var(--accent);flex:0 0 auto}
+.qchip .qt{font-size:var(--text-xs);color:var(--text-muted);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.qchip .qx{background:none;border:0;color:var(--text-dim);cursor:pointer;
+  font-size:15px;line-height:1;padding:0 2px}
+.qchip .qx:hover{color:var(--danger)}
 .composer .cbox{max-width:920px;margin:0 auto}
 .composer textarea{width:100%;background:var(--surface-1);color:var(--text);
   border:1px solid var(--edge);border-radius:var(--r-md);padding:12px 52px 12px 14px;
@@ -561,9 +603,14 @@ details.tlo pre{background:var(--surface-0);border:1px solid var(--edge);
   font-family:var(--font-label);text-transform:uppercase;letter-spacing:.13em;
   font-size:var(--text-caps);color:var(--text-dim);flex-wrap:wrap}
 .cfoot b{color:var(--text-muted);font-weight:400}
+.cfoot .keys{margin-left:auto;color:var(--text-dim)}
+.cfoot .cstat{display:none;align-items:center;gap:7px;color:var(--accent)}
+.cfoot .cstat.on{display:inline-flex}
+.cfoot .cstat .dot{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);
+  animation:caret 1.2s steps(2) infinite}
 
 /* ── chat hub + agent roster ──────────────────────────────────────────── */
-.hub{flex:1;overflow-y:auto;padding:24px 28px}
+.hub{flex:1;min-height:0;overflow-y:auto;padding:24px 28px}
 .hub .inner{max-width:920px;margin:0 auto}
 .hub h1{font-size:var(--text-lg);font-weight:600;margin:6px 0 4px}
 .lede{font-size:var(--text-sm);color:var(--text-muted);margin:0 0 18px;

@@ -118,29 +118,72 @@ def sidebar(sessions, directory, user: str, active_sid: str | None, now) -> str:
     return f"<aside class='chatside'>{''.join(bits)}</aside>"
 
 
+WORK_FOLD_AT = 6            # tool lines a finished turn shows before folding
+
+
+def args_summary(raw) -> str:
+    """A tool line reads as a call, not a payload: `read_file(AGENTS.md)`.
+    Claude Code's anatomy — the arguments are a hint, the result is the detail."""
+    d = raw
+    if not isinstance(d, (dict, list)):
+        s = str(raw or "").strip()
+        if not s.startswith("{"):
+            return s[:180]
+        try:
+            d = json.loads(s)
+        except ValueError:
+            return s[:180]
+    if isinstance(d, dict):
+        if not d:
+            return ""
+        if len(d) == 1:
+            return str(next(iter(d.values())))[:180]
+        return ", ".join(f"{k}={v}" for k, v in d.items())[:180]
+    return str(d)[:180]
+
+
+def out_summary(out: str) -> str:
+    """Result headers say how much came back, in the unit the eye wants."""
+    out = out or ""
+    if not out:
+        return "empty result"
+    n = out.count("\n") + 1
+    return f"{n} lines" if n > 1 else f"{len(out)} chars"
+
+
+def tool_line(name: str, args, spec: bool = False) -> str:
+    a = args_summary(args)
+    glyph = "↳" if spec else "⏺"
+    tail = f"<span class='ta' title='{H(a)}'>({H(a)})</span>" if a else ""
+    return (f"<div class='tl{' spec' if spec else ''}'><span class='g'>{glyph}</span>"
+            f"<span class='tn'>{H(name)}</span>{tail}</div>")
+
+
 def trace_html(trace) -> str:
-    """The agent's visible work: tool lines with folded results, in order."""
+    """The agent's visible work: tool lines with folded results, in order.
+
+    Thinking is deliberately *not* here. Reasoning drives the live status line
+    and is never written into the record — the same call Claude Code makes, and
+    the reason `chat_service` publishes `thinking` with persist=False."""
     if isinstance(trace, str):
         try:
             trace = json.loads(trace)
         except ValueError:
             trace = []
-    out = []
+    out, calls = [], 0
     for ev in trace or []:
         k = ev.get("kind")
         if k == "tool":
-            out.append(f"<div class='tl'><span class='g'>⏺</span>"
-                       f"<span class='tn'>{H(ev.get('name', '?'))}</span>"
-                       f"<span class='ta' title='{H(ev.get('args', ''))}'>"
-                       f"{H(ev.get('args', ''))}</span></div>")
+            calls += 1
+            out.append(tool_line(ev.get("name", "?"), ev.get("args", "")))
         elif k == "tool_done":
             o = ev.get("output", "")
-            out.append(f"<details class='tlo'><summary>result · {len(o)} chars</summary>"
+            out.append(f"<details class='tlo'><summary>{H(out_summary(o))}</summary>"
                        f"<pre>{H(o)}</pre></details>")
         elif k == "specialist":
-            out.append(f"<div class='tl spec'><span class='g'>↳</span>"
-                       f"<span class='tn'>asked {H(ev.get('role', '?'))}</span>"
-                       f"<span class='ta'>{H(ev.get('question', ''))}</span></div>")
+            calls += 1
+            out.append(tool_line(f"asked {ev.get('role', '?')}",
+                                 ev.get("question", ""), spec=True))
         elif k == "specialist_done":
             tok = ev.get("tokens")
             tok_s = f" · {fmt_int(tok)} tok" if tok else ""
@@ -149,7 +192,14 @@ def trace_html(trace) -> str:
         elif k == "note":
             out.append(f"<div class='tl'><span class='g'>·</span>"
                        f"<span class='ta'>{H(ev.get('text', ''))}</span></div>")
-    return f"<div class='work'>{''.join(out)}</div>" if out else ""
+    if not out:
+        return ""
+    body = f"<div class='work'>{''.join(out)}</div>"
+    if calls > WORK_FOLD_AT:
+        # Long traces stay available but stop pushing the answer off the screen.
+        return (f"<details class='workfold'><summary>{calls} tool calls</summary>"
+                f"{body}</details>")
+    return body
 
 
 def turn_ledger(turn) -> str:
@@ -180,7 +230,9 @@ def user_block(turn) -> str:
 
 def agent_block(turn, label: str) -> str:
     """One finished agent reply: work trace + rendered answer + ledger."""
-    bits = [f"<span class='who'>{H(label)}</span>", trace_html(turn["trace"])]
+    copy = ("<button class='copy' type='button' title='Copy this reply'>copy</button>"
+            if turn["final_text"] else "")
+    bits = [f"<span class='who'>{H(label)}{copy}</span>", trace_html(turn["trace"])]
     if turn["status"] == "failed":
         bits.append(f"<div class='terr'>{H(turn['error'] or 'failed')}</div>")
     elif turn["status"] == "stopped":
@@ -208,14 +260,20 @@ def composer(sid_or_new: str, agent_slug: str, directory: dict, session_est: flo
               else "nothing billed yet")
     scope = f"<b>run {H(run_id)}</b><span>·</span>" if run_id else ""
     dis = " disabled" if disabled else ""
-    return f"""<div class='composer'><div class='cbox'>
+    return f"""<div class='composer'>
+      <button class='jumplatest' id='jumplatest' type='button'>↓ Jump to latest</button>
+      <div class='cbox'>
+      <div class='queued' id='queued'></div>
       <div class='crow'>
         <textarea id='cinput' placeholder='{H(ph)}' rows='1'{dis}></textarea>
         <button class='send' id='csend' title='Send (Enter)'{dis}>↑</button>
       </div>
       <div class='cfoot'>{scope}<b>{H(label)} consult</b><span>·</span>
         <span>advisory, read-only</span><span>·</span>
-        <span id='cbilled'>{H(billed)}</span></div>
+        <span id='cbilled'>{H(billed)}</span>
+        <span class='cstat' id='cstat'><span class='dot'></span>
+          <span id='cstattext'></span></span>
+        <span class='keys'>↑ recalls · esc interrupts</span></div>
     </div></div>"""
 
 
@@ -228,23 +286,92 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
 (function(){
   var CFG = """ + cfg + """;
   var tr = document.getElementById('transcript');
+  var inner = tr ? tr.querySelector('.tinner') : null;
+  var pad = tr ? tr.querySelector('.tailpad') : null;
   var input = document.getElementById('cinput'), send = document.getElementById('csend');
+  var jump = document.getElementById('jumplatest'), qbox = document.getElementById('queued');
   var live = null, liveText = null, liveWork = null, liveTimer = null, t0 = 0, tools = 0;
-  var lastUserText = null;
+  var phase = 'Thinking', lastUserText = null, follow = true;
+  var queue = [], hist = [], hidx = 0, browsing = false;
+  var DRAFT = 'lantern-draft:' + CFG.sid;
+  var IDLE_PH = input ? input.getAttribute('placeholder') : '';
 
   function esc(s){var d=document.createElement('span');d.textContent=s;return d.innerHTML}
-  function atBottom(){return tr.scrollHeight - tr.scrollTop - tr.clientHeight < 120}
-  function pin(force){if(force || atBottom()) tr.scrollTop = tr.scrollHeight}
+  function gap(){ return tr.scrollHeight - tr.scrollTop - tr.clientHeight }
+  function showJump(b){ if(jump) jump.className = 'jumplatest' + (b ? ' on' : '') }
 
-  function setBusy(b){
-    if(input){input.disabled = b} if(send){send.disabled = b}
-    if(!b && input){input.focus()}
+  /* Scrolling belongs to the reader, not to the model. Nothing moves the
+     window unless the reader is already parked at the bottom or asks for it,
+     and the tail spacer lets the newest question sit at the top of the
+     viewport and shrinks as the answer fills the space — so a long reply grows
+     into a still frame instead of dragging the page under the reader's eyes. */
+  function lastTurn(){   // NOT :last-of-type — the tail spacer is a div too
+    var all = inner ? inner.querySelectorAll('.turn') : [];
+    return all.length ? all[all.length - 1] : null;
+  }
+  function syncTail(){
+    if(!pad || !inner || !pad.dataset.on) return;
+    var last = lastTurn();
+    if(!last) return;
+    var h = tr.clientHeight - last.getBoundingClientRect().height - 30;
+    pad.style.height = Math.max(0, h) + 'px';
+  }
+  var pending = false;
+  function grew(){
+    // Coalesced on a timer, not requestAnimationFrame: a chat left in a
+    // background tab still keeps its own bookkeeping straight.
+    if(pending) return;
+    pending = true;
+    setTimeout(function(){
+      pending = false; syncTail();
+      if(follow){ tr.scrollTop = tr.scrollHeight; showJump(false) }
+      else if(gap() > 8){ showJump(true) }
+    }, 60);
+  }
+  function anchorLast(){
+    var last = lastTurn();
+    if(!last) return;
+    if(pad){ pad.dataset.on = '1'; syncTail() }
+    follow = false;
+    tr.scrollTop += last.getBoundingClientRect().top - tr.getBoundingClientRect().top - 10;
+    showJump(false);
+  }
+  function toBottom(){ follow = true; tr.scrollTop = tr.scrollHeight; showJump(false) }
+
+  if(tr){
+    tr.addEventListener('scroll', function(){
+      if(gap() < 40){ follow = true; showJump(false) }
+      else { follow = false; if(live) showJump(true) }
+    });
+  }
+  if(jump) jump.addEventListener('click', function(){ toBottom(); if(input) input.focus() });
+  window.addEventListener('resize', function(){   // the box rewraps, the tail regrows
+    if(input) autosize();
+    syncTail();
+  });
+
+  function setPhase(p){ phase = p; tickWork() }
+  function tickWork(){
+    var s = Math.floor((Date.now() - t0) / 1000);
+    var line = phase + ' — ' + s + 's' +
+      (tools ? ' · ' + tools + ' tool call' + (tools > 1 ? 's' : '') : '');
+    var el = document.getElementById('wtext');
+    if(el) el.textContent = line;
+    // The working line lives inside the turn and can scroll out of the fixed
+    // window; the composer's copy is always on screen, as in Claude Code.
+    var cs = document.getElementById('cstattext');
+    if(cs) cs.textContent = line;
+  }
+  function showStatus(on){
+    var box = document.getElementById('cstat');
+    if(box) box.className = 'cstat' + (on ? ' on' : '');
+    if(!on){ var t = document.getElementById('cstattext'); if(t) t.textContent = '' }
   }
 
   function workingLine(){
     var w = document.createElement('div'); w.className='workingline'; w.id='working';
-    w.innerHTML = "<span class='dot'></span><span id='wtext'>Working</span>" +
-      "<button class='stop' id='wstop'>Stop</button>";
+    w.innerHTML = "<span class='dot'></span><span id='wtext'>Thinking</span>" +
+      "<span class='hint'>esc to interrupt</span><button class='stop' id='wstop'>Stop</button>";
     w.querySelector('#wstop').onclick = function(){
       fetch('/chat/' + encodeURIComponent(CFG.sid) + '/stop', {method:'POST'});
     };
@@ -254,7 +381,7 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
   function startLive(turnId, userText){
     var turn = document.querySelector("[data-turn='" + turnId + "']");
     if(turn && turn.querySelector('.msg.agent')) return;   // already live or finished
-    tools = 0; t0 = Date.now();
+    tools = 0; t0 = Date.now(); phase = 'Thinking';
     if(userText) lastUserText = userText;
     else if(turn){ var ut = turn.querySelector('.utext');
       if(ut) lastUserText = ut.textContent; }
@@ -266,8 +393,8 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
         turn.innerHTML = "<div class='msg you'><span class='who'>You<span class='tm'>" +
           hm + "</span></span><div class='utext'>" + esc(userText) + "</div></div>";
       }
-      var host = tr.firstElementChild || tr;
-      host.appendChild(turn);
+      if(inner && pad) inner.insertBefore(turn, pad);
+      else (inner || tr).appendChild(turn);
     }
     var ag = document.createElement('div');
     ag.className = 'msg agent';
@@ -278,18 +405,17 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
     ag.appendChild(workingLine());
     live = turn; liveWork = turn.querySelector('#live-work');
     liveText = turn.querySelector('#live-text');
-    liveTimer = setInterval(function(){
-      var el = document.getElementById('wtext');
-      if(el){var s = Math.floor((Date.now()-t0)/1000);
-        el.textContent = 'Working — ' + s + 's' + (tools ? ' · ' + tools + ' tool call' + (tools>1?'s':'') : '');}
-    }, 1000);
-    setBusy(true); pin(true);
+    liveTimer = setInterval(tickWork, 1000);
+    if(input) input.setAttribute('placeholder',
+      'Reply — it sends as soon as this turn finishes');
+    showStatus(true); tickWork();
+    anchorLast();
   }
 
   function resetLive(){       // SSE reconnect replays the whole turn — rebuild clean
     if(liveWork) liveWork.innerHTML = '';
     if(liveText) liveText.textContent = '';
-    tools = 0;
+    tools = 0; phase = 'Thinking';
   }
 
   function money(x){ return x <= 0 ? '—' : (x < 0.01 ? '<$0.01' : '$' + x.toFixed(2)); }
@@ -306,6 +432,8 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
   function endLive(turnId, ok){
     if(liveTimer){clearInterval(liveTimer); liveTimer = null;}
     var w = document.getElementById('working'); if(w) w.remove();
+    showStatus(false);
+    if(input) input.setAttribute('placeholder', IDLE_PH);
     // the server titled the session on its first turn — reflect it without a reload
     var ttl = document.querySelector('.chathead input.ttl');
     if(ttl && !ttl.value && lastUserText){ ttl.value = lastUserText.slice(0, 80); }
@@ -316,9 +444,13 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
       if(st && st.textContent === '(untitled)' && lastUserText){
         st.textContent = lastUserText.slice(0, 80); }
     }
-    if(!live){setBusy(false); return}
+    if(!live){ live = liveText = liveWork = null; drain(); return }
     if(liveText) liveText.classList.remove('streaming');
     if(ok){
+      // Swapping streamed text for the server-rendered turn must not move what
+      // the reader is looking at: hold the turn's screen position across the
+      // replacement, since markdown reflows to a different height.
+      var keep = live.getBoundingClientRect().top - tr.getBoundingClientRect().top;
       fetch('/chat/' + encodeURIComponent(CFG.sid) + '/turn/' + turnId)
         .then(function(r){return r.text()})
         .then(function(html){
@@ -327,33 +459,51 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
           var fresh = probe.firstElementChild;
           live.replaceWith(fresh);
           live = liveText = liveWork = null;
-          pin(false);
+          syncTail();
+          if(follow) tr.scrollTop = tr.scrollHeight;
+          else tr.scrollTop += (fresh.getBoundingClientRect().top -
+                                tr.getBoundingClientRect().top) - keep;
+          drain();
         })
-        .catch(function(){ live = liveText = liveWork = null });  // streamed text stands
-    } else { live = liveText = liveWork = null; }
-    setBusy(false);
+        .catch(function(){ live = liveText = liveWork = null; drain() });  // streamed text stands
+    } else { live = liveText = liveWork = null; drain() }
   }
 
+  // Same summary the server renders for a finished turn, so the live line and
+  // the one that replaces it read identically.
+  function argsSummary(raw){
+    var s = (raw == null ? '' : String(raw)).trim();
+    if(s.charAt(0) !== '{') return s.slice(0, 180);
+    var d; try { d = JSON.parse(s) } catch(e){ return s.slice(0, 180) }
+    if(!d || typeof d !== 'object' || Array.isArray(d)) return String(d).slice(0, 180);
+    var ks = Object.keys(d);
+    if(!ks.length) return '';
+    if(ks.length === 1) return String(d[ks[0]]).slice(0, 180);
+    return ks.map(function(k){ return k + '=' + d[k] }).join(', ').slice(0, 180);
+  }
   function toolLine(ev){
     tools++;
+    setPhase(ev.kind === 'specialist'
+      ? 'Asking ' + (ev.role || 'a specialist') : 'Running ' + (ev.name || 'a tool'));
     var d = document.createElement('div'); d.className = 'tl' + (ev.kind==='specialist' ? ' spec' : '');
-    if(ev.kind === 'tool'){
-      d.innerHTML = "<span class='g'>⏺</span><span class='tn'>" + esc(ev.name||'?') +
-        "</span><span class='ta'>" + esc(ev.args||'') + "</span>";
-    } else {
-      d.innerHTML = "<span class='g'>↳</span><span class='tn'>asked " + esc(ev.role||'?') +
-        "</span><span class='ta'>" + esc(ev.question||'') + "</span>";
-    }
-    liveWork.appendChild(d); pin(false);
+    var label = ev.kind === 'tool' ? (ev.name||'?') : 'asked ' + (ev.role||'?');
+    var arg = argsSummary(ev.kind === 'tool' ? (ev.args||'') : (ev.question||''));
+    d.innerHTML = "<span class='g'>" + (ev.kind==='tool' ? '⏺' : '↳') + "</span><span class='tn'>" +
+      esc(label) + "</span>" +
+      (arg ? "<span class='ta' title='" + esc(arg) + "'>(" + esc(arg) + ")</span>" : "");
+    liveWork.appendChild(d); grew();
   }
   function toolOut(ev){
+    setPhase('Thinking');
     var d = document.createElement('details'); d.className = 'tlo';
+    var body = ev.kind === 'specialist_done' ? (ev.answer||'') : (ev.output||'');
+    var lines = body ? body.split('\\n').length : 0;
     var head = ev.kind === 'specialist_done'
       ? esc(ev.role||'?') + ' answered' + (ev.tokens ? ' · ' + ev.tokens + ' tok' : '')
-      : 'result · ' + (ev.output||'').length + ' chars';
-    d.innerHTML = '<summary>' + head + '</summary><pre>' +
-      esc(ev.kind === 'specialist_done' ? (ev.answer||'') : (ev.output||'')) + '</pre>';
-    liveWork.appendChild(d); pin(false);
+      : (!body ? 'empty result'
+               : (lines > 1 ? lines + ' lines' : body.length + ' chars'));
+    d.innerHTML = '<summary>' + head + '</summary><pre>' + esc(body) + '</pre>';
+    liveWork.appendChild(d); grew();
   }
 
   var es = new EventSource('/chat/' + encodeURIComponent(CFG.sid) + '/events');
@@ -363,7 +513,10 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
     var ev; try { ev = JSON.parse(m.data) } catch(e){ return }
     switch(ev.kind){
       case 'turn_started': startLive(ev.turn_id, ev.user_text); break;
-      case 'delta': if(liveText){liveText.textContent += ev.text; pin(false)} break;
+      // Reasoning never lands in the transcript — it only says what the status
+      // line should read while nothing visible is happening.
+      case 'thinking': setPhase('Thinking'); break;
+      case 'delta': if(liveText){liveText.textContent += ev.text; setPhase('Responding'); grew()} break;
       case 'tool': case 'specialist': if(liveWork) toolLine(ev); break;
       case 'tool_done': case 'specialist_done': if(liveWork) toolOut(ev); break;
       case 'final': updateTotals(ev.session); endLive(ev.turn_id, true); break;
@@ -384,37 +537,116 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
 
   function autosize(){ input.style.height='auto';
     input.style.height = Math.min(input.scrollHeight, 220) + 'px'; }
-  function submit(){
-    var text = (input.value || '').trim();
-    if(!text || input.disabled) return;
-    input.value = ''; autosize();
-    function giveBack(msg){ input.value = text; autosize(); if(msg) alert(msg); }
+  function saveDraft(v){ try{ v ? localStorage.setItem(DRAFT, v)
+                                : localStorage.removeItem(DRAFT) }catch(e){} }
+  function giveBack(text, msg){
+    if(input && !input.value){ input.value = text; autosize(); saveDraft(text) }
+    if(msg) alert(msg);
+  }
+
+  // Typing while the agent works is normal, so the composer never locks: what
+  // you send during a turn queues visibly and goes out by itself.
+  function renderQueue(){
+    if(!qbox) return;
+    qbox.className = 'queued' + (queue.length ? ' on' : '');
+    qbox.innerHTML = '';
+    queue.forEach(function(text, i){
+      var d = document.createElement('div'); d.className = 'qchip';
+      d.innerHTML = "<span class='ql'>queued</span><span class='qt'></span>" +
+        "<button class='qx' type='button' title='Remove'>×</button>";
+      d.querySelector('.qt').textContent = text;
+      d.querySelector('.qx').onclick = function(){ queue.splice(i, 1); renderQueue() };
+      qbox.appendChild(d);
+    });
+  }
+  function post(text, tries){
     fetch('/chat/' + encodeURIComponent(CFG.sid) + '/send', {
       method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:'text=' + encodeURIComponent(text)})
     .then(function(r){
-      if(r.status === 409){ giveBack('A turn is already running — stop it or wait.'); return null }
-      if(!r.ok){ giveBack('Send failed (' + r.status + ')'); return null }
+      if(r.status === 409){          // the finished turn has not cleared yet
+        if(tries > 0){ setTimeout(function(){ post(text, tries - 1) }, 500); return null }
+        giveBack(text, 'A turn is already running — stop it or wait.'); return null;
+      }
+      if(!r.ok){ giveBack(text, 'Send failed (' + r.status + ')'); return null }
       return r.json();
     })
     .then(function(j){ if(j) startLive(j.turn_id, text) })
-    .catch(function(){ giveBack('Send failed — is Mission Control still up? Your text is back in the box.') });
+    .catch(function(){ giveBack(text,
+      'Send failed — is Mission Control still up? Your text is back in the box.') });
   }
+  function drain(){
+    if(!queue.length || live) return;
+    var text = queue.shift(); renderQueue();
+    post(text, 4);
+  }
+  function submit(){
+    var text = (input.value || '').trim();
+    if(!text || input.disabled) return;
+    input.value = ''; autosize(); saveDraft(''); browsing = false;
+    hist.push(text); hidx = hist.length;
+    if(live){ queue.push(text); renderQueue(); return }
+    post(text, 0);
+  }
+
   if(input){
-    input.addEventListener('input', autosize);
+    Array.prototype.forEach.call(document.querySelectorAll('.msg.you .utext'), function(el){
+      hist.push(el.textContent);
+    });
+    hidx = hist.length;
+    try{ var saved = localStorage.getItem(DRAFT); if(saved && !input.value) input.value = saved }catch(e){}
+    input.addEventListener('input', function(){ autosize(); browsing = false; saveDraft(input.value) });
     input.addEventListener('keydown', function(e){
-      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submit(); }
+      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submit(); return }
+      // ↑/↓ walk your own past messages, as in Claude Code's composer.
+      if(e.key === 'ArrowUp' && hist.length && (browsing || !input.value)){
+        if(hidx > 0){ hidx--; browsing = true; input.value = hist[hidx];
+          autosize(); e.preventDefault(); }
+        return;
+      }
+      if(e.key === 'ArrowDown' && browsing){
+        e.preventDefault();
+        hidx++;
+        if(hidx >= hist.length){ hidx = hist.length; browsing = false; input.value = '' }
+        else { input.value = hist[hidx] }
+        autosize();
+      }
     });
     send.addEventListener('click', submit);
     autosize(); if(!input.disabled) input.focus();
   }
+  // Copy a reply without selecting it by hand — delegated, so the turns the
+  // server swaps in get it for free.
+  document.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('.msg.agent .copy') : null;
+    if(!b) return;
+    var t = b.closest('.msg.agent').querySelector('.atext');
+    if(!t) return;
+    var done = function(){ b.textContent = 'copied';
+      setTimeout(function(){ b.textContent = 'copy' }, 1400) };
+    var legacy = function(){          // clipboard API refuses on an unfocused tab
+      var ta = document.createElement('textarea');
+      ta.value = t.innerText; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy') } catch(err){}
+      document.body.removeChild(ta); done();
+    };
+    if(navigator.clipboard) navigator.clipboard.writeText(t.innerText).then(done, legacy);
+    else legacy();
+  });
   document.addEventListener('keydown', function(e){   // Esc interrupts, like Claude Code
     if(e.key === 'Escape' && live){
       fetch('/chat/' + encodeURIComponent(CFG.sid) + '/stop', {method:'POST'});
     }
   });
+  function settle(){                 // fonts and CSS land after the first paint
+    if(input) autosize();
+    if(tr && follow) tr.scrollTop = tr.scrollHeight;
+    syncTail();
+  }
+  settle();
+  window.addEventListener('load', settle);
   if(CFG.running){ startLive(CFG.running, null); }
-  pin(true);
 })();
 </script>"""
 
@@ -733,7 +965,8 @@ async def chat_session(sid: str, request: Request):
 
     main = (f"<main class='chatmain'>{head}{notice}"
             f"<div class='transcript' id='transcript'>"
-            f"<div style='max-width:920px;margin:0 auto'>{''.join(blocks)}</div></div>"
+            f"<div class='tinner'>{''.join(blocks)}"
+            f"<div class='tailpad'></div></div></div>"
             + composer(sid, s["agent"], directory, est, len(turns), s["run_id"],
                        disabled=not ok)
             + chat_js(sid, label, running_id))

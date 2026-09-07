@@ -147,13 +147,39 @@ this, so the audit log sees one stream of consults regardless of surface.
 2. **`/chat/{sid}` — the conversation.** Claude-Code-anatomy transcript: `YOU`
    / agent caps labels, streamed text, tool lines with folded results,
    specialist handoffs shown as indented sub-consults, a working footer with
-   elapsed time + live tool count + Stop (Esc also stops, as in Claude Code;
-   a stopped turn keeps the tokens it already burned), and a per-turn ledger line (model ·
-   tokens · cached % · est. $ · duration). Composer pinned at bottom with the
-   advisory-line status footer ("UI-UX CONSULT · ADVISORY, READ-ONLY · $0.32
-   THIS CHAT" — or "NOTHING BILLED YET", which is the design system's own
-   example copy). Sessions scoped to a run (`run_id` set) carry the run chip
-   and the agent is pointed at the run folder in its instructions.
+   phase + elapsed time + live tool count + Stop (Esc also stops, as in Claude
+   Code; a stopped turn keeps the tokens it already burned), and a per-turn
+   ledger line (model · tokens · cached % · est. $ · duration). Composer pinned
+   at bottom with the advisory-line status footer ("UI-UX CONSULT · ADVISORY,
+   READ-ONLY · $0.32 THIS CHAT" — or "NOTHING BILLED YET", which is the design
+   system's own example copy). Sessions scoped to a run (`run_id` set) carry
+   the run chip and the agent is pointed at the run folder in its instructions.
+
+   **The reading window is fixed** — the rule the rest of the screen obeys.
+   The shell is a frame (`min-height:0` on both columns, or a grid/flex child
+   floors at its content height and a long conversation scrolls the whole
+   page); the transcript owns the only scrollbar; and the client never scrolls
+   on its own. Sending a message anchors that question at the top of the
+   viewport and a tail spacer shrinks as the answer fills the space, so a long
+   reply grows into a still frame. The view follows the bottom only for a
+   reader already parked there; anyone who scrolls up keeps their place and
+   gets a "↓ Jump to latest" pill instead. The end-of-turn swap (streamed text
+   → server-rendered markdown) holds the turn's screen position across the
+   replacement, so nothing jumps when a turn finishes.
+
+   **Thinking is not shown.** Reasoning deltas and reasoning items drive the
+   status line (`Thinking → Running read_file → Responding`, with elapsed and
+   tool count) and are published with `persist=False` — never streamed into
+   the reply, never written into the trace, so a replayed turn cannot leak
+   them either. What the agent *did* is still fully on the record.
+
+   **The composer never locks.** Typing during a turn is normal: a message
+   sent while the agent works becomes a visible queued chip and goes out by
+   itself when the turn ends (409-tolerant, since the bus clears just after
+   the final event). `↑`/`↓` walk your own past messages, an unsent draft
+   survives a reload (per session, in `localStorage`), a finished reply has a
+   `copy` button, and traces longer than six tool calls fold behind a
+   "N tool calls" summary instead of burying the answer.
 3. **`/agents` — the roster.** Fleet roles (read from `agents/<role>/`, exactly
    what the orchestrator loads) and custom agents side by side with per-agent
    usage (sessions, tokens, est. $, memory entries). "New agent" is the
@@ -183,7 +209,9 @@ stage spend instead of hiding in the events log.
 
 ## Roadmap
 
-- v1 (now): everything above.
+- v1 (now): everything above. `tools/mission-control/test_chat_ux.py` pins the
+  reading contract (fixed window, hidden thinking, queue, fold) with stdlib
+  unittest — no database, no browser.
 - v2: opt-in Playwright MCP for browser-role consults (`LANTERN_CHAT_BROWSER=1`);
   file/image drop into the composer; Slack surface reusing `chat_service`.
 - v3: "promote this consult" — draft a brief from a conversation and hand it to

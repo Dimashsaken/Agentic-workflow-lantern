@@ -531,6 +531,7 @@ run_oneshot = Runner.run
 
 DELTA_FLUSH_CHARS = 48
 DELTA_FLUSH_S = 0.15
+THINK_PING_S = 1.0          # at most one «thinking» ping a second; it is a hint
 
 
 def _tool_call_view(item) -> dict:
@@ -614,16 +615,26 @@ async def run_chat_turn(pool: asyncpg.Pool, session, turn_id: int, user_text: st
                               if session["agent"] == LANTERN_AGENT else MAX_TURNS_CONSULT)
 
         buf, last_flush = [], time.monotonic()
+        last_think = 0.0
         async for ev in result.stream_events():
             etype = getattr(ev, "type", "")
             if etype == "raw_response_event":
                 d = ev.data
-                if getattr(d, "type", "") == "response.output_text.delta":
+                dtype = getattr(d, "type", "")
+                if dtype == "response.output_text.delta":
                     buf.append(d.delta or "")
                     if (sum(map(len, buf)) >= DELTA_FLUSH_CHARS
                             or time.monotonic() - last_flush >= DELTA_FLUSH_S):
                         publish({"kind": "delta", "text": "".join(buf)}, persist=False)
                         buf, last_flush = [], time.monotonic()
+                elif dtype.startswith("response.reasoning"):
+                    # Reasoning is the model's scratchpad, not its answer: it
+                    # says the status line should read «Thinking» and nothing
+                    # more. Never buffered into the reply, never persisted into
+                    # the trace — the transcript keeps only what the agent did.
+                    if time.monotonic() - last_think >= THINK_PING_S:
+                        last_think = time.monotonic()
+                        publish({"kind": "thinking"}, persist=False)
             elif etype == "run_item_stream_event":
                 if buf:
                     publish({"kind": "delta", "text": "".join(buf)}, persist=False)
@@ -635,6 +646,8 @@ async def run_chat_turn(pool: asyncpg.Pool, session, turn_id: int, user_text: st
                     await flush_trace()
                 elif itype == "tool_call_output_item":
                     publish(_tool_output_view(item))
+                elif itype == "reasoning_item":
+                    publish({"kind": "thinking"}, persist=False)
         if buf:
             publish({"kind": "delta", "text": "".join(buf)}, persist=False)
 
