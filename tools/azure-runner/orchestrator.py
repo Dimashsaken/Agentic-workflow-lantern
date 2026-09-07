@@ -86,6 +86,7 @@ ROLE_FOR_STAGE = {
     "01-ui-ux.diverge": "ui-ux",    # pipeline: divergence phase (EC2, fast model)
     "01-ui-ux.design": "ui-ux",     # pipeline: Paper convergence phase (workstation)
     "02-pre-coding": "pre-coding",
+    "03-coding": "coding",          # only executed when runs.coding_mode = 'auto' (D14)
     "04-qa-dev": "qa-dev",
     "05-post-coding": "post-coding",
     "06-security": "security",
@@ -322,6 +323,17 @@ def product_wired() -> bool:
     return product_root().is_dir()
 
 
+def product_writable() -> bool:
+    """True only in an auto-coding execution (D14): the dispatcher/entrypoint set
+    LANTERN_PRODUCT_WRITABLE=1 for stage 03-coding and nothing else. Every other
+    stage keeps the read-only contract test_product_access.py proves."""
+    return os.environ.get("LANTERN_PRODUCT_WRITABLE") == "1" and product_wired()
+
+
+def coding_branch_name() -> str:
+    return os.environ.get("LANTERN_CODING_BRANCH", "")
+
+
 PRODUCT_HINT = (
     "No product repository is wired into this run. Report Status: BLOCKED asking for "
     "the product repo + base branch to be set (`pipeline.py set-product <run-id> "
@@ -357,6 +369,19 @@ def _writable(rel: str) -> Path:
     """
     norm = rel.replace("\\", "/").lstrip("/")
     if norm == "product" or norm.startswith("product/"):
+        if product_writable():
+            # Auto-coding (D14): the checkout is this execution's working tree on the
+            # run's branch. Confined exactly like reads; the harness bundles the
+            # committed result into the run folder at the end of the stage.
+            sub = norm[len("product"):].lstrip("/")
+            if not sub:
+                raise ValueError("write a file inside the product tree, not the root")
+            p = (product_root() / sub).resolve()
+            if not p.is_relative_to(product_root().resolve()):
+                raise ValueError(f"path escapes the product checkout: {rel}")
+            if ".git/" in (p.relative_to(product_root().resolve()).as_posix() + "/"):
+                raise ValueError("never write inside the product's .git directory")
+            return p
         raise ValueError(
             "the product checkout is READ-ONLY for fleet stages — it is a throwaway clone "
             "of a mirror and nothing written there survives the container. Product code is "
@@ -386,7 +411,8 @@ def read_file(path: str) -> str:
 
 @function_tool
 def write_file(path: str, content: str) -> str:
-    """Create or overwrite a file. Path is relative to the Lantern repo root."""
+    """Create or overwrite a file. Path is relative to the Lantern repo root, or
+    `product/...` for product code — accepted ONLY in an auto-coding execution."""
     p = _writable(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
@@ -516,10 +542,248 @@ def _product_git(subcommand: str, args: list[str] | None = None) -> str:
     return out.strip() or f"(no output, git exit {r.returncode})"
 
 
+# ── auto-coding (D14): a writable checkout, a shell, and a bundle handoff ─────
+# Stage 03-coding with runs.coding_mode = 'auto' runs the `coding` role like any other
+# fleet stage, with two additions: the product checkout is WRITABLE (on the run's
+# feat/* branch, created by the entrypoint/dispatcher) and the agent gets a shell in
+# it — the same "cd into the repo and work" access a developer's Claude Code or Codex
+# session has. The checkout still dies with the container: what survives is the git
+# bundle finalize_coding() writes into the run folder, which the HOST verifies, pushes
+# as the bot identity and turns into the PR that becomes the code_complete payload.
+# The PAT never enters the sandbox; the sandbox never pushes.
+
+PRODUCT_SHELL_MAX = 24000
+PRODUCT_SHELL_TIMEOUT = int(os.environ.get("LANTERN_PRODUCT_SHELL_TIMEOUT", "900"))
+
+
+def _product_shell(command: str, timeout_s: int | None = None) -> str:
+    """The tool body, callable as a plain function (test_coding_stage.py)."""
+    if not product_writable():
+        raise PermissionError(
+            "product_shell is available only in an auto-coding execution — this stage's "
+            "product checkout is read-only (use product_git and read_file)")
+    if not command or not command.strip():
+        raise ValueError("empty command")
+    timeout = max(5, min(int(timeout_s or PRODUCT_SHELL_TIMEOUT), PRODUCT_SHELL_TIMEOUT))
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith(("AZURE_", "LANTERN_DATABASE", "GITHUB_", "POSTHOG_"))}
+    env.setdefault("HOME", str(Path.home()))
+    env["GIT_TERMINAL_PROMPT"] = "0"   # never hang on a credential prompt
+    env["CI"] = "1"
+    shell = ["bash", "-lc", command]
+    if os.name == "nt":
+        shell = ["bash", "-c", command]  # Git Bash on a laptop; -l would source profiles
+    try:
+        r = subprocess.run(shell, cwd=product_root(), timeout=timeout, env=env,
+                           capture_output=True, text=True, errors="replace",
+                           stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(
+            f"command ran over {timeout}s and was killed — run long tasks in smaller "
+            "pieces (a single test file, one package) or raise timeout_s up to "
+            f"{PRODUCT_SHELL_TIMEOUT}")
+    out = (r.stdout or "")
+    if r.stderr.strip():
+        out += ("\n[stderr]\n" if out else "[stderr]\n") + r.stderr
+    if len(out) > PRODUCT_SHELL_MAX:
+        out = out[:PRODUCT_SHELL_MAX // 2] + "\n… [truncated] …\n" + out[-PRODUCT_SHELL_MAX // 2:]
+    return f"exit {r.returncode}\n{out}".strip()
+
+
+@function_tool
+def product_shell(command: str, timeout_s: int = 600) -> str:
+    """Run ONE shell command inside the product checkout (auto-coding only).
+
+    This is how you work in the codebase the way a developer does at a terminal:
+
+      product_shell("cat AGENTS.md README.md | head -120")     conventions first
+      product_shell("ls; git status --short; git log --oneline -5")
+      product_shell("npm test -- --runInBand")                  or pytest, go test, …
+      product_shell("git add -A && git commit -m '<run-id>: task 2 — add the endpoint'")
+
+    cwd is the product root on your feature branch. Output (stdout+stderr) is
+    truncated at ~24k characters — pipe through head/tail/grep rather than dumping
+    everything. Commands are killed at timeout_s (default 600s). There is no
+    network credential here: `git push` and package publishing will not work and
+    are not your job — the harness bundles your COMMITTED branch into the run
+    folder when you finish, and the host pushes it and opens the pull request.
+    Install dependencies with scripts disabled where the stack allows
+    (`npm ci --ignore-scripts`, `pip install -r requirements.txt`).
+    """
+    return _product_shell(command, timeout_s)
+
+
+def _git_out(args: list[str], cwd: Path, timeout: int = 300) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=cwd, timeout=timeout, capture_output=True,
+                          text=True, errors="replace", env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+
+
+CODING_BUNDLE = "branch.bundle"
+
+
+def finalize_coding(run_id: str, stage: str) -> list[str]:
+    """Turn the agent's committed branch into the stage's handoff: a git bundle plus
+    handoff.json in the stage dir. Returns problems (empty = the handoff is valid).
+
+    Runs INSIDE the execution (container or in-process) right after the agent's turn,
+    because the checkout is gone the moment the container exits — the bundle is the
+    only thing that crosses to the host. Uncommitted work is committed by the harness
+    rather than lost (flagged in handoff.json); an empty branch is a failed stage.
+    """
+    problems: list[str] = []
+    if not product_writable():
+        return ["finalize_coding called without a writable product checkout"]
+    root = product_root()
+    branch = coding_branch_name()
+    base = os.environ.get("LANTERN_PRODUCT_BRANCH", "main")
+    if not branch:
+        return ["LANTERN_CODING_BRANCH is not set — the dispatcher must name the run's branch"]
+    head_name = _git_out(["rev-parse", "--abbrev-ref", "HEAD"], root).stdout.strip()
+    if head_name != branch:
+        co = _git_out(["checkout", branch], root)
+        if co.returncode != 0:
+            return [f"checkout is on '{head_name}', not the run's branch '{branch}': "
+                    f"{co.stderr.strip()[-300:]}"]
+    auto_committed = False
+    if _git_out(["status", "--porcelain"], root).stdout.strip():
+        _git_out(["add", "-A"], root)
+        c = _git_out(["commit", "-q", "-m",
+                      f"{run_id}: uncommitted changes at handoff (auto-committed by the harness)\n\n"
+                      f"Lantern-Agent: coding"], root)
+        auto_committed = c.returncode == 0
+        if not auto_committed:
+            problems.append(f"could not commit leftover changes: {c.stderr.strip()[-300:]}")
+    base_ref = f"refs/remotes/origin/{base}"
+    if _git_out(["rev-parse", "--verify", "-q", base_ref], root).returncode != 0:
+        base_ref = base   # in-process checkouts may carry the base as a local branch
+        if _git_out(["rev-parse", "--verify", "-q", base_ref], root).returncode != 0:
+            return [f"base branch '{base}' is not present in the checkout — cannot compute the diff"]
+    base_sha = _git_out(["merge-base", base_ref, "HEAD"], root).stdout.strip()
+    head_sha = _git_out(["rev-parse", "HEAD"], root).stdout.strip()
+    log = _git_out(["log", "--format=%H%x09%s", f"{base_sha}..HEAD"], root).stdout
+    commits = [{"sha": ln.split("\t", 1)[0], "subject": ln.split("\t", 1)[1] if "\t" in ln else ""}
+               for ln in log.splitlines() if ln.strip()]
+    if not commits:
+        problems.append(
+            "the coding branch has no commits beyond the base — nothing to hand off. "
+            "Implement the task plan and commit (one task, one commit).")
+        return problems
+    sdir = REPO / "workflow" / "runs" / run_id / stage_dir(stage)
+    sdir.mkdir(parents=True, exist_ok=True)
+    bundle = sdir / CODING_BUNDLE
+    if bundle.exists():
+        bundle.unlink()
+    b = _git_out(["bundle", "create", str(bundle), f"refs/heads/{branch}", f"^{base_sha}"], root)
+    if b.returncode != 0 or not bundle.is_file() or bundle.stat().st_size == 0:
+        problems.append(f"git bundle create failed: {b.stderr.strip()[-400:]}")
+        return problems
+    v = _git_out(["bundle", "verify", str(bundle)], root)
+    if v.returncode != 0:
+        problems.append(f"the bundle does not verify: {v.stderr.strip()[-400:]}")
+    diffstat = _git_out(["diff", "--stat", f"{base_sha}..HEAD"], root).stdout.strip()
+    handoff = {
+        "kind": "coding_branch",
+        "run_id": run_id,
+        "branch": branch,
+        "base": base,
+        "base_sha": base_sha,
+        "head_sha": head_sha,
+        "commits": list(reversed(commits)),      # oldest first, how a reviewer reads them
+        "bundle": f"workflow/runs/{run_id}/{stage_dir(stage)}/{CODING_BUNDLE}",
+        "auto_committed": auto_committed,
+        "diffstat": diffstat[-4000:],
+        "files_changed": [ln for ln in _git_out(
+            ["diff", "--name-only", f"{base_sha}..HEAD"], root).stdout.splitlines() if ln.strip()],
+    }
+    (sdir / "handoff.json").write_text(json.dumps(handoff, indent=2), encoding="utf-8")
+    return problems
+
+
+def check_coding_handoff(run_id: str, sdir: str, verify_in: Path | None = None) -> list[str]:
+    """Presence AND validity of the coding handoff (the fabrication lesson, applied to
+    code): handoff.json must name a feat/* or fix/* branch with ≥1 commit, the bundle
+    must exist, be non-empty, verify against a repo that has the base (when one is
+    given), and carry exactly that one branch ref — nothing else can ride along."""
+    d = REPO / "workflow" / "runs" / run_id / sdir
+    hf = d / "handoff.json"
+    if not hf.is_file():
+        return [f"{sdir}/handoff.json missing — the coding branch was never bundled "
+                "(finalize_coding did not run or found no commits)"]
+    try:
+        h = json.loads(hf.read_text(encoding="utf-8"))
+    except ValueError as e:
+        return [f"{sdir}/handoff.json is not valid JSON: {e}"]
+    problems = []
+    branch = str(h.get("branch") or "")
+    if not branch.startswith(("feat/", "fix/", "proto/")):
+        problems.append(f"handoff branch '{branch}' is not a feat/*, fix/* or proto/* branch")
+    if not h.get("commits"):
+        problems.append("handoff.json lists no commits")
+    bundle = REPO / str(h.get("bundle") or f"workflow/runs/{run_id}/{sdir}/{CODING_BUNDLE}")
+    if not bundle.is_file() or bundle.stat().st_size == 0:
+        problems.append(f"bundle {bundle.name} missing or empty")
+        return problems
+    heads = _git_out(["bundle", "list-heads", str(bundle)], REPO).stdout.split()
+    refs = [x for x in heads if x.startswith("refs/")]
+    if refs != [f"refs/heads/{branch}"]:
+        problems.append(f"bundle carries refs {refs} — expected exactly refs/heads/{branch}")
+    if verify_in is not None:
+        v = _git_out(["bundle", "verify", str(bundle)], verify_in)
+        if v.returncode != 0:
+            problems.append(f"bundle does not verify against the base: {v.stderr.strip()[-300:]}")
+    return problems
+
+
+def coding_product_note() -> str:
+    """System-prompt section for an auto-coding execution — the 'connect to this
+    codebase' contract (docs: tools/azure-runner/README.md, Connecting a codebase)."""
+    origin = os.environ.get("LANTERN_PRODUCT_ORIGIN", "") or "unknown"
+    base = os.environ.get("LANTERN_PRODUCT_BRANCH", "") or "main"
+    branch = coding_branch_name() or "(unset)"
+    head = ""
+    try:
+        head = subprocess.run(["git", "log", "-1", "--format=%h %s"], cwd=product_root(),
+                              timeout=30, capture_output=True, text=True).stdout.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return (
+        "\n\n# The product repository — you are CODING in it\n"
+        "This execution is stage 3 in AUTO mode (D14): you implement the approved task "
+        "plan yourself. The product checkout under the `product/` prefix is WRITABLE and "
+        "already on your feature branch.\n\n"
+        f"- **Origin:** `{origin}`\n- **Base branch:** `{base}`\n"
+        f"- **Your branch:** `{branch}` (checked out; HEAD at {head or 'unknown'})\n\n"
+        "How to work in this codebase — the same way a developer's coding agent would:\n"
+        "1. Orient: `product_shell('cat AGENTS.md CLAUDE.md README.md 2>/dev/null | head -200')`, "
+        "`product_shell('ls')`, `product_git('log', ['--oneline','-20'])`. The product's own "
+        "AGENTS.md/README are authoritative for its conventions, build and test commands; "
+        "Lantern's coding skills yield to them.\n"
+        "2. Read the approved plan: `workflow/runs/<run-id>/02-pre-coding/task-plan.md` "
+        "(and blast-radius.md). Work the tasks IN ORDER. Do not re-decide architecture or "
+        "schema; if the plan is wrong, stop and report Status: BLOCKED with the question.\n"
+        "3. Edit with `write_file('product/<path>', …)` / `read_file('product/<path>')`; run "
+        "builds and tests with `product_shell(...)`. Tests accompany each task.\n"
+        "4. Commit per task with `product_shell(\"git add -A && git commit -m '<run-id>: "
+        "<task> — <message>'\")`. Author identity and the `Lantern-Agent: coding` trailer "
+        "are configured for you. Never push, never touch other branches, never rewrite "
+        "history someone else may have read.\n"
+        "5. Finish with `03-coding/report.md` (commit list, deviations, the QA confidence "
+        "map) and `append_memory`. When you stop, the harness bundles your committed "
+        "branch into the run folder; the host pushes it and opens the pull request that a "
+        "human approves at the `code_complete` gate. Uncommitted work is auto-committed but "
+        "flagged — commit deliberately instead.\n\n"
+        "Limits: no network credentials in this sandbox (pushes/publishes fail by design), "
+        "no package installs that run arbitrary scripts unless the plan requires them "
+        "(prefer `--ignore-scripts`), wall clock is bounded — keep commands short and "
+        "output filtered. Every path you cite in the report must be one you opened here.")
+
+
 def product_note() -> str:
     """The product-repo section of a stage's system prompt (orientation §3/§4)."""
     origin = os.environ.get("LANTERN_PRODUCT_ORIGIN", "")
     branch = os.environ.get("LANTERN_PRODUCT_BRANCH", "")
+    if product_writable():
+        return coding_product_note()
     if not product_wired():
         return ("\n\n# The product repository\nNOT WIRED INTO THIS RUN. " + PRODUCT_HINT +
                 " Do not invent product paths, consumers, or schema — a plan built on "
@@ -653,6 +917,26 @@ def make_collect_jsx(paper: MCPServerStreamableHttp):
     return collect_jsx
 
 
+def stage_tools(role: str, run_id: str, stage: str, execution_key: str, paper=None) -> list:
+    """The tool set for one stage execution — one definition for the container path
+    (main below) and the in-process path (pipeline.run_agent_stage), so a tool added
+    for a role cannot silently exist in one executor and not the other."""
+    tools = [read_file, write_file, append_file, list_dir, list_exports, collect_export,
+             product_git, make_append_memory(role, run_id, stage, execution_key)]
+    if paper:
+        tools.append(make_collect_jsx(paper))
+    if product_writable():
+        tools.append(product_shell)
+    return tools
+
+
+def max_turns_for(role: str) -> int:
+    """Coding is a long loop of edit/test/commit; the other roles are review-shaped."""
+    if role == "coding":
+        return int(os.environ.get("LANTERN_CODING_MAX_TURNS", "400"))
+    return 120
+
+
 def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     """Every file a handoff.json claims must actually exist.
 
@@ -748,6 +1032,14 @@ def check_stage_inputs(run_id: str, stage: str) -> str | None:
                     "report and divergence/*.html skeletons must exist before Paper "
                     "convergence — pull the diverge commit into this runner's checkout "
                     "(run folders sync between runners through git), then retry")
+    if stage == "03-coding":
+        # Auto-coding implements the APPROVED plan — without it the agent would code
+        # from the brief alone, which is exactly the vague-ticket failure the plan
+        # (symphony-alignment C2.4) names. The gate record is the approval evidence.
+        plan = REPO / "workflow/runs" / run_id / "02-pre-coding" / "task-plan.md"
+        if not plan.is_file():
+            return ("03-coding (auto) needs 02-pre-coding/task-plan.md in this checkout — "
+                    "stage 2 has not produced an approved plan for this run")
     return None
 
 
@@ -828,6 +1120,13 @@ async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
                 "opened for a blocked stage. Answer its open question, then `retry`. "
                 f"Question: {blocked_q or '(none stated — the report must state exactly one)'}")
     missing.extend(check_claimed_artifacts(run_id, sdir))
+    if role == "coding":
+        # The branch bundle is the deliverable; a report without one is a claim.
+        # Verified against the checkout when this process has one (container /
+        # in-process); the host re-check verifies again against its mirror before
+        # anything is pushed (pipeline.publish_coding_branch).
+        verify_in = product_root() if (product_root() / ".git").exists() else None
+        missing.extend(check_coding_handoff(run_id, sdir, verify_in))
     if is_qa_video_stage(stage):
         # Presence AND validity AND recency (the fabrication lesson, applied to video):
         # a real, non-empty .webm recorded by THIS attempt — a stale file from a failed
@@ -902,10 +1201,7 @@ async def main() -> None:
             name=role,
             model=model_for(role, args.stage),
             instructions=build_instructions(role, args.run_id, args.stage),
-            tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export,
-                   product_git,
-                   make_append_memory(role, args.run_id, args.stage, execution_key),
-                   *([make_collect_jsx(paper)] if paper else [])],
+            tools=stage_tools(role, args.run_id, args.stage, execution_key, paper),
             mcp_servers=mcp_servers,
         )
         # Attempt number from the execution key ('run:stage:attempt') — the agent
@@ -918,9 +1214,14 @@ async def main() -> None:
                   "Do not reply with a plan — start calling tools now and keep working "
                   "until the report is on disk and append_memory has been called.",
             session=session,
-            max_turns=120,
+            max_turns=max_turns_for(role),
         )
         print(result.final_output)
+        if role == "coding":
+            # The checkout dies with this process; bundle the committed branch into
+            # the run folder NOW so the host can verify, push and open the PR (D14).
+            for p in finalize_coding(args.run_id, args.stage):
+                print(f"FINALIZE: {p}", file=sys.stderr)
         print(USAGE_MARKER + json.dumps(
             {**usage_dict(result), "model": model_for(role, args.stage)}))
         calls = sum(1 for i in result.new_items if type(i).__name__ == "ToolCallItem")

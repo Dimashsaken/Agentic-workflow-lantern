@@ -122,8 +122,12 @@ LANTERN_QA_STAGING_BASE_URL=       # + _USER/_PASS from /lantern/qa/staging/*
 LANTERN_PRODUCT_REPO=              # default product target (a run's own target wins)
 LANTERN_PRODUCT_BRANCH=main        # default base branch
 LANTERN_PRODUCT_MIRROR_DIR=        # host mirror cache (default ~/.lantern/product-mirrors)
-GITHUB_LANTERN_BOT_TOKEN=          # HOST-ONLY — authenticates the mirror fetch; never
+GITHUB_LANTERN_BOT_TOKEN=          # HOST-ONLY — authenticates the mirror fetch and the
+                                   #   branch push / PR of auto-coding (D14); never
                                    #   allowlisted into a sandbox, never in the mirror config
+LANTERN_CODING_TIMEOUT_MIN=120     # wall clock for an auto-coding stage (D14)
+LANTERN_CODING_MAX_TURNS=400       # agent turns for the coding loop
+LANTERN_PUBLIC_URL=                # Mission Control URL, linked from agent-opened PRs
 ```
 
 **Before stage 4's first run, preflight the target:**

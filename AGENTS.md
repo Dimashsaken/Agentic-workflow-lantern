@@ -77,18 +77,23 @@ everyone downstream — the checks are sound under concurrent runs by design
 |---|------------------|--------------|----------------------------------------------|------------------------------------|
 | 1 | `01-ui-ux`       | `ui-ux`      | 2–3 flow options on Paper → PNGs + handoff package + video | Justin/developer picks an option   |
 | 2 | `02-pre-coding`  | `pre-coding` | Blast-radius report, schema plan, task plan  | Schema + plan approved             |
-| 3 | `03-coding`      | developer    | Implementation on a feature branch           | Code complete, self-review done    |
+| 3 | `03-coding`      | developer, or `coding` agent (auto mode, D14) | Implementation on a feature branch — a pull request in auto mode | Code complete (in auto mode a human reviews the PR) |
 | 4 | `04-qa-dev`      | `qa-dev`     | Test design + executed runs + **videos**     | No open sev-1/sev-2 bugs           |
 | 5 | `05-post-coding` | `post-coding`| Cleanliness / tech-debt / backward-compat    | Findings resolved or waived        |
 | 6 | `06-security`    | `security`   | Deploy-risk + vulnerability report           | No unmitigated high-risk findings  |
 | — | *deploy to staging (human)* |   |                                              |                                    |
 | 7 | `07-qa-staging`  | `qa-staging` | Staging QA runs + **videos**                 | Justin signs off for production    |
 
-Stage 3 (coding) is done by the assigned developer in their own **Codex CLI session**
-on their laptop (Azure OpenAI provider — config in `tools/azure-runner/`) — it is the
-primary session, not a fleet agent. All other stages run through the orchestrator on
-EC2 (or a workstation for Paper-dependent ui-ux work). Details, per-stage contracts,
-and the list of human-in-the-loop gates: `workflow/PIPELINE.md`.
+Stage 3 (coding) has two modes per run (D14). **`human`** (default): the assigned
+developer implements the plan in their own coding session on their laptop (Codex CLI on
+Azure OpenAI, or any coding harness) — the primary session, not a fleet agent.
+**`auto`**: the fleet's `coding` agent implements the approved plan in a sandbox on a
+writable clone of the product repo, and the host pushes the branch and opens the pull
+request a human reviews at `code_complete`. All other stages run through the
+orchestrator on EC2 (or a workstation for Paper-dependent ui-ux work). Details,
+per-stage contracts, and the list of human-in-the-loop gates: `workflow/PIPELINE.md`.
+Connecting a product repository to a run: `tools/azure-runner/README.md`
+("Connecting a codebase").
 
 Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 `workflow/DEBUG-LIFECYCLE.md`, owned by the `debug` agent.

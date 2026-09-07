@@ -18,6 +18,8 @@ Design: docs/ORCHESTRATION.md. Schema: schema.sql.
 
 import argparse
 import asyncio
+import urllib.error
+import urllib.request
 import hashlib
 import json
 import os
@@ -35,7 +37,7 @@ from agents import Agent, Runner, set_default_openai_api, set_default_openai_cli
 from agents.extensions.memory import SQLAlchemySession
 
 from orchestrator import (
-    BROWSER_ROLES, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
+    BROWSER_ROLES, check_coding_handoff, finalize_coding, max_turns_for, stage_tools, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
     USAGE_MARKER, append_file, azure_v1_client, build_consult_instructions,
     build_instructions, check_postconditions, check_stage_inputs, collect_export,
     consult_roles, db_urls,
@@ -124,6 +126,33 @@ PRODUCT_MIRROR_DIR = Path(os.environ.get(
 PRODUCT_REPO_DEFAULT = os.environ.get("LANTERN_PRODUCT_REPO", "")
 PRODUCT_BRANCH_DEFAULT = os.environ.get("LANTERN_PRODUCT_BRANCH", "main")
 GIT_TOKEN = os.environ.get("GITHUB_LANTERN_BOT_TOKEN", "")
+# Auto-coding (D14): identity for the commits the coding agent makes in its sandbox
+# and for the PR the host opens. Defaults are the bot identity D6 specifies.
+CODING_MODES = ("human", "auto")
+CODING_TIMEOUT_MIN = int(os.environ.get("LANTERN_CODING_TIMEOUT_MIN", "120"))
+GIT_AUTHOR_NAME = os.environ.get("LANTERN_GIT_AUTHOR_NAME", "lantern-bot")
+GIT_AUTHOR_EMAIL = os.environ.get("LANTERN_GIT_AUTHOR_EMAIL", "lantern-bot@users.noreply.github.com")
+PUBLIC_URL = os.environ.get("LANTERN_PUBLIC_URL", "").rstrip("/")   # Mission Control, for PR links
+
+
+def coding_branch(run_id: str) -> str:
+    """The run's own branch: feat/<date>-<slug> for feature runs, fix/… for bug runs —
+    unique per run (the run id is) and inside the feat/*|fix/* namespace D6 lets
+    agents push to."""
+    if run_id.startswith("bug-"):
+        return "fix/" + run_id[len("bug-"):]
+    if run_id.startswith("feat-"):
+        return "feat/" + run_id[len("feat-"):]
+    return "feat/" + run_id
+
+
+def parse_brief_coding_mode(text: str) -> str:
+    """`- **Coding mode:** auto|human` in a brief; anything else reads as unset ('')."""
+    m = re.search(r"^\s*-\s*\*\*Coding mode:\*\*\s*(.+?)\s*$", text, re.M | re.I)
+    if not m:
+        return ""
+    v = m.group(1).strip().strip("`").lower()
+    return v if v in CODING_MODES else ""
 
 
 def parse_brief_product(text: str) -> tuple[str, str]:
@@ -441,11 +470,19 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     # laptop/workstation runs see exactly what the box does (orchestrator reads
     # LANTERN_PRODUCT_DIR at call time).
     repo, branch = await product_target(conn, run_id)
-    os.environ.pop("LANTERN_PRODUCT_DIR", None)
+    for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH"):
+        os.environ.pop(var, None)
+    if stage == "03-coding" and not repo:
+        raise RuntimeError("auto-coding needs a product repo — set one with "
+                           f"`pipeline.py set-product {run_id} --repo … --branch …`")
     if repo:
-        os.environ["LANTERN_PRODUCT_DIR"] = str(
-            await asyncio.to_thread(product_checkout, repo, branch, run_id))
+        checkout = await asyncio.to_thread(product_checkout, repo, branch, run_id)
+        os.environ["LANTERN_PRODUCT_DIR"] = str(checkout)
         os.environ["LANTERN_PRODUCT_ORIGIN"], os.environ["LANTERN_PRODUCT_BRANCH"] = repo, branch
+        if stage == "03-coding":   # D14: writable, on the run's branch, bot identity
+            await asyncio.to_thread(prepare_coding_checkout, checkout, coding_branch(run_id))
+            os.environ["LANTERN_CODING_BRANCH"] = coding_branch(run_id)
+            os.environ["LANTERN_PRODUCT_WRITABLE"] = "1"
     session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
 
     problem = check_stage_inputs(run_id, stage)
@@ -467,10 +504,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
             name=role,
             model=model_for(role, stage),
             instructions=build_instructions(role, run_id, stage),
-            tools=[read_file, write_file, append_file, list_dir, list_exports, collect_export,
-                   product_git,
-                   make_append_memory(role, run_id, stage, execution_key),
-                   *([make_collect_jsx(paper)] if paper else [])],
+            tools=stage_tools(role, run_id, stage, execution_key, paper),
             mcp_servers=mcp_servers,
         )
         result = await Runner.run(
@@ -479,18 +513,24 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
                   "reply with a plan — start calling tools now and keep working until the "
                   "report is on disk and append_memory has been called.",
             session=session,
-            max_turns=120,
+            max_turns=max_turns_for(role),
         )
         final = str(result.final_output)
+        # D14: bundle the committed branch into the run folder while the checkout exists.
+        finalize_problems = finalize_coding(run_id, stage) if role == "coding" else []
     finally:
         for s in mcp_servers:
             await s.cleanup()
+        for var in ("LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH"):
+            os.environ.pop(var, None)   # never leak writability into the next stage
 
     # Ledger before the postcondition verdict: tokens are spent either way (P0.4).
     # Known gap, both paths: a Runner.run exception (max_turns, API error) yields no
     # result/usage line, so that spend goes unmetered — `usage` reports the count.
     await record_usage(conn, exec_id, usage_dict(result), model_for(role, stage))
 
+    if finalize_problems:
+        raise RuntimeError("coding handoff failed: " + "; ".join(finalize_problems))
     missing = await check_postconditions(conn, role, run_id, stage, execution_key)
     if missing:
         raise RuntimeError("postconditions failed: " + "; ".join(missing))
@@ -557,18 +597,33 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     # Product code (read-only, credential-free): the host refreshes its mirror and
     # bind-mounts it; the entrypoint clones /product-src.git into /work/product.
     repo, branch = await product_target(conn, run_id)
+    if stage == "03-coding" and not repo:
+        raise RuntimeError("auto-coding needs a product repo — set one with "
+                           f"`pipeline.py set-product {run_id} --repo … --branch …`")
     cmd += await asyncio.to_thread(product_mount_args, repo, branch)
+    timeout_min = STAGE_TIMEOUT_MIN
+    if stage == "03-coding":
+        # D14: the entrypoint puts the checkout on the run's branch and marks it
+        # writable; commits carry the bot identity. Still no PAT in the container —
+        # the bundle it writes into the run folder is the only way code leaves.
+        timeout_min = CODING_TIMEOUT_MIN
+        cmd += ["-e", f"LANTERN_CODING_BRANCH={coding_branch(run_id)}",
+                "-e", f"LANTERN_GIT_AUTHOR_NAME={GIT_AUTHOR_NAME}",
+                "-e", f"LANTERN_GIT_AUTHOR_EMAIL={GIT_AUTHOR_EMAIL}"]
+        for var in ("LANTERN_CODING_MAX_TURNS", "LANTERN_PRODUCT_SHELL_TIMEOUT"):
+            if os.environ.get(var):
+                cmd += ["-e", f"{var}={os.environ[var]}"]
     cmd += [SANDBOX_IMAGE, run_id, stage]
 
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     try:
-        out, _ = await asyncio.wait_for(proc.communicate(), timeout=STAGE_TIMEOUT_MIN * 60)
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout_min * 60)
     except asyncio.TimeoutError:
         kill = await asyncio.create_subprocess_exec("docker", "kill", name)
         await kill.wait()
         await proc.communicate()
-        raise RuntimeError(f"sandbox hit the {STAGE_TIMEOUT_MIN}-minute wall clock and was killed")
+        raise RuntimeError(f"sandbox hit the {timeout_min}-minute wall clock and was killed")
     full = out.decode(errors="replace")
     tail = full[-4000:]
     # Ledger first — tokens are spent whether or not the stage passed (P0.4). The
@@ -596,6 +651,178 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
         json.dumps({"final_output": tail, "report": report}), exec_id,
     )
     await log_event(conn, run_id, f"agent:{role}", "stage_succeeded", {"stage": stage})
+
+
+# ── auto-coding: the HOST publishes the sandbox's branch (D14 / plan item C2.3) ──
+# The sandbox commits on the run's branch and bundles it into the run folder; nothing
+# in it can push. Here, with the token, the host verifies that bundle carries exactly
+# the run's branch, lands it in the mirror, pushes it as the bot identity and opens
+# (or reuses) the pull request — which becomes the code_complete gate's payload.
+
+def _github_repo(url: str) -> tuple[str, str] | None:
+    m = re.match(r"^https://github\.com/([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", url.strip())
+    return (m.group(1), m.group(2)) if m else None
+
+
+def _gh_api(method: str, path: str, data: dict | None = None) -> tuple[int, object]:
+    """One GitHub REST call with the host token; the token never reaches a log line."""
+    body = json.dumps(data).encode() if data is not None else None
+    req = urllib.request.Request(
+        "https://api.github.com" + path, method=method, data=body,
+        headers={"Authorization": f"Bearer {GIT_TOKEN}", "Accept": "application/vnd.github+json",
+                 "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "lantern-pipeline",
+                 "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = resp.read()
+            return resp.status, (json.loads(raw) if raw else {})
+    except urllib.error.HTTPError as e:
+        raw = e.read()
+        try:
+            return e.code, (json.loads(raw) if raw else {})
+        except ValueError:
+            return e.code, {"message": _scrub(raw.decode(errors="replace"))[:300]}
+
+
+def pr_body(run_id: str, handoff: dict, base: str) -> str:
+    """The evidence pack a reviewer reads before approving code_complete."""
+    d = REPO / "workflow" / "runs" / run_id
+    title = _run_title(run_id) or run_id
+    commits = handoff.get("commits", [])
+    lines = [f"Lantern run `{run_id}` — **{title}**", "",
+             f"Branch `{handoff['branch']}` → `{base}` · {len(commits)} commit(s)"
+             + (" · leftovers auto-committed by the harness" if handoff.get("auto_committed") else ""),
+             ""]
+    if PUBLIC_URL:
+        lines += [f"Mission Control: {PUBLIC_URL}/run/{run_id}", ""]
+    lines += ["### Commits", ""]
+    lines += [f"- `{str(c.get('sha', ''))[:8]}` {c.get('subject', '')}" for c in commits]
+    lines += ["", "### Files", "", "```", (handoff.get("diffstat") or "")[-3000:], "```", ""]
+    rep = d / "03-coding" / "report.md"
+    if rep.is_file():
+        text = rep.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"^## Summary\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
+        if m and m.group(1).strip():
+            lines += ["### Coding report — summary", "", m.group(1).strip()[:2500], ""]
+    lines += [f"Approved plan: `workflow/runs/{run_id}/02-pre-coding/task-plan.md` · "
+              f"brief: `workflow/runs/{run_id}/brief.md`", "", "---",
+              "Opened by the Lantern pipeline (stage 03-coding, auto mode). A human approves "
+              "the `code_complete` gate in Mission Control to advance; QA, code review and "
+              "security (stages 4–6) run on this branch before it is merged — "
+              "**do not merge from here.**"]
+    return "\n".join(lines)
+
+
+def _open_or_find_pr(owner: str, name: str, branch: str, base: str, title: str, body: str) -> dict:
+    status, found = _gh_api("GET", f"/repos/{owner}/{name}/pulls?state=open&head={owner}:{branch}")
+    if status == 200 and isinstance(found, list) and found:
+        pr = found[0]                     # a retry attempt updates the same PR
+        _gh_api("POST", f"/repos/{owner}/{name}/issues/{pr['number']}/comments",
+                {"body": "New attempt pushed by the Lantern pipeline.\n\n" + body})
+        return {"pr_url": pr["html_url"], "pr_number": pr["number"], "pr_reused": True}
+    status, pr = _gh_api("POST", f"/repos/{owner}/{name}/pulls",
+                         {"title": title, "head": branch, "base": base, "body": body})
+    if status not in (200, 201) or not isinstance(pr, dict) or "html_url" not in pr:
+        raise RuntimeError(f"GitHub refused to open the PR ({status}): "
+                           f"{_scrub(json.dumps(pr))[:400]}")
+    # Labels are best-effort: a repo without the label set still gets its PR.
+    _gh_api("POST", f"/repos/{owner}/{name}/labels",
+            {"name": "agent:coding", "color": "5319e7",
+             "description": "opened by Lantern's coding agent"})
+    _gh_api("POST", f"/repos/{owner}/{name}/issues/{pr['number']}/labels",
+            {"labels": ["agent:coding"]})
+    return {"pr_url": pr["html_url"], "pr_number": pr["number"], "pr_reused": False}
+
+
+def _publish_branch(run_id: str, repo: str, base: str) -> dict:
+    """Verify the coding handoff against the host mirror, land the branch in it, push it
+    to the origin (https remotes; a local-path product repo is updated in place) and
+    open or reuse the pull request. Returns the code_complete payload. Sync, testable."""
+    sdir = REPO / "workflow" / "runs" / run_id / "03-coding"
+    hf = sdir / "handoff.json"
+    if not hf.is_file():
+        raise RuntimeError("no 03-coding/handoff.json — the coding stage produced no branch")
+    handoff = json.loads(hf.read_text(encoding="utf-8"))
+    branch = str(handoff.get("branch") or "")
+    if branch != coding_branch(run_id):
+        raise RuntimeError(f"handoff names branch '{branch}', expected '{coding_branch(run_id)}'")
+    mirror = sync_product_mirror(repo)
+    problems = check_coding_handoff(run_id, "03-coding", verify_in=mirror)
+    if problems:
+        raise RuntimeError("coding handoff rejected: " + "; ".join(problems))
+    bundle = REPO / handoff["bundle"]
+    r = _git("fetch", "--quiet", str(bundle), f"+refs/heads/{branch}:refs/heads/{branch}", cwd=mirror)
+    if r.returncode != 0:
+        raise RuntimeError(f"could not land the bundle in the mirror: {_scrub(r.stderr)[-400:]}")
+    head = _git("rev-parse", f"refs/heads/{branch}", cwd=mirror).stdout.strip()
+    if head != handoff.get("head_sha"):
+        raise RuntimeError("mirror head does not match the handoff — refusing to push")
+    payload: dict = {
+        "branch": branch, "base": base, "base_sha": handoff.get("base_sha"), "head_sha": head,
+        "commit_count": len(handoff.get("commits", [])),
+        "commits": handoff.get("commits", [])[:40],
+        "files_changed": len(handoff.get("files_changed", [])),
+        "auto_committed": bool(handoff.get("auto_committed")),
+        "bundle": handoff["bundle"], "pushed": False, "pr_url": None, "pr_number": None,
+    }
+    if repo.startswith("https://"):
+        r = _git("push", "--quiet", _authed(repo), f"refs/heads/{branch}:refs/heads/{branch}", cwd=mirror)
+        if r.returncode != 0 and ("non-fast-forward" in r.stderr or "rejected" in r.stderr):
+            # The branch belongs to this run: attempt N supersedes attempt N-1.
+            r = _git("push", "--quiet", "--force", _authed(repo),
+                     f"refs/heads/{branch}:refs/heads/{branch}", cwd=mirror)
+        if r.returncode != 0:
+            raise RuntimeError(f"push of {branch} failed: {_scrub(r.stderr)[-500:]}")
+        payload["pushed"] = True
+        gh = _github_repo(repo)
+        if gh:
+            payload["compare_url"] = f"https://github.com/{gh[0]}/{gh[1]}/compare/{base}...{branch}"
+            if GIT_TOKEN:
+                title = f"{run_id}: {_run_title(run_id) or 'feature'}"[:250]
+                payload.update(_open_or_find_pr(gh[0], gh[1], branch, base, title,
+                                                pr_body(run_id, handoff, base)))
+    # D4: the branch/PR facts reach the run folder, not only the approvals row.
+    handoff.update({k: payload[k] for k in ("pushed", "pr_url", "pr_number") if k in payload})
+    hf.write_text(json.dumps(handoff, indent=2), encoding="utf-8")
+    (sdir / "pr.md").write_text(
+        f"# Branch published — {run_id}\n\n- **Branch:** `{branch}` → `{base}`\n"
+        f"- **Head:** `{head}`\n- **Pushed:** {payload['pushed']}\n"
+        f"- **Pull request:** {payload.get('pr_url') or '(none — non-GitHub remote)'}\n"
+        f"- **Commits:** {payload['commit_count']}\n", encoding="utf-8")
+    return payload
+
+
+async def publish_coding_branch(conn, run_id: str) -> dict:
+    repo, base = await product_target(conn, run_id)
+    if not repo:
+        raise RuntimeError("auto-coding produced a branch but the run has no product repo to push to")
+    payload = await asyncio.to_thread(_publish_branch, run_id, repo, base)
+    await insert_artifact(conn, run_id, "03-coding", "coding_branch", payload["bundle"],
+                          {"branch": payload["branch"], "head_sha": payload["head_sha"],
+                           "commits": payload["commit_count"]})
+    if payload.get("pr_url"):
+        await insert_artifact(conn, run_id, "03-coding", "pull_request", payload["pr_url"],
+                              {"number": payload.get("pr_number")})
+    await log_event(conn, run_id, "orchestrator", "branch_published",
+                    {"branch": payload["branch"], "head_sha": payload["head_sha"],
+                     "pushed": payload["pushed"], "pr_url": payload.get("pr_url")})
+    print(f"[{run_id}] branch {payload['branch']} published"
+          + (f" — PR {payload['pr_url']}" if payload.get("pr_url") else ""))
+    return payload
+
+
+def prepare_coding_checkout(checkout: Path, branch: str) -> None:
+    """In-process executor: put a fresh product checkout on the run's branch with the
+    bot identity — the same thing the sandbox entrypoint does for containers."""
+    _git("config", "user.name", GIT_AUTHOR_NAME, cwd=checkout)
+    _git("config", "user.email", GIT_AUTHOR_EMAIL, cwd=checkout)
+    _git("config", "commit.gpgsign", "false", cwd=checkout)
+    if _git("rev-parse", "--verify", "-q", f"refs/remotes/origin/{branch}", cwd=checkout).returncode == 0:
+        r = _git("checkout", "-q", "-b", branch, f"origin/{branch}", cwd=checkout)
+    else:
+        r = _git("checkout", "-q", "-b", branch, cwd=checkout)
+    if r.returncode != 0:
+        raise RuntimeError(f"could not create branch {branch}: {r.stderr.strip()[-300:]}")
 
 
 def _read_handoff(run_id: str, sdir: str) -> dict | None:
@@ -695,14 +922,18 @@ async def render_runboard(conn) -> None:
     (REPO / "workflow" / "RUNBOARD.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-async def open_gate(conn, run_id: str, stage: str, gate: str) -> None:
+async def open_gate(conn, run_id: str, stage: str, gate: str,
+                    extra: dict | None = None, external_ref: str | None = None) -> None:
     payload: dict = {"stage": stage, "run_folder": f"workflow/runs/{run_id}/"}
     handoff = _read_handoff(run_id, STAGE_DIR[stage])
-    if handoff is not None:
+    if handoff is not None and handoff.get("kind") != "coding_branch":
         payload["handoff"] = handoff   # Mission Control renders paper_url + PNGs from this
+    if extra:
+        payload.update(extra)          # code_complete after auto-coding: branch + PR (D14)
     await conn.execute(
-        """INSERT INTO approvals (run_id, gate, channel, payload) VALUES ($1, $2, 'cli', $3)""",
-        run_id, gate, json.dumps(payload),
+        """INSERT INTO approvals (run_id, gate, channel, payload, external_ref)
+           VALUES ($1, $2, 'cli', $3, $4)""",
+        run_id, gate, json.dumps(payload), external_ref,
     )
     await conn.execute(
         "UPDATE runs SET status = 'waiting_gate', updated_at = now() WHERE id = $1", run_id)
@@ -725,17 +956,26 @@ async def advance(conn, run_id: str, stage: str) -> None:
 
 async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
     """Execute the current stage of one claimed run, then gate or advance."""
-    row = await conn.fetchrow("SELECT current_stage FROM runs WHERE id = $1", run_id)
+    row = await conn.fetchrow("SELECT current_stage, coding_mode FROM runs WHERE id = $1", run_id)
     stage = row["current_stage"]
+    mode = row["coding_mode"] or "human"
     _, _, stype, gate, _ = FEATURE_STAGES[STAGE_INDEX[stage]]
+    extra: dict | None = None
+    external_ref: str | None = None
     try:
+        execute = run_agent_stage_docker if EXECUTOR == "docker" else run_agent_stage
         if stype == "agent":
-            execute = run_agent_stage_docker if EXECUTOR == "docker" else run_agent_stage
             await execute(conn, run_id, stage, runner)
+        elif stage == "03-coding" and mode == "auto":
+            # D14: the coding agent implements the plan in a sandbox; the host then
+            # verifies + pushes its branch and opens the PR — the gate's payload.
+            await execute(conn, run_id, stage, runner)
+            extra = await publish_coding_branch(conn, run_id)
+            external_ref = extra.get("pr_url")
         else:  # human stage: nothing to execute — the gate IS the stage
-            print(f"[{run_id}] {stage} is a human stage (developer + Codex CLI).")
+            print(f"[{run_id}] {stage} is a human stage (the developer's own session).")
         if gate:
-            await open_gate(conn, run_id, stage, gate)
+            await open_gate(conn, run_id, stage, gate, extra, external_ref)
         else:
             await advance(conn, run_id, stage)
     except Exception as e:  # noqa: BLE001 — orchestrator must not die with a claim held
@@ -787,16 +1027,25 @@ async def cmd_init_db() -> None:
 
 
 async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
-                  product_repo: str = "", product_branch: str = "") -> None:
+                  product_repo: str = "", product_branch: str = "",
+                  coding_mode: str = "") -> None:
     brief = Path(brief_path)
     if not brief.exists():
         sys.exit(f"brief not found: {brief_path}")
     # Product target: --flag wins, then the brief's own field, then the box default.
     # Resolved at creation so the run records what it was pointed at, not what the
     # daemon's env happened to say three stages later.
-    brief_repo, brief_branch = parse_brief_product(brief.read_text(encoding="utf-8"))
+    brief_text = brief.read_text(encoding="utf-8")
+    brief_repo, brief_branch = parse_brief_product(brief_text)
     product_repo = product_repo or brief_repo or PRODUCT_REPO_DEFAULT
     product_branch = product_branch or brief_branch or PRODUCT_BRANCH_DEFAULT
+    # Coding mode (D14): same precedence; 'human' unless someone asked for 'auto'.
+    coding_mode = (coding_mode or parse_brief_coding_mode(brief_text) or "human").lower()
+    if coding_mode not in CODING_MODES:
+        sys.exit(f"coding mode must be one of {', '.join(CODING_MODES)} — got '{coding_mode}'")
+    if coding_mode == "auto" and not product_repo:
+        sys.exit("auto coding mode needs a product repo: add `- **Product repo:**` to the "
+                 "brief or pass --product-repo")
     if product_repo:
         # Fail here, not inside a container three stages later.
         await asyncio.to_thread(sync_product_mirror, product_repo)
@@ -813,15 +1062,15 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
     conn = await connect()
     await conn.execute(
         """INSERT INTO runs (id, brief, pipeline_version, current_stage, created_by,
-                             product_repo, product_branch)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+                             product_repo, product_branch, coding_mode)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
         run_id, str(brief), PIPELINE_VERSION, FEATURE_STAGES[0][0], by,
-        product_repo or None, product_branch or None)
+        product_repo or None, product_branch or None, coding_mode)
     await log_event(conn, run_id, f"human:{by}", "run_created",
                     {"brief": str(brief), "product_repo": product_repo,
-                     "product_branch": product_branch})
+                     "product_branch": product_branch, "coding_mode": coding_mode})
     await render_runboard(conn)
-    print(f"run {run_id} created — the pipeline takes it from here.")
+    print(f"run {run_id} created (coding mode: {coding_mode}) — the pipeline takes it from here.")
     if follow:
         local = os.environ.get("LANTERN_RUNNER", "ec2")
         waiting_on = None
@@ -1010,6 +1259,28 @@ async def cmd_set_product(run_id: str, repo: str, branch: str) -> None:
     print(f"[{run_id}] product target set: {repo} @ {branch} ({r.stdout.strip()[:12]})\n"
           f"  mirror: {mirror}\n"
           f"  stages from here on get it read-only at the `product/` prefix.")
+
+
+async def cmd_set_coding_mode(run_id: str, mode: str) -> None:
+    """Switch stage 3 of an existing run between the developer's own session and the
+    fleet's coding agent (D14). Allowed until the run has passed stage 3."""
+    if mode not in CODING_MODES:
+        sys.exit(f"mode must be one of {', '.join(CODING_MODES)}")
+    conn = await connect()
+    row = await conn.fetchrow("SELECT current_stage, product_repo FROM runs WHERE id = $1", run_id)
+    if not row:
+        await conn.close()
+        sys.exit(f"unknown run: {run_id}")
+    if STAGE_INDEX.get(row["current_stage"], 0) > STAGE_INDEX["03-coding"]:
+        await conn.close()
+        sys.exit(f"{run_id} is already past stage 3 ({row['current_stage']})")
+    if mode == "auto" and not (row["product_repo"] or PRODUCT_REPO_DEFAULT):
+        await conn.close()
+        sys.exit("auto coding needs a product repo — run `pipeline.py set-product` first")
+    await conn.execute("UPDATE runs SET coding_mode = $1, updated_at = now() WHERE id = $2", mode, run_id)
+    await log_event(conn, run_id, "human:cli", "coding_mode_set", {"mode": mode})
+    await conn.close()
+    print(f"[{run_id}] coding mode: {mode}")
 
 
 # ── QA target credentials from SSM (P0.1's documented path, made real) ───────
@@ -1234,12 +1505,13 @@ async def cmd_import_run(run_id: str, by: str, stage: str, status: str, gate: st
 async def cmd_status() -> None:
     conn = await connect()
     runs = await conn.fetch(
-        """SELECT id, status, current_stage, updated_at FROM runs
+        """SELECT id, status, current_stage, updated_at, coding_mode FROM runs
            WHERE status NOT IN ('done', 'cancelled') ORDER BY updated_at DESC""")
     if not runs:
         print("no active runs")
     for r in runs:
-        print(f"{r['id']:<40} {r['status']:<13} {r['current_stage']:<18} updated {r['updated_at']:%Y-%m-%d %H:%M}")
+        tag = "  [auto-coding]" if r["coding_mode"] == "auto" else ""
+        print(f"{r['id']:<40} {r['status']:<13} {r['current_stage']:<18} updated {r['updated_at']:%Y-%m-%d %H:%M}{tag}")
     pend = await conn.fetch("SELECT run_id, gate, requested_at FROM approvals WHERE status = 'pending'")
     for p in pend:
         # plain ASCII: Windows consoles default to cp1252 and choke on emoji/arrows
@@ -1382,9 +1654,15 @@ def main() -> None:
                    help="product repo URL or on-box path (default: the brief's field, then "
                         "LANTERN_PRODUCT_REPO)")
     p.add_argument("--product-branch", default="", help="base branch (default: the brief's field, then main)")
+    p.add_argument("--coding-mode", choices=CODING_MODES, default="",
+                   help="human = the developer's own session (default); auto = the coding "
+                        "agent implements the plan and the host opens a PR (D14)")
     p = sub.add_parser("set-product", help="point an existing run at a product repo/branch")
     p.add_argument("run_id"); p.add_argument("--repo", required=True)
     p.add_argument("--branch", default=PRODUCT_BRANCH_DEFAULT)
+    p = sub.add_parser("set-coding-mode", help="human (developer's own session) or auto "
+                                               "(the coding agent implements the plan → PR)")
+    p.add_argument("run_id"); p.add_argument("mode", choices=CODING_MODES)
     p = sub.add_parser("daemon")
     p.add_argument("--runner", choices=["ec2", "workstation"],
                    default=os.environ.get("LANTERN_RUNNER", "ec2"))
@@ -1415,8 +1693,9 @@ def main() -> None:
     match a.cmd:
         case "init-db": asyncio.run(cmd_init_db())
         case "run":     asyncio.run(cmd_run(a.brief, a.run_id, a.by, a.follow,
-                                            a.product_repo, a.product_branch))
+                                            a.product_repo, a.product_branch, a.coding_mode))
         case "set-product":   asyncio.run(cmd_set_product(a.run_id, a.repo, a.branch))
+        case "set-coding-mode": asyncio.run(cmd_set_coding_mode(a.run_id, a.mode))
         case "daemon":  asyncio.run(cmd_daemon(a.runner))
         case "approve": asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, True))
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))

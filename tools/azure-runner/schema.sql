@@ -119,6 +119,11 @@ ALTER TABLE stage_executions ADD COLUMN IF NOT EXISTS total_tokens bigint;
 -- read-only. NULL = unset, and stage 2+ blocks asking for it rather than guessing.
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_repo text;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_branch text;
+-- How stage 3 runs for this run (D14): 'human' = the developer's own session and the
+-- gate opens immediately (the original contract); 'auto' = the fleet's coding agent
+-- implements the approved plan in a sandbox, the host pushes the branch as the bot
+-- identity and opens the PR that becomes the code_complete gate's payload.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS coding_mode text NOT NULL DEFAULT 'human';
 
 -- ── Chat surface (docs/CHAT.md, D13): web consults with history and a ledger ──
 -- chat_sessions.id doubles as the Agents SDK session key ('consult:{user}:{agent}:{name}'),

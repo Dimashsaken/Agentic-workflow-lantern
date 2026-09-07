@@ -64,6 +64,22 @@ if [ -n "${LANTERN_PRODUCT_REPO:-}" ]; then
          "against no product code at all." >&2
     exit 1
   fi
+  # Auto-coding (D14): the dispatcher names the run's branch. Put the checkout on it
+  # (continuing an existing branch on retry), give commits the bot identity + trailer
+  # convention, and mark the checkout writable for orchestrator.py. Still no
+  # credentials: the bundle the stage writes into the run folder is the only way
+  # code leaves this container, and the HOST pushes it.
+  if [ -n "${LANTERN_CODING_BRANCH:-}" ]; then
+    git -C /work/product config user.name  "${LANTERN_GIT_AUTHOR_NAME:-lantern-bot}"
+    git -C /work/product config user.email "${LANTERN_GIT_AUTHOR_EMAIL:-lantern-bot@users.noreply.github.com}"
+    git -C /work/product config commit.gpgsign false
+    if git -C /work/product show-ref --verify --quiet "refs/remotes/origin/${LANTERN_CODING_BRANCH}"; then
+      git -C /work/product checkout --quiet -b "${LANTERN_CODING_BRANCH}" "origin/${LANTERN_CODING_BRANCH}"
+    else
+      git -C /work/product checkout --quiet -b "${LANTERN_CODING_BRANCH}"
+    fi
+    export LANTERN_PRODUCT_WRITABLE=1
+  fi
 fi
 
 exec /opt/lantern/venv/bin/python /work/lantern/tools/azure-runner/orchestrator.py \

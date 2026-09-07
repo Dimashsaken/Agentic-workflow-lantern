@@ -289,3 +289,40 @@ tracked end to end. Design doc: `docs/CHAT.md`. Decisions, each with the why:
 - **Browser roles consult without their Playwright MCP in v1**, and the card
   says so, rather than spawning a browser per web turn; `pipeline.py ask -i`
   remains the path when a live browser matters.
+
+## D14 — 2026-09-07 — Auto-coding: stage 3 as a fleet stage that ends in a pull request
+
+The ask: the pipeline must take a concept from brief to a ready pull request on its own,
+in any git repository, the way a developer's coding agent works in a checkout. Plan
+item C2.3 designed it; this records what was built and the choices made on the way.
+
+- **A per-run mode, not a new stage.** `runs.coding_mode = human | auto` (brief field
+  `- **Coding mode:**`, `pipeline.py run --coding-mode`, `set-coding-mode`). `03-coding`
+  stays the human stage it was; in `auto` the dispatcher executes the `coding` role for
+  it like any agent stage and then opens the same `code_complete` gate. Why: the
+  pipeline shape, the run folder layout and every downstream stage stay identical — a
+  human-mode run and an auto-mode run differ only in who wrote the commits.
+- **Agents SDK loop, not Codex CLI, for the first version.** C2.1's de-risk of Codex on
+  Azure was not done (open 400s on gpt-5.6 deployments); the plan's stated fallback — the
+  same orchestrator with a writable checkout and a shell tool — is what shipped. Codex
+  remains a swap-in for the sandbox entrypoint later: the handoff contract (bundle +
+  handoff.json) does not depend on which harness wrote the commits.
+- **The sandbox never pushes.** Same clone as every other stage, on the run's branch
+  (`feat/<date>-<slug>`), writable; commits carry the bot identity and the
+  `Lantern-Agent: coding` trailer. When the turn ends the harness writes a git bundle of
+  exactly that branch into the run folder. The HOST — which holds the token — verifies
+  the bundle lists one ref, lands it in its mirror, pushes, and opens or reuses the PR.
+  Why: D6/D12 — the PAT never enters a sandbox; a lying container can at most produce a
+  bundle the host rejects.
+- **The PR is the payload; the approvals row is the gate.** Nothing advances off GitHub
+  state. A human approves `code_complete` in Mission Control with the PR link, the
+  commit list and the coding report in front of them. Merge stays a human act after
+  stages 4–6, as PIPELINE.md always said.
+- **Presence AND validity, again.** A coding stage with no commits fails; a handoff
+  without a verifiable bundle fails; uncommitted leftovers are auto-committed but
+  flagged, so a reviewer sees the agent stopped early. Proof:
+  `tools/azure-runner/test_coding_stage.py` (real git, no database).
+- **Deferred, stated plainly:** C2.0 (restricted sandbox DB role) and C2.5 (egress
+  allowlist) are still open — auto mode is for trusted repos until they land; the
+  sandbox image carries Python 3.12 + Node 22 + git only, so other toolchains need an
+  image change; human-stage token capture is unchanged (unmetered).

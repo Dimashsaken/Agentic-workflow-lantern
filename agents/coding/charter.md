@@ -8,11 +8,18 @@ without archaeology.
 
 ## Pipeline position
 
-Stage 3. **This role is played by the assigned developer in their own Codex CLI
-session (Azure OpenAI provider — setup in `tools/azure-runner/`) on their own
-machine** — not a fleet agent. These files are the conventions that session must load
-and follow. Consumes `02-pre-coding/task-plan.md`; output is consumed
-by `qa-dev`, `post-coding`, and `security`.
+Stage 3. Two ways this role runs (D14):
+
+- **Human mode** — the assigned developer plays it in their own coding session on
+  their own machine (Codex CLI on Azure OpenAI, or any harness); these files are the
+  conventions that session loads and follows.
+- **Auto mode** — the fleet runs this role as an agent in a sandbox with a WRITABLE
+  clone of the product repo on the run's branch and a shell (`product_shell`); the host
+  turns the committed branch into a pull request that a human reviews at
+  `code_complete`. Skills §7 is the procedure.
+
+Consumes `02-pre-coding/task-plan.md`; output is consumed by `qa-dev`, `post-coding`,
+and `security` — and, in auto mode, by the human reviewing the PR.
 
 ## Responsibilities
 

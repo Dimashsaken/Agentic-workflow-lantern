@@ -48,16 +48,28 @@ the developer).
 **Gate:** schema plan and task plan approved by the developer; schema changes always
 `HITL: required`.
 
-## Stage 3 — Coding (assigned developer, own Codex CLI session) → `03-coding/`
+## Stage 3 — Coding (assigned developer, or the `coding` agent in auto mode) → `03-coding/`
 
 **In:** approved task plan.
-**Do:** implement on branch `feat/<slug>`, following `agents/coding/skills.md`
+**Do:** implement on the run's branch, following `agents/coding/skills.md`
 (conventions, commit discipline, test-alongside rules). Multi-phase features land as a
 sequence of reviewable commits mapped to the task plan.
+**Two modes, chosen per run (D14)** — `- **Coding mode:**` in the brief,
+`pipeline.py run --coding-mode`, or `pipeline.py set-coding-mode`:
+- `human` (default) — the assigned developer implements the plan in their own coding
+  session on their own machine; the gate opens immediately and the developer approves
+  it when the branch is code-complete.
+- `auto` — the fleet's `coding` agent implements the plan in a sandbox on a WRITABLE
+  clone of the product repo (branch `feat/<date>-<slug>`, `fix/…` for bug runs), with a
+  shell for builds and tests, committing per task as the bot identity. It cannot push:
+  the harness bundles the committed branch into the run folder, and the HOST verifies
+  the bundle, pushes the branch and opens the pull request. That PR is the
+  `code_complete` payload a human reviews in Mission Control. Agents never merge.
 **Out:** the branch; `report.md` listing commits, deviations from the plan, and known
-gaps for QA to probe.
-**Gate:** developer declares code-complete; all tasks in the plan checked off or
-explicitly deferred.
+gaps for QA to probe; in auto mode also `handoff.json` + `branch.bundle` (the evidence)
+and `pr.md` (where it went).
+**Gate:** code-complete declared — by the developer, or by a human reviewing the agent's
+PR; all tasks in the plan checked off or explicitly deferred.
 
 ## Stage 4 — QA in dev (`qa-dev` agent) → `04-qa-dev/`
 

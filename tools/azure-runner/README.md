@@ -76,6 +76,7 @@ python pipeline.py daemon                       # service loop (systemd on EC2)
 python pipeline.py status | approve | reject | retry
 python pipeline.py runboard | render-memory     # re-render the Postgres-backed views
 python pipeline.py import-run <run-id>          # backfill a file-era run into the DB
+python pipeline.py set-product | set-coding-mode   # per-run product repo + how stage 3 runs (D14)
 python pipeline.py usage [--days 7]             # token ledger: per-day + per-run est. spend
 python pipeline.py usage-check                  # spend tripwires (hourly systemd timer on EC2)
 ```
@@ -94,6 +95,55 @@ to `s3://$LANTERN_ARTIFACT_BUCKET/lantern/<run-id>/<stage>/attempt-<k>/` under t
 PIPELINE.md `session-<n>` naming (AWS creds never enter a sandbox; retries never
 overwrite earlier attempts' footage), regenerates `media-manifest.json` from the
 artifacts table, and deletes the local files.
+
+## Connecting a codebase — and letting the pipeline code in it (D14)
+
+A run works on ONE product repository, the way a developer's coding agent works in one
+checkout. Point the run at it and the fleet does the rest:
+
+```markdown
+# in the brief (workflow/briefs/<slug>.md)
+- **Product repo:** https://github.com/org/repo     # or an on-box path: /home/ubuntu/work/repo
+- **Base branch:** main
+- **Coding mode:** auto                             # human (default) | auto
+```
+
+```bash
+# or on the command line
+python pipeline.py run workflow/briefs/x.md --product-repo https://github.com/org/repo --coding-mode auto
+python pipeline.py set-product <run-id> --repo <url-or-path> --branch main   # an existing run
+python pipeline.py set-coding-mode <run-id> auto
+```
+
+What "connected" means, stage by stage:
+
+- The host keeps a bare mirror of the repo (`GITHUB_LANTERN_BOT_TOKEN` authenticates
+  the fetch for private GitHub repos; a local path needs no token). Every sandbox gets a
+  throwaway clone of that mirror — read-only for stages 1–2 and 4–7
+  (`read_file('product/…')`, `product_git`).
+- **Stage 3 in `auto` mode gets the same clone writable**, on the run's branch
+  (`feat/<date>-<slug>`, `fix/…` for bug runs), plus `product_shell` — one shell command
+  at a time inside the checkout (run the tests, build, `git commit`). The agent reads the
+  repo's own `AGENTS.md`/`README` first; those conventions win over Lantern's. There is
+  still no credential in the sandbox: when the agent finishes, the harness bundles the
+  committed branch into `03-coding/handoff.json` + `branch.bundle`, and the HOST verifies
+  the bundle carries exactly that branch, pushes it as the bot identity, and opens the
+  pull request (GitHub) — `03-coding/pr.md` records it and the `code_complete` gate
+  shows it in Mission Control. Non-GitHub https remotes get the branch pushed without a
+  PR; local-path repos get the branch landed in place.
+- `human` mode is unchanged: the developer codes in their own session and approves
+  `code_complete` themselves.
+
+For a product repo to work in auto mode it must be reachable from the box (an https
+URL the token can read, or a local path), its base branch must exist, and its build and
+test commands must be discoverable from `AGENTS.md`/`README` (the sandbox image has
+Python 3.12, Node 22 and git; other toolchains need an image change). Knobs:
+`LANTERN_CODING_TIMEOUT_MIN` (120), `LANTERN_CODING_MAX_TURNS` (400),
+`LANTERN_PRODUCT_SHELL_TIMEOUT` (900 s per command), `LANTERN_GIT_AUTHOR_NAME/EMAIL`
+(`lantern-bot`), `LANTERN_PUBLIC_URL` (Mission Control URL, linked from PRs). Proof:
+`test_coding_stage.py` (no database). Still open, stated plainly: sandbox egress is not
+yet allowlisted (plan item C2.5) and the sandbox DB role is not yet restricted (C2.0) —
+run auto mode on repos you trust until they land.
 
 ## Direct consult — use one agent, no run (D11)
 

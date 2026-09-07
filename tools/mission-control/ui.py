@@ -322,6 +322,8 @@ input::placeholder{color:var(--text-dim)}
 .gmeta{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 0;
   font-family:var(--font-mono);font-size:var(--text-caps);color:var(--text-dim)}
 .gmeta b{color:var(--text-muted);font-weight:400}
+.commits{margin:8px 0 0;padding-left:18px;font-size:13px;color:var(--text-muted);line-height:1.5}
+.commits code{font-family:var(--font-mono);color:var(--text-dim)}
 .gact{display:flex;gap:10px;align-items:center;margin-top:16px;
   padding-top:14px;border-top:1px solid var(--edge);flex-wrap:wrap}
 .gact input{flex:1;min-width:220px}
