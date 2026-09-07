@@ -1453,6 +1453,24 @@ async def cmd_qa_preflight(role: str) -> None:
         code2, err2 = curl(cmd)
         print(f"  sandbox   HTTP {code2 or 'FAILED'}{'  ' + err2 if err2 else ''}")
         ok = code2.startswith(("2", "3", "401", "403"))
+        # Reachability is not readiness: the first daemon-driven stage 4 (2026-09-07)
+        # reached the login page and still could not get in. Try the provisioned
+        # login from inside a sandbox, credentials passed as env (never on argv).
+        # Mission-Control-shaped form: POST /login with username/password answers
+        # 303 on success and re-renders (200) on a rejected login.
+        if ok and user and pw:
+            probe = ["docker", "run", "--rm", "--add-host=host.docker.internal:host-gateway",
+                     "-e", f"QA_BASE_URL={base}", "-e", f"QA_USER={user}", "-e", f"QA_PASS={pw}",
+                     "--entrypoint", "sh", SANDBOX_IMAGE, "-c",
+                     'curl -sS -o /dev/null -w "%{http_code}" --max-time 30 -X POST '
+                     '--data-urlencode "username=$QA_USER" --data-urlencode "password=$QA_PASS" '
+                     '"$QA_BASE_URL/login"']
+            code3, err3 = curl(probe)
+            accepted = code3.startswith("3")
+            print(f"  login     HTTP {code3 or 'FAILED'}  "
+                  f"({'accepted' if accepted else 'REJECTED — the QA user/password do not log in (or the form is not Mission-Control-shaped)'})"
+                  f"{'  ' + err3 if err3 else ''}")
+            ok = ok and accepted
         print("\n" + ("READY — a QA stage can reach this target." if ok else
                       "NOT REACHABLE FROM A SANDBOX. The host result above does not matter: "
                       "stage 4 runs in a container. A localhost-only, Tailscale-only, or "

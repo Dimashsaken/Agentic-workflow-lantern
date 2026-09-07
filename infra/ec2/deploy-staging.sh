@@ -37,7 +37,12 @@ if [ ! -f "/etc/systemd/system/$UNIT.service" ] || ! cmp -s "$MAIN/infra/ec2/$UN
 fi
 sudo systemctl enable -q "$UNIT"
 sudo systemctl restart "$UNIT"
-sleep 3
-CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://127.0.0.1:8081/login || true)
+# uvicorn takes a few seconds to bind; poll rather than guess.
+CODE=000
+for _ in $(seq 1 15); do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:8081/login || true)
+  [ "$CODE" = "200" ] && break
+  sleep 1
+done
 echo "staging: $REF @ $HEAD_SHA — http://127.0.0.1:8081/login -> HTTP $CODE ($(systemctl is-active "$UNIT"))"
 [ "$CODE" = "200" ] || { sudo journalctl -u "$UNIT" -n 20 --no-pager; exit 1; }

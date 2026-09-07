@@ -223,6 +223,43 @@ PHASE_NOTES = {
 }
 
 
+QA_ENV_PREFIX = {"qa-dev": "LANTERN_QA_DEV", "qa-staging": "LANTERN_QA_STAGING"}
+
+
+def qa_target_note(stage: str) -> str:
+    """The QA target and its test login, in the system prompt of a QA execution.
+
+    The dispatcher puts QA_BASE_URL/QA_USER/QA_PASS into the sandbox environment, but
+    the model has no env access — on 2026-09-07 the first daemon-driven stage 4 guessed
+    a host name and a placeholder user, blocked, and burned a run. In-process runs read
+    the host's LANTERN_QA_<DEV|STAGING>_* directly. Never in a log or a report row.
+    """
+    role = ROLE_FOR_STAGE.get(stage, "")
+    prefix = QA_ENV_PREFIX.get(role)
+    if not prefix:
+        return ""
+    base = os.environ.get("QA_BASE_URL") or os.environ.get(prefix + "_BASE_URL", "")
+    user = os.environ.get("QA_USER") or os.environ.get(prefix + "_USER", "")
+    pw = os.environ.get("QA_PASS") or os.environ.get(prefix + "_PASS", "")
+    env_name = "dev" if role == "qa-dev" else "staging"
+    if not base:
+        return (f"\n\n# QA target\nNO {env_name} target is configured for this execution "
+                f"({prefix}_BASE_URL is unset). Write your report with Status: BLOCKED asking "
+                "for the target URL and test credentials, and still satisfy every postcondition.")
+    creds = (f"- **Login:** username `{user}` / password `{pw}` — provisioned test credentials "
+             "for this environment; type them into the login form exactly. "
+             if user and pw else
+             "- **Login:** no test credentials were provisioned; if the target needs a login, "
+             "report Status: BLOCKED asking for them. ")
+    return (f"\n\n# QA target ({env_name} environment)\n"
+            f"- **Base URL:** `{base}` — open THIS address in the browser (it is the route "
+            "the sandbox network can reach; do not substitute another host).\n"
+            f"{creds}\n"
+            "Never invent or guess credentials or hosts. If the login is rejected with these "
+            "exact values, that is an environment finding: record it in bugs.md with the "
+            "video timestamp and report Status: BLOCKED with one question.")
+
+
 def paper_file_note() -> str:
     """Tell the agent which Paper file is agent-owned (mounted; page-per-run works)."""
     fid = os.environ.get("LANTERN_PAPER_FILE_ID")
@@ -262,6 +299,7 @@ def build_instructions(role: str, run_id: str, stage: str) -> str:
         "once the three postconditions are already on disk. Work continuously until done.",
     ]
     parts.append(product_note())
+    parts.append(qa_target_note(stage))
     parts.append(PHASE_NOTES.get(stage, ""))
     if stage in PAPER_STAGES:
         parts.append(paper_file_note())
