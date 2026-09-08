@@ -1,20 +1,28 @@
-"""Lantern Mission Control v2 — the board is the control plane.
+"""Lantern Mission Control v3 — the factory's face (docs/MISSION-CONTROL.md, D22).
 
     uvicorn app:app --host 0.0.0.0 --port 8080     (or: python app.py)
 
-The board is a ticket board in the Fredrin sense — five workflow columns
-(Queued · Running · Blocked · Review · Done) and every run is a card moving
-through them, with the 7-stage pipeline compressed into a rail on the card.
-Review cards carry Approve/Reject directly; /runs keeps the dense strip list.
+One glance = what runs, what needs me, what it cost; one click = act:
+  /                 Home: the Inbox (every pending gate, leading with the artifact being
+                    decided) above the Board (runs as tickets in five workflow columns).
+  /run/<id>         Swim lanes: one lane per stage execution key in time order, attempts
+                    as bars, gate diamonds between lanes; a bar opens the execution drawer.
+  /run/<id>/exec/<n>  The drawer: compiled prompt, tool calls, report, envelope + its
+                    validation, gate.md, memory appended, cost, retry / rework-to.
+  /run/<id>/trace   Traceability: story criteria × plan tasks × commits × QA charter ×
+                    validation verdicts, as a matrix of status chips.
+  /factory          The catalog: roles, stages and gates, the model stack, each product's
+                    quality gate, evals, builders — read-only, from files and env.
+  /cost             Per run, per day, per model, and the two spend tripwires.
+  /gates /runs /chat /agents  as before.
 
 Two hard rules carried over unchanged from v1:
   * Gate integrity: approvals are written server-side via
     POST /gate/{approval_id}/{decision}, fail-closed, against LANTERN_WEB_USERS.
-    Nothing client-side can approve anything.
-  * Honesty: the board renders what the database and the stage reports actually
-    say — including when they disagree. A stage execution can be 'succeeded'
-    while its own report's Status: line says BLOCKED (the vacuous-gate failure,
-    fixed for new runs in 5f3f653); that disagreement is a first-class column.
+    Nothing client-side can approve anything; the keyboard map only submits forms.
+  * Honesty: pages render what the database and the run folder actually say —
+    including when they disagree. A stage execution can be 'succeeded' while its own
+    report's Status: line says BLOCKED; that disagreement is first-class.
 
 Auth: HMAC cookie sessions behind a login page — no data is served
 unauthenticated. Users from LANTERN_WEB_USERS ("name:pw,name:pw"); signing key
@@ -46,14 +54,21 @@ sys.path.insert(0, str(AZURE_RUNNER))
 load_dotenv(AZURE_RUNNER / ".env")
 
 from pipeline import (  # noqa: E402
-    FEATURE_STAGES, STAGE_DIR, STAGE_RUNNER, ProductTargetError, advance, db_urls,
-    est_cost_usd, log_event, verify_product_target, work_branch,
+    FEATURE_STAGES, REWORK_TARGETS, STAGE_DIR, STAGE_INDEX, STAGE_RUNNER, ProductTargetError,
+    advance, cmd_rework, db_urls, est_cost_usd, log_event, render_runboard,
+    verify_product_target, work_branch,
 )
 from orchestrator import CODING_BRANCH_PREFIXES, ROLE_FOR_STAGE  # noqa: E402
+import factory  # noqa: E402
+import catalog  # noqa: E402
 import chat  # noqa: E402
+import cost as costmod  # noqa: E402
+import drawer  # noqa: E402
+import lanes  # noqa: E402
+import traceability  # noqa: E402
 import ui  # noqa: E402
 import workspace  # noqa: E402
-from ui import H, ago, chip, fmt_int, fmt_money, group_head, srail, strip, strip_header  # noqa: E402
+from ui import H, ago, chip, fmt_int, fmt_k, fmt_money, group_head, srail, strip, strip_header  # noqa: E402
 
 # Board columns = run-folder dirs; split stage-1 executions share one column.
 BOARD_DIRS = list(dict.fromkeys(d for _, d, *_ in FEATURE_STAGES))
@@ -100,6 +115,8 @@ GATE_SHORT = {
 }
 KIND_ICON = {"qa_video": "🎬 ", "design_png": "🖼 ", "paper_file": "🎨 ",
              "flow_spec": "🗺 ", "design_handoff": "📦 ", "report": "📄 "}
+VALIDATION_CHIP = {"covered": "ok", "missing": "blocked", "skipped": "warn",
+                   "off-spec": "blocked", "insecure": "blocked"}
 
 
 # ── auth: signed cookie sessions (unchanged from v1) ─────────────────────────
@@ -151,7 +168,7 @@ async def get_pool() -> asyncpg.Pool:
 # the login rules stay defined exactly once, here.
 
 def page_for_chat(title, body, user, active, clock, auto_reload=True):
-    return ui.page(title, body, user, active, clock, auto_reload=auto_reload)
+    return ui.page(title, body, user, active, clock, auto_reload=auto_reload, kind="chat")
 
 
 app.include_router(chat.setup(get_pool=get_pool, current_user=current_user,
@@ -177,8 +194,12 @@ VERDICT_RE = re.compile(r"\*\*Status:\*\*\s*([A-Z][A-Z-]*)")
 OPENQ_RE = re.compile(r"##\s*Open questions?[^\n]*\n+\s*-?\s*(.+)")
 
 
+def run_root(run_id: str) -> Path:
+    return REPO / "workflow" / "runs" / run_id
+
+
 def report_path(run_id: str, dir_: str) -> Path:
-    return REPO / "workflow" / "runs" / run_id / dir_ / "report.md"
+    return run_root(run_id) / dir_ / "report.md"
 
 
 def report_text(run_id: str, dir_: str) -> str | None:
@@ -188,18 +209,33 @@ def report_text(run_id: str, dir_: str) -> str | None:
         return None
 
 
+def run_file(run_id: str, rel: str) -> str | None:
+    try:
+        return (run_root(run_id) / rel).read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def run_json(run_id: str, rel: str):
+    try:
+        return json.loads((run_root(run_id) / rel).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def report_verdict(text: str | None) -> str | None:
     if not text:
         return None
-    m = VERDICT_RE.search(text[:4000])
-    return m.group(1) if m else None
+    # The LAST status line counts (D17: second executions append their section).
+    ms = VERDICT_RE.findall(text)
+    return ms[-1] if ms else None
 
 
 def report_open_question(text: str | None) -> str | None:
     if not text:
         return None
-    m = OPENQ_RE.search(text)
-    return m.group(1).strip()[:240] if m else None
+    ms = OPENQ_RE.findall(text)
+    return ms[-1].strip()[:240] if ms else None
 
 
 def render_markdown(text: str) -> str:
@@ -456,8 +492,9 @@ def build_strip(run, snap: dict, now: datetime) -> tuple[str, dict]:
 
 # ── shared page fragments ────────────────────────────────────────────────────
 
-def page(title, body, user, active, now) -> HTMLResponse:
-    return HTMLResponse(ui.page(title, body, user, active, f"{now:%H:%M}"))
+def page(title, body, user, active, now, kind: str = "", auto_reload: bool = True) -> HTMLResponse:
+    return HTMLResponse(ui.page(title, body, user, active, f"{now:%H:%M}",
+                                auto_reload=auto_reload, kind=kind))
 
 
 def runner_sentence(snap) -> tuple[str, str]:
@@ -484,44 +521,171 @@ def today_spend(snap) -> tuple[float, int, str]:
     return cost, n, ", ".join(models) if models else "—"
 
 
-def gate_card(a, run, now, inline: bool = True) -> str:
-    """One pending approval, payload rendered inline. Same component on /gates
-    and /run/{id}. The decision itself stays a server-side POST."""
-    payload = _payload(a)
-    gate_title, gate_desc = GATE_META.get(a["gate"], (a["gate"], ""))
-    stage = payload.get("stage") or (run["current_stage"] if run else "")
-    dir_ = STAGE_DIR.get(stage, stage)
-    text = report_text(a["run_id"], dir_) if dir_ else None
-    verdict = report_verdict(text)
-    openq = report_open_question(text)
-    age = ago((now - a["requested_at"]).total_seconds())
+# ── gate cards: the artifact being decided comes first ───────────────────────
 
-    bits = [f"""<div class='ghead'><div>
-        <div class='gid'><a href='/run/{H(a["run_id"])}'>{H(a["run_id"])}</a>
-          · after {H(dir_ or "?")}</div>
-        <h2>{H(gate_title)}</h2></div>
-        <div class='gage'>waiting {H(age)}<br>
-          <span style='color:var(--text-dim)'>opened {a["requested_at"]:%b %d %H:%M} UTC</span></div>
-      </div><p class='gdesc'>{H(gate_desc)}</p>"""]
+def artbox(title: str, inner: str, sub: str = "", open_: bool = True) -> str:
+    """A bounded, scrollable box for the artifact under decision, headed by its path."""
+    head = f"<div class='abh'><b>{H(title)}</b>" + (f"<span>{H(sub)}</span>" if sub else "") + "</div>"
+    return f"<div class='artbox'>{head}{inner}</div>"
 
-    if verdict == "BLOCKED":
-        q = f"<span class='q'>“{H(openq)}”</span>" if openq else ""
-        bits.append(
-            f"<div class='blockwarn'><b>This stage's own report says BLOCKED.</b> "
-            f"The database marked the execution succeeded, but the report's verdict "
-            f"did not — approving here approves a stage that says it isn't done. "
-            f"Its open question:{q}</div>")
 
-    if a["gate"] == "story_signoff":             # D17: the story IS the payload
-        story_md = REPO / "workflow" / "runs" / a["run_id"] / "00-story" / "story.md"
-        try:
-            story = story_md.read_text(encoding="utf-8")
-        except OSError:
-            story = ""
+def validation_table(data: dict) -> str:
+    rows = []
+    for c in data.get("criteria", []) or []:
+        if not isinstance(c, dict):
+            continue
+        st = str(c.get("status", "?"))
+        rows.append(f"<tr><td class='id'>{H(str(c.get('id', '?')))}</td>"
+                    f"<td>{chip(st, VALIDATION_CHIP.get(st, ''))}</td>"
+                    f"<td>{H(str(c.get('evidence', '')))}</td></tr>")
+    verdict = str(data.get("verdict", "?"))
+    fix = data.get("fix_now") or []
+    head = (f"<div class='abh'><b>05-post-coding/validation.json</b>"
+            f"{chip('verdict ' + verdict, 'ok' if verdict == 'pass' else 'blocked')}"
+            + (f"<span>{len(fix)} fix-now item(s)</span>" if fix else "") + "</div>")
+    table = ("<table class='vtbl'><tr><th>AC</th><th>Verdict</th><th>Evidence</th></tr>"
+             f"{''.join(rows)}</table>")
+    fixrows = "".join(f"<li><b>{H(str(f.get('criterion', '')))}</b> {H(str(f.get('title', '')))}</li>"
+                      for f in fix if isinstance(f, dict))
+    fixhtml = f"<ul class='commits'>{fixrows}</ul>" if fixrows else ""
+    return f"<div class='artbox'>{head}{table}{fixhtml}</div>"
+
+
+def plan_summary(plan: dict) -> str:
+    rows = []
+    for t in plan.get("tasks", []) or []:
+        if not isinstance(t, dict):
+            continue
+        rows.append(f"<tr><td class='id'>{H(str(t.get('id', '?')))}</td><td>{H(str(t.get('title', '')))}</td>"
+                    f"<td class='id'>{H(str(t.get('size') or '—'))}</td>"
+                    f"<td class='id'>{H(', '.join(map(str, t.get('criteria') or [])) or '—')}</td>"
+                    f"<td>{'yes' if t.get('hitl') else ''}</td></tr>")
+    deferred = "".join(f"<li><b>{H(str(d.get('id')))}</b> deferred — {H(str(d.get('reason', '')))}</li>"
+                       for d in (plan.get("deferred_criteria") or []) if isinstance(d, dict))
+    scope = ", ".join(map(str, plan.get("write_scope") or [])) or "—"
+    builders = plan.get("builders") or []
+    chips = (chip("schema changes" if plan.get("schema_changes") else "no schema change",
+                  "warn" if plan.get("schema_changes") else "ok")
+             + chip("HITL required" if plan.get("hitl_required") else "no HITL flagged",
+                    "gate" if plan.get("hitl_required") else ""))
+    if builders:
+        chips += chip(f"{len(builders)} builders", "tier")
+    head = f"<div class='abh'><b>02-pre-coding/plan.json</b>{chips}<span>write scope: {H(scope)}</span></div>"
+    table = ("<table class='vtbl'><tr><th>Task</th><th>Title</th><th>Size</th><th>Criteria</th><th>HITL</th></tr>"
+             f"{''.join(rows)}</table>")
+    return f"<div class='artbox'>{head}{table}" + (f"<ul class='commits'>{deferred}</ul>" if deferred else "") + "</div>"
+
+
+def review_rounds(run_id: str, payload: dict) -> str:
+    """Review-bot rounds (D19): from the run folder first, the gate payload second."""
+    rounds: list[dict] = []
+    rdir = run_root(run_id) / "03-coding" / "review"
+    for p in sorted(rdir.glob("round-*.md")) if rdir.is_dir() else []:
+        n = re.sub(r"\D", "", p.stem) or "?"
+        rounds.append({"round": n, "file": f"03-coding/review/{p.name}", "text": run_file(run_id, f"03-coding/review/{p.name}")})
+    rj = run_json(run_id, "03-coding/review/review.json") or run_json(run_id, "03-coding/review.json")
+    for key in ("review_rounds", "reviews", "review"):
+        v = payload.get(key)
+        if isinstance(v, list):
+            for r in v:
+                if isinstance(r, dict):
+                    rounds.append({"round": str(r.get("round", "?")), "verdict": r.get("verdict"),
+                                   "findings": r.get("findings") if isinstance(r.get("findings"), list) else None,
+                                   "must_fix": r.get("must_fix"), "text": None})
+            break
+        if isinstance(v, dict):
+            rounds.append({"round": str(v.get("round", "?")), "verdict": v.get("verdict"),
+                           "findings": v.get("findings") if isinstance(v.get("findings"), list) else None,
+                           "must_fix": v.get("must_fix"), "text": None})
+            break
+    if rj and not any(r.get("verdict") for r in rounds):
+        rounds.append({"round": str(rj.get("round", "?")), "verdict": rj.get("verdict"),
+                       "findings": rj.get("findings") if isinstance(rj.get("findings"), list) else None,
+                       "must_fix": rj.get("must_fix"), "text": None, "file": "03-coding/review.json"})
+    if not rounds:
+        return ""
+    items = []
+    for r in rounds:
+        v = r.get("verdict")
+        vchip = chip(v, "ok" if v == "approve" else "blocked") if v else ""
+        n_f = len(r["findings"]) if isinstance(r.get("findings"), list) else None
+        bits = [f"<span class='rn'>round {H(str(r['round']))}</span>", vchip]
+        if n_f is not None:
+            mf = r.get("must_fix") or []
+            bits.append(f"<span>{n_f} finding(s)" + (f" · {len(mf)} must-fix" if mf else "") + "</span>")
+        if r.get("file"):
+            bits.append(f"<span class='caps'>{H(r['file'])}</span>")
+        body = "".join(bits)
+        if r.get("text"):
+            body += (f"<details class='report' style='flex-basis:100%'><summary>read the round</summary>"
+                     f"<div class='prose'>{render_markdown(r['text'])}</div></details>")
+        items.append(f"<div class='round'>{body}</div>")
+    return (f"<div class='artbox' style='max-height:none'><div class='abh'><b>Review rounds</b>"
+            f"<span>{len(rounds)} round(s) before a human was pinged</span></div>"
+            f"<div class='rounds' style='padding:10px 14px'>{''.join(items)}</div></div>")
+
+
+def builders_block(run_id: str, payload: dict) -> str:
+    """Parallel builders (D18): the payload's list, or per-builder handoffs on disk."""
+    blds = payload.get("builders") if isinstance(payload.get("builders"), list) else []
+    if not blds:
+        bdir = run_root(run_id) / "03-coding" / "builders"
+        for p in sorted(bdir.glob("*/handoff.json")) if bdir.is_dir() else []:
+            h = run_json(run_id, f"03-coding/builders/{p.parent.name}/handoff.json") or {}
+            blds.append({"name": p.parent.name, "branch": h.get("branch"),
+                         "commits": h.get("commit_count", len(h.get("commits") or [])),
+                         "files_changed": h.get("files_changed")})
+    if not blds:
+        return ""
+    rows = []
+    for b in blds:
+        if not isinstance(b, dict):
+            continue
+        commits = b.get("commits")
+        n = len(commits) if isinstance(commits, list) else commits
+        files = b.get("files_changed")
+        nf = len(files) if isinstance(files, list) else files
+        rows.append(f"<tr><td class='id'>{H(str(b.get('name', '?')))}</td>"
+                    f"<td class='id'>{H(str(b.get('branch') or '—'))}</td>"
+                    f"<td class='id'>{H(str(n if n is not None else '—'))}</td>"
+                    f"<td class='id'>{H(str(nf if nf is not None else '—'))}</td></tr>")
+    return (f"<div class='artbox' style='max-height:none'><div class='abh'><b>Builders</b>"
+            f"<span>{len(rows)} scoped builders merged by the host</span></div>"
+            "<table class='vtbl'><tr><th>Builder</th><th>Branch</th><th>Commits</th><th>Files</th></tr>"
+            f"{''.join(rows)}</table></div>")
+
+
+def media_links(run_id: str, dir_: str) -> str:
+    data = run_json(run_id, f"{dir_}/media-manifest.json") or {}
+    ups = data.get("uploaded") if isinstance(data, dict) else None
+    if not ups:
+        return ""
+    links = "".join(
+        f"<a href='{H(art_href(str(u.get('uri', ''))))}' target='_blank'>🎬 session {H(str(u.get('session', '?')))}"
+        f" · attempt {H(str(u.get('attempt', '?')))}</a>"
+        for u in ups if isinstance(u, dict))
+    return f"<div class='arts'>{links}</div>"
+
+
+def gate_artifacts(a, run, payload: dict, dir_: str, text: str | None, inline: bool) -> list[str]:
+    """The artifact each gate is deciding, first — then the supporting report."""
+    run_id = a["run_id"]
+    bits: list[str] = []
+    gate = a["gate"]
+    shown_report = False
+    if gate == "story_signoff":             # D17: the story IS the payload
+        story = run_file(run_id, "00-story/story.md")
         if story:
-            bits.append(f"<details class='report' open><summary>The story being approved — "
-                        f"00-story/story.md</summary><div class='prose'>{render_markdown(story)}"
-                        f"</div></details>")
+            bits.append(artbox("The story being approved — 00-story/story.md",
+                               f"<div class='prose'>{render_markdown(story)}</div>"))
+            sj = run_json(run_id, "00-story/story.json")
+            if isinstance(sj, dict):
+                n = len(sj.get("acceptance_criteria") or [])
+                q = sj.get("open_questions") or []
+                bits.append(f"<div class='gmeta'><b>{n}</b> acceptance criteria · "
+                            f"<b>{len(sj.get('non_goals') or [])}</b> non-goals · "
+                            + (f"<span style='color:var(--warning)'>{len(q)} open question(s)</span>" if q else "no open questions")
+                            + "</div>")
     h = payload.get("handoff") or {}
     if h:                                        # ux_signoff: the rich handoff
         cards = []
@@ -551,7 +715,19 @@ def gate_card(a, run, now, inline: bool = True) -> str:
             f"video: <b>{H(str(h['video']))}</b>" if h.get("video")
             else "no walkthrough video recorded")
         bits.append(f"<div class='gmeta'>{' · '.join(meta_bits)}</div>")
-    elif payload.get("branch") and payload.get("commits") is not None:
+    if gate == "plan_signoff":
+        plan = run_json(run_id, "02-pre-coding/plan.json")
+        task_plan = run_file(run_id, "02-pre-coding/task-plan.md")
+        if isinstance(plan, dict):
+            bits.append(plan_summary(plan))
+        if task_plan:
+            bits.append(artbox("The task plan being approved — 02-pre-coding/task-plan.md",
+                               f"<div class='prose'>{render_markdown(task_plan)}</div>"))
+        schema = run_file(run_id, "02-pre-coding/schema-plan.md")
+        if schema:
+            bits.append(f"<details class='report'><summary>schema-plan.md</summary>"
+                        f"<div class='prose'>{render_markdown(schema)}</div></details>")
+    if payload.get("branch") and payload.get("commits") is not None:
         # code_complete after an AUTO coding stage (D14): the pull request is the
         # payload — link it, list the commits, and keep the coding report inline
         # so the reviewer sees the deviations and the confidence map next to it.
@@ -574,23 +750,103 @@ def gate_card(a, run, now, inline: bool = True) -> str:
             bits.append(f"<div class='blockwarn'><b>The branch is pushed but the pull request "
                         f"was not opened.</b> {H(payload['pr_error'])} — fix the cause "
                         f"(usually the bot token's pull-request permission), then run "
-                        f"<code>pipeline.py publish {H(a['run_id'])}</code>.</div>")
+                        f"<code>pipeline.py publish {H(run_id)}</code>.</div>")
         bits.append(
             f"<div class='gmeta'>{link} · branch <code>{H(payload['branch'])}</code> → "
             f"<code>{H(payload.get('base', ''))}</code> · <b>{n}</b> commit{'s' if n != 1 else ''}"
             f"{' · <b>auto-committed leftovers</b>' if payload.get('auto_committed') else ''}</div>"
             f"<ul class='commits'>{rows}{more}</ul>")
+    if gate == "code_complete":
+        gate_json = run_json(run_id, "03-coding/gate.json")
+        gate_md = run_file(run_id, "03-coding/gate.md")
+        if isinstance(gate_json, dict):
+            ok = bool(gate_json.get("passed"))
+            failed = [r.get("name") for r in gate_json.get("results", []) if isinstance(r, dict) and not r.get("passed")]
+            head = (f"<div class='abh'><b>03-coding/gate.md</b>{chip('GREEN' if ok else 'RED', 'ok' if ok else 'blocked')}"
+                    f"<span>quality gate as code · round {H(str(gate_json.get('round', 0)))}"
+                    + (f" · failed: {H(', '.join(map(str, failed)))}" if failed else "")
+                    + f" · {H(', '.join(map(str, gate_json.get('configured') or [])) or 'no commands configured')}</span></div>")
+            body = f"<div class='prose'>{render_markdown(gate_md)}</div>" if gate_md else ""
+            bits.append(f"<div class='artbox'>{head}{body}</div>")
+        rr = review_rounds(run_id, payload)
+        if rr:
+            bits.append(rr)
+        bb = builders_block(run_id, payload)
+        if bb:
+            bits.append(bb)
         if text:
             bits.append(f"<details class='report' open><summary>The coding report — "
                         f"{H(dir_)}/report.md</summary>"
                         f"<div class='prose'>{render_markdown(text)}</div></details>")
-    elif text and inline:                        # plan_signoff etc: the report IS the payload
-        bits.append(f"<details class='report' open><summary>The report being approved — "
+            shown_report = True
+    if gate == "staging_deploy":
+        val = run_json(run_id, "05-post-coding/validation.json")
+        if isinstance(val, dict):
+            bits.append(validation_table(val))
+        else:
+            bits.append("<p class='gdesc'>No 05-post-coding/validation.json — the validator's "
+                        "verdict per criterion is missing for this run (runs imported after "
+                        "stage 5, or pre-D17).</p>")
+        if text:
+            bits.append(artbox("The security report — 06-security/report.md",
+                               f"<div class='prose'>{render_markdown(text)}</div>"))
+            shown_report = True
+    if gate == "prod_signoff":
+        media = media_links(run_id, "07-qa-staging")
+        bugs = run_file(run_id, "07-qa-staging/bugs.md")
+        if media:
+            bits.append(f"<div class='gmeta'><b>staging videos</b></div>{media}")
+        if text:
+            bits.append(artbox("The staging QA report — 07-qa-staging/report.md",
+                               f"<div class='prose'>{render_markdown(text)}</div>"))
+            shown_report = True
+        if bugs:
+            bits.append(f"<details class='report'><summary>bugs.md</summary>"
+                        f"<div class='prose'>{render_markdown(bugs)}</div></details>")
+    if not shown_report and text and inline:
+        opened = " open" if gate not in ("story_signoff", "plan_signoff", "ux_signoff") else ""
+        bits.append(f"<details class='report'{opened}><summary>The stage report — "
                     f"{H(dir_)}/report.md</summary>"
                     f"<div class='prose'>{render_markdown(text)}</div></details>")
-    elif inline:
+    elif not bits and inline:
         bits.append("<p class='gdesc'>No report found for this stage — the run "
                     "folder has nothing to show. Decide from the run page evidence.</p>")
+    return bits
+
+
+def gate_card(a, run, now, inline: bool = True) -> str:
+    """One pending approval, its artifact first, its decision form last. Same
+    component on /, /gates and /run/{id}. The decision itself stays a server-side
+    POST; the keyboard map (a / r) only submits this form."""
+    payload = _payload(a)
+    gate_title, gate_desc = GATE_META.get(a["gate"], (a["gate"], ""))
+    stage = payload.get("stage") or (run["current_stage"] if run else "")
+    dir_ = STAGE_DIR.get(stage, stage)
+    text = report_text(a["run_id"], dir_) if dir_ else None
+    verdict = report_verdict(text)
+    openq = report_open_question(text)
+    waited = (now - a["requested_at"]).total_seconds()
+    age = ago(waited)
+    stale = is_stale(waited)
+
+    bits = [f"""<div class='ghead'><div>
+        <div class='gid'><a href='/run/{H(a["run_id"])}' data-open>{H(a["run_id"])}</a>
+          <span>· after {H(dir_ or "?")}</span>{chip("STALE", "warn") if stale else ""}
+          {chip("report: blocked", "blocked") if verdict == "BLOCKED" else ""}</div>
+        <h2>{H(gate_title)}</h2></div>
+        <div class='gage'>waiting {H(age)}<br>
+          <span style='color:var(--text-dim)'>opened {a["requested_at"]:%b %d %H:%M} UTC</span></div>
+      </div><p class='gdesc'>{H(gate_desc)}</p>"""]
+
+    if verdict == "BLOCKED":
+        q = f"<span class='q'>“{H(openq)}”</span>" if openq else ""
+        bits.append(
+            f"<div class='blockwarn'><b>This stage's own report says BLOCKED.</b> "
+            f"The database marked the execution succeeded, but the report's verdict "
+            f"did not — approving here approves a stage that says it isn't done. "
+            f"Its open question:{q}</div>")
+
+    bits.extend(gate_artifacts(a, run, payload, dir_, text, inline))
 
     nxt = ""
     if run:
@@ -603,16 +859,22 @@ def gate_card(a, run, now, inline: bool = True) -> str:
                 nxt = " — the run is complete"
         except ValueError:
             pass
-    confirm = (" onsubmit=\"return confirm('The report says BLOCKED — approve anyway?')\""
-               if verdict == "BLOCKED" else "")
+    blocked = "1" if verdict == "BLOCKED" else "0"
+    confirm = ("return (event.submitter&&event.submitter.hasAttribute('formaction'))"
+               "?confirm('Reject and stop this run for rework?')"
+               + (":confirm('The report says BLOCKED — approve anyway?')" if verdict == "BLOCKED" else ":true"))
     bits.append(f"""<div class='gact'>
-      <form method='post' action='/gate/{a["id"]}/approve' style='display:flex;gap:10px;flex:1;min-width:300px'{confirm}>
+      <form method='post' action='/gate/{a["id"]}/approve' data-decide data-gate='{H(a["gate"])}'
+            data-run='{H(a["run_id"])}' data-blocked='{blocked}' data-approve='/gate/{a["id"]}/approve'
+            data-reject='/gate/{a["id"]}/reject' onsubmit="{confirm}">
         <input type='text' name='note' placeholder='decision note — recorded in the audit log'>
-        <button class='btn primary'>Approve{H(nxt)}</button></form>
-      <form method='post' action='/gate/{a["id"]}/reject'>
-        <button class='btn danger'>Reject — stop for rework</button></form>
+        <button class='btn primary'>Approve{H(nxt)}</button>
+        <button class='btn danger' formaction='/gate/{a["id"]}/reject'>Reject — stop for rework</button>
+        <span class='nxt'>keyboard: <kbd>a</kbd> approve · <kbd>r</kbd> reject with a note · <kbd>Enter</kbd> open the run</span>
+      </form>
     </div>""")
-    return f"<div class='gcard'>{''.join(bits)}</div>"
+    return (f"<div class='gcard{' stale' if stale else ''}' data-k tabindex='0' "
+            f"id='gate-{a['id']}'>{''.join(bits)}</div>")
 
 
 # ── routes ───────────────────────────────────────────────────────────────────
@@ -627,7 +889,7 @@ async def login_page(request: Request, error: str = ""):
     return HTMLResponse(ui.page("Sign in — Lantern", f"""
       <div class='login'><div class='logo'></div>
       <h1>Mission Control</h1>
-      <p>The control room for the agent fleet. Sign in to see runs and decide gates.</p>
+      <p>The control room for the software factory. Sign in to see runs and decide gates.</p>
       {warn}{err}
       <form method='post' action='/login'>
         <input name='username' type='text' placeholder='username' autofocus>
@@ -654,10 +916,6 @@ async def logout():
     return resp
 
 
-def fmt_k(n) -> str:
-    return f"{n / 1000:,.0f}k" if n and n >= 1000 else (str(n) if n else "0")
-
-
 def led_model(led: dict) -> str:
     models = led.get("models") or set()
     return next(iter(models)) if len(models) == 1 else ("mixed" if models else "—")
@@ -668,7 +926,7 @@ def build_card(run, snap: dict, now: datetime) -> tuple[str, str]:
 
     The board is Fredrin's concept, not a pipeline diagram: five workflow
     columns — Queued · Running · Blocked · Review · Done — and the ticket
-    moves through them. Where the run is inside the 7-stage pipeline is the
+    moves through them. Where the run is inside the 8-stage pipeline is the
     rail ON the card, not the geometry of the board. Review cards carry the
     actual controls; the decision is still the same server-side POST.
     """
@@ -711,7 +969,7 @@ def build_card(run, snap: dict, now: datetime) -> tuple[str, str]:
                 f"<form method='post' action='/gate/{a['id']}/reject' "
                 f"onsubmit=\"return confirm('Reject and stop this run for rework?')\">"
                 f"<button class='btn danger sm'>Reject</button></form>"
-                f"<a class='ev' href='/gates'>evidence →</a></div>")
+                f"<a class='ev' href='/gates#gate-{a['id']}'>evidence →</a></div>")
     elif run["status"] == "executing":
         col = "running"
         age = ago((now - (e["started_at"] if e else run["updated_at"])).total_seconds())
@@ -773,6 +1031,23 @@ def build_card(run, snap: dict, now: datetime) -> tuple[str, str]:
     return col, card
 
 
+def inbox_section(snap: dict, now: datetime) -> str:
+    """The Inbox: every pending gate, oldest first, artifact first."""
+    runs_by_id = {r["id"]: r for r in snap["runs"]}
+    pend = snap["pend"]
+    n = len(pend)
+    stale_n = sum(1 for a in pend if is_stale((now - a["requested_at"]).total_seconds()))
+    head = (f"<div class='ihead'><h2>{n} gate{'s' if n != 1 else ''} waiting on you</h2>"
+            + (f"<span>{chip(f'{stale_n} stale', 'warn')}</span>" if stale_n else "")
+            + f"<span class='keys'>{ui.keys_hint(('j/k', 'move'), ('a', 'approve'), ('r', 'reject'), ('?', 'all keys'))}</span></div>")
+    if not pend:
+        body = ("<p class='iempty'><b>Nothing needs you.</b> When a stage finishes behind a "
+                "gate, its card appears here with the artifact being decided.</p>")
+    else:
+        body = "".join(gate_card(a, runs_by_id.get(a["run_id"]), now) for a in pend)
+    return f"<section class='inbox' id='inbox'>{head}{body}</section>"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def board(request: Request):
     user = current_user(request)
@@ -805,7 +1080,7 @@ async def board(request: Request):
         f"<span><span class='num'>{n_rev}</span> waiting on you</span>{sep}"
         f"<span><span class='num'>{n_run}</span> running</span>{sep}"
         f"<span>spent today <span class='num'>{H(fmt_money(cost_today))}</span>"
-        f" of ${tripwire:.0f}</span>{sep}"
+        f" of ${tripwire:.0f} <a href='/cost' style='text-decoration:underline'>cost</a></span>{sep}"
         f"<span>{ec2_bit}</span>{sep}<span>{ws_bit}</span></div>")
 
     lat = snap["gate_latency"]
@@ -826,9 +1101,10 @@ async def board(request: Request):
         content = "".join(cols[key]) if cols[key] else f"<p class='kbempty'>{H(empty)}</p>"
         kb.append(f"<div class='kbcol'>{head}{content}</div>")
 
-    return page("Board — Lantern Mission Control",
-                statusline + lat_html + f"<section class='kb'>{''.join(kb)}</section>",
-                user, "/", now)
+    return page("Home — Lantern Mission Control",
+                statusline + inbox_section(snap, now) + lat_html
+                + f"<section class='kb'>{''.join(kb)}</section>",
+                user, "/", now, kind="home")
 
 
 @app.get("/gates", response_class=HTMLResponse)
@@ -849,7 +1125,8 @@ async def gates(request: Request):
 
     body = [f"<h2 class='sect'>{len(pend)} gate{'s' if len(pend) != 1 else ''} waiting, oldest first</h2>",
             "<p class='sub'>Approving advances the run; rejecting stops it for rework. "
-            "Every decision lands in the audit log with your name on it.</p>"]
+            "Every decision lands in the audit log with your name on it. "
+            f"{ui.keys_hint(('j/k', 'move'), ('a', 'approve'), ('r', 'reject'))}</p>"]
     if pend:
         for a in pend:
             body.append(gate_card(a, runs.get(a["run_id"]), now))
@@ -876,7 +1153,7 @@ async def gates(request: Request):
                     f"<span class='caps'>{len(history)} shown</span></div>{''.join(rows)}</section>")
 
     return page("Gates — Lantern Mission Control",
-                f"<main class='page'>{''.join(body)}</main>", user, "/gates", now)
+                f"<main class='page'>{''.join(body)}</main>", user, "/gates", now, kind="gates")
 
 
 @app.get("/runs", response_class=HTMLResponse)
@@ -900,34 +1177,41 @@ async def runs_index(request: Request):
             f"<div class='stripwrap'>{''.join(closed_s)}</div>" if closed_s
             else "<p class='empty'><b>Nothing has closed yet.</b></p>"]
     return page("Runs — Lantern Mission Control",
-                f"<main class='page'>{''.join(body)}</main>", user, "/runs", now)
+                f"<main class='page'>{''.join(body)}</main>", user, "/runs", now, kind="runs")
 
 
-@app.get("/spend", response_class=HTMLResponse)
-async def spend(request: Request):
+# ── cost ─────────────────────────────────────────────────────────────────────
+
+COST_COLS = """model, coalesce(sum(input_tokens),0)::bigint AS inp,
+              coalesce(sum(cached_input_tokens),0)::bigint AS cached,
+              coalesce(sum(output_tokens),0)::bigint AS outp, count(*)::int AS n,
+              count(*) FILTER (WHERE total_tokens IS NULL)::int AS unmetered"""
+
+
+@app.get("/spend")
+async def spend_redirect():
+    return RedirectResponse("/cost", status_code=303)
+
+
+@app.get("/cost", response_class=HTMLResponse)
+async def cost_page(request: Request):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
     p = await get_pool()
     now = datetime.now(timezone.utc)
-    cols = """model, coalesce(sum(input_tokens),0)::bigint AS inp,
-              coalesce(sum(cached_input_tokens),0)::bigint AS cached,
-              coalesce(sum(output_tokens),0)::bigint AS outp, count(*)::int AS n,
-              count(*) FILTER (WHERE total_tokens IS NULL)::int AS unmetered"""
     daily = await p.fetch(
-        f"""SELECT date_trunc('day', started_at)::date AS day, {cols}
+        f"""SELECT date_trunc('day', started_at)::date AS day, {COST_COLS}
             FROM stage_executions
             WHERE started_at >= now() - interval '14 days'
             GROUP BY 1, model ORDER BY 1 DESC""")
-    top = await p.fetch(
-        f"""SELECT run_id, {cols} FROM stage_executions
-            WHERE started_at >= now() - interval '14 days'
-            GROUP BY run_id, model
-            ORDER BY coalesce(sum(total_tokens),0) DESC LIMIT 15""")
-    alltime = await p.fetch(f"SELECT {cols} FROM stage_executions GROUP BY model")
+    per_run = await p.fetch(
+        f"""SELECT run_id, {COST_COLS} FROM stage_executions
+            GROUP BY run_id, model ORDER BY coalesce(sum(total_tokens),0) DESC""")
+    alltime = await p.fetch(f"SELECT {COST_COLS} FROM stage_executions GROUP BY model")
     # Consults burn credits too (D11/D13) — chat_turns sits in the same ledger.
-    chat_cols = cols.replace("total_tokens IS NULL",
-                             "total_tokens IS NULL AND status <> 'running'")
+    chat_cols = COST_COLS.replace("total_tokens IS NULL",
+                                  "total_tokens IS NULL AND status <> 'running'")
     try:
         chat_daily = await p.fetch(
             f"""SELECT date_trunc('day', t.started_at)::date AS day, s.agent, {chat_cols}
@@ -937,74 +1221,52 @@ async def spend(request: Request):
         chat_alltime = await p.fetch(f"SELECT {chat_cols} FROM chat_turns GROUP BY model")
     except asyncpg.PostgresError:          # database predates the chat tables
         chat_daily, chat_alltime = [], []
-    tripwire = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "50"))
+    try:
+        alarms = await p.fetch(
+            "SELECT type, data, at FROM events WHERE actor = 'usage-check' ORDER BY at DESC LIMIT 20")
+    except asyncpg.PostgresError:
+        alarms = []
 
-    total_cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
-                     for r in [*alltime, *chat_alltime])
+    by_day = costmod.aggregate(daily, "day")
+    by_run = costmod.aggregate(per_run, "run_id")
+    by_model = costmod.aggregate(alltime, "model")
+    stage_total = sum(g["cost"] for g in by_model)
+    chat_total = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"]) for r in chat_alltime)
+    total_cost = stage_total + chat_total
     total_unmetered = sum(r["unmetered"] for r in [*alltime, *chat_alltime])
-    today_rows = [r for r in daily if r["day"] == now.date()]
-    today_cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
-                     for r in [*today_rows, *[r for r in chat_daily if r["day"] == now.date()]])
+    n_exec = sum(r["n"] for r in alltime)
+    today_cost = sum(g["cost"] for g in by_day if g["day"] == now.date()) + sum(
+        est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
+        for r in chat_daily if r["day"] == now.date())
+    alarm_rows = [{"type": r["type"], "at": r["at"],
+                   "data": (json.loads(r["data"]) if isinstance(r["data"], str) else r["data"]) or {}}
+                  for r in alarms]
+    trip = costmod.tripwire(today_cost, total_cost, os.environ, alarm_rows)
 
-    body = [f"""<section class='readout' style='grid-template-columns:repeat(3,1fr) auto'>
+    body = [f"""<section class='readout' style='grid-template-columns:repeat(4,1fr) auto'>
       <div><div class='caps'>Spent today</div>
-        <div class='v'>{H(fmt_money(today_cost))}<small> / {tripwire:.0f}</small></div>
-        <div class='d'>{min(today_cost / tripwire * 100, 999):.0f}% of the daily tripwire</div></div>
+        <div class='v{' bad' if trip['over_daily'] else ''}'>{H(fmt_money(today_cost))}<small> / {trip['daily_limit']:.0f}</small></div>
+        <div class='d'>{min(trip['today_pct'], 999):.0f}% of the daily tripwire · stages and consults</div></div>
       <div><div class='caps'>Ledger total</div><div class='v'>{H(fmt_money(total_cost))}</div>
-        <div class='d'>every metered stage and consult, all time · est.</div></div>
+        <div class='d'>{H(fmt_money(stage_total))} stages · {H(fmt_money(chat_total))} consults · est.</div></div>
+      <div><div class='caps'>Executions</div><div class='v'>{n_exec}</div>
+        <div class='d'>metered stage executions, all time</div></div>
       <div><div class='caps'>Unmetered</div>
         <div class='v{' bad' if total_unmetered else ''}'>{total_unmetered}</div>
         <div class='d'>executions with no token counts — real spend is higher</div></div>
       <div class='cta'></div></section>"""]
-
-    if daily:
-        rows = []
-        for r in daily:
-            # A model-less bucket is the unmetered pile (crashed before the usage
-            # line): printing 0 tokens / $0.00 for it would be a lie.
-            if r["model"] is None and not r["inp"]:
-                rows.append(
-                    f"<tr><td class='d'>{r['day']:%b %d}</td>"
-                    f"<td>— unmetered</td><td class='r'>{r['n']}</td>"
-                    f"<td class='r'>—</td><td class='r'>—</td><td class='r'>—</td>"
-                    f"<td class='r'>—</td><td></td></tr>")
-                continue
-            cost = est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
-            w = min(cost / tripwire * 100, 100)
-            over = " over" if cost > tripwire else ""
-            cpct = f"{round(r['cached'] / r['inp'] * 100)}%" if r["inp"] else "—"
-            rows.append(
-                f"<tr><td class='d'>{r['day']:%b %d}</td><td>{H(r['model'] or '—')}</td>"
-                f"<td class='r'>{r['n']}</td><td class='r'>{fmt_int(r['inp'])}</td>"
-                f"<td class='r'>{fmt_int(r['cached'])} · {cpct}</td>"
-                f"<td class='r'>{fmt_int(r['outp'])}</td>"
-                f"<td class='r'>{H(fmt_money(cost))}</td>"
-                f"<td><span class='bar'><i class='{over.strip()}' style='width:{w:.0f}%'></i></span></td></tr>")
-        body.append(f"""<h2 class='sect'>By day, last 14</h2>
-          <p class='sub'>The bar is the day against the ${tripwire:.0f} tripwire.</p>
-          <div class='stripwrap'><table class='spendtbl'>
-          <tr><th>Day</th><th>Model</th><th class='r'>Stages</th><th class='r'>Input</th>
-          <th class='r'>Cached</th><th class='r'>Output</th><th class='r'>Est. $</th><th></th></tr>
-          {''.join(rows)}</table></div>""")
-    else:
-        body.append("<p class='empty' style='margin-top:20px'><b>No metered executions "
-                    "in the last 14 days.</b></p>")
-
-    if top:
-        rows = "".join(
-            f"<tr><td class='d'><a href='/run/{H(r['run_id'])}'>{H(r['run_id'])}</a></td>"
-            + (f"<td>— unmetered</td><td class='r'>{r['n']}</td>"
-               f"<td class='r'>—</td><td class='r'>—</td><td class='r'>—</td></tr>"
-               if r["model"] is None and not r["inp"] else
-               f"<td>{H(r['model'] or '—')}</td><td class='r'>{r['n']}</td>"
-               f"<td class='r'>{fmt_int(r['inp'])}</td><td class='r'>{fmt_int(r['outp'])}</td>"
-               f"<td class='r'>{H(fmt_money(est_cost_usd(r['inp'], r['cached'], r['outp'], r['model'])))}</td></tr>")
-            for r in top)
-        body.append(f"""<h2 class='sect'>By run, last 14 days</h2>
-          <div class='stripwrap'><table class='spendtbl'>
-          <tr><th>Run</th><th>Model</th><th class='r'>Stages</th><th class='r'>Input</th>
-          <th class='r'>Output</th><th class='r'>Est. $</th></tr>{rows}</table></div>""")
-
+    body.append("<h2 class='sect'>Tripwires</h2><p class='sub'>The two ceilings "
+                "<code>pipeline.py usage-check</code> watches hourly: today's rate, and the draw "
+                "on the credit pool. Alarms post once; they never block a run.</p>"
+                + costmod.render_tripwires(trip))
+    body.append("<h2 class='sect'>By run</h2><p class='sub'>Every run's stage executions, all "
+                "time, costliest first. Open a run for the per-execution breakdown in its lanes.</p>"
+                + costmod.render_by_run(by_run))
+    body.append(f"<h2 class='sect'>By day, last 14</h2><p class='sub'>The bar is the day against "
+                f"the ${trip['daily_limit']:.0f} tripwire.</p>" + costmod.render_by_day(by_day, trip["daily_limit"]))
+    body.append("<h2 class='sect'>By model, all time</h2><p class='sub'>The fleet routes across "
+                "price classes (D16); per-deployment rates come from LANTERN_PRICE_JSON when set.</p>"
+                + costmod.render_by_model(by_model))
     if chat_daily:
         rows = "".join(
             f"<tr><td class='d'>{r['day']:%b %d}</td>"
@@ -1033,8 +1295,74 @@ async def spend(request: Request):
                 f"crashed before reporting usage have no token counts and are flagged "
                 f"unmetered — real spend is higher than shown.</p>")
 
-    return page("Spend — Lantern Mission Control",
-                f"<main class='page'>{''.join(body)}</main>", user, "/spend", now)
+    return page("Cost — Lantern Mission Control",
+                f"<main class='page'>{''.join(body)}</main>", user, "/cost", now, kind="cost")
+
+
+# ── the run page: swim lanes ─────────────────────────────────────────────────
+
+def run_header(run, run_id: str, now: datetime, totals: dict, active: str) -> str:
+    status_chip = {"running": ("Queued", ""), "executing": ("Running", "ok"),
+                   "waiting_gate": ("Waiting on a human", "gate"),
+                   "failed": ("Failed", "blocked"), "done": ("Shipped", "ok"),
+                   "cancelled": ("Cancelled", "")}.get(run["status"], (run["status"], ""))
+    curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
+    verdict = report_verdict(report_text(run_id, curdir)) \
+        if run["status"] not in ("done", "cancelled") else None
+    v_chip = chip("report: blocked", "blocked") if verdict == "BLOCKED" else ""
+    mode = chip("auto coding", "tier") if (dict(run).get("coding_mode") == "auto") else ""
+    # D15: the target is editable from here. When it is unset the warn chip IS the
+    # link — that turns "stage 2+ blocks" from a dead end into the fix for it.
+    if dict(run).get("product_repo"):
+        landed = work_branch(run_id, dict(run).get("product_working_branch") or "")
+        derived = not (dict(run).get("product_working_branch") or "")
+        repo_bit = (
+            f"<code>{H(run['product_repo'])}</code> · base "
+            f"<code>{H(run['product_branch'] or 'default')}</code> · branch "
+            f"<code>{H(landed)}</code>{' (derived)' if derived else ''} "
+            f"<a href='/run/{H(run_id)}/repo' class='lnk'>change</a>")
+    else:
+        repo_bit = (f"<a href='/run/{H(run_id)}/repo'>"
+                    + chip("no product repo set — stage 2+ blocks · connect one", "warn")
+                    + "</a>")
+    tot, inp, cached = totals.get("tot", 0), totals.get("inp", 0), totals.get("cached", 0)
+    tok_line = (f"{fmt_int(tot)} tok · {round(cached / inp * 100) if inp else 0}% cached"
+                if tot else "no ledger")
+    unm = totals.get("unmetered", 0)
+    unm_line = f"<br>{unm} unmetered execution{'s' if unm != 1 else ''}" if unm else ""
+    secs = totals.get("seconds")
+    sec_line = f"<br>{ui.dur(secs)} of agent time" if secs else ""
+    tabs = [("Lanes", f"/run/{run_id}", ""), ("Traceability", f"/run/{run_id}/trace", " data-key-t"),
+            ("Codebase", f"/run/{run_id}/repo", ""),
+            ("Ask Lantern", f"/chat?agent=lantern&run={run_id}", "")]
+    nav = "".join(f"<a href='{H(href)}'{extra}{' class=on' if href == active else ''}>{H(n)}</a>"
+                  for n, href, extra in tabs)
+    return f"""<div class='runhead'><div>
+        <div class='caps'>Run · pipeline v{H(str(run['pipeline_version']))}</div>
+        <h1>{H(run_id)}</h1>
+        <div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>
+          {chip(*status_chip)}{v_chip}{mode}</div>
+        <div class='meta'>brief <code>{H(run['brief'])}</code><br>
+          started by <b>{H(run['created_by'])}</b> · {run['created_at']:%b %d %H:%M} UTC
+          · last activity {ago((now - run['updated_at']).total_seconds())} ago<br>
+          product repo: {repo_bit}</div>
+        <nav class='runnav'>{nav}</nav></div>
+      <div class='totals'><div class='caps'>Est. spend</div>
+        <div class='v'>{H(fmt_money(totals.get('cost', 0.0)) if tot else '—')}</div>
+        <div class='d'>{H(tok_line)}{unm_line}{sec_line}</div></div></div>"""
+
+
+def _trace_keys(run_id: str, execs) -> set[str]:
+    """Execution keys that have a trace file on disk (a stat per execution)."""
+    out = set()
+    for e in execs:
+        key = e["idempotency_key"] if "idempotency_key" in dict(e) and e["idempotency_key"] else None
+        if not key:
+            continue
+        sdir = STAGE_DIR.get(e["stage"], e["stage"].split(".", 1)[0])
+        if (run_root(run_id) / sdir / factory.TRACE_DIR / factory.trace_filename(key)).is_file():
+            out.add(key)
+    return out
 
 
 @app.get("/run/{run_id}", response_class=HTMLResponse)
@@ -1056,66 +1384,47 @@ async def run_page(run_id: str, request: Request):
         run_id)
     pend = await p.fetch(
         "SELECT * FROM approvals WHERE run_id = $1 AND status='pending'", run_id)
+    approvals = await p.fetch(
+        "SELECT * FROM approvals WHERE run_id = $1 ORDER BY requested_at", run_id)
+    if not approvals and pend:
+        approvals = pend
 
-    by_dir: dict[str, list] = {}
-    for e in execs:
-        by_dir.setdefault(STAGE_DIR.get(e["stage"], e["stage"]), []).append(e)
-    curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
-
-    # totals
-    cost = tot = inp = cached = 0
-    unmetered = 0
-    for e in execs:
-        cost += est_cost_usd(e["input_tokens"], e["cached_input_tokens"],
-                             e["output_tokens"], e["model"])
-        tot += e["total_tokens"] or 0
-        inp += e["input_tokens"] or 0
-        cached += e["cached_input_tokens"] or 0
-        unmetered += 1 if e["total_tokens"] is None else 0
-
-    status_chip = {"running": ("Queued", ""), "executing": ("Running", "ok"),
-                   "waiting_gate": ("Waiting on a human", "gate"),
-                   "failed": ("Failed", "blocked"), "done": ("Shipped", "ok"),
-                   "cancelled": ("Cancelled", "")}.get(run["status"], (run["status"], ""))
-    verdict = report_verdict(report_text(run_id, curdir)) \
-        if run["status"] not in ("done", "cancelled") else None
-    v_chip = chip("report: blocked", "blocked") if verdict == "BLOCKED" else ""
-    # D15: the target is editable from here. When it is unset the warn chip IS the
-    # link — that turns "stage 2+ blocks" from a dead end into the fix for it.
-    if run.get("product_repo"):
-        landed = work_branch(run_id, run.get("product_working_branch") or "")
-        derived = not (run.get("product_working_branch") or "")
-        repo_bit = (
-            f"<code>{H(run['product_repo'])}</code> · base "
-            f"<code>{H(run['product_branch'] or 'default')}</code> · branch "
-            f"<code>{H(landed)}</code>{' (derived)' if derived else ''} "
-            f"<a href='/run/{H(run_id)}/repo'>change</a>")
-    else:
-        repo_bit = (f"<a href='/run/{H(run_id)}/repo'>"
-                    + chip("no product repo set — stage 2+ blocks · connect one", "warn")
-                    + "</a>")
-    tok_line = (f"{fmt_int(tot)} tok · {round(cached / inp * 100) if inp else 0}% cached"
-                if tot else "no ledger")
-    unm_line = f"<br>{unmetered} unmetered execution{'s' if unmetered != 1 else ''}" if unmetered else ""
-    body = [f"""<div class='runhead'><div>
-        <div class='caps'>Run · pipeline v{H(str(run['pipeline_version']))}</div>
-        <h1>{H(run_id)}</h1>
-        <div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>
-          {chip(*status_chip)}{v_chip}</div>
-        <div class='meta'>brief <code>{H(run['brief'])}</code><br>
-          started by <b>{H(run['created_by'])}</b> · {run['created_at']:%b %d %H:%M} UTC
-          · last activity {ago((now - run['updated_at']).total_seconds())} ago<br>
-          product repo: {repo_bit}<br>
-          <a href='/chat?agent=lantern&amp;run={H(run_id)}'
-             style='color:var(--dawn-3);text-decoration:underline;text-underline-offset:3px'>
-            💬 Ask Lantern about this run</a></div></div>
-      <div class='totals'><div class='caps'>Est. spend</div>
-        <div class='v'>{H(fmt_money(cost) if tot else '—')}</div>
-        <div class='d'>{H(tok_line)}{unm_line}</div></div></div>"""]
+    model = lanes.build_lanes(run, execs, approvals, now, traces=_trace_keys(run_id, execs))
+    tot = sum(e["total_tokens"] or 0 for e in execs)
+    inp = sum(e["input_tokens"] or 0 for e in execs)
+    cached = sum(e["cached_input_tokens"] or 0 for e in execs)
+    totals = {"cost": model["cost"], "tot": tot, "inp": inp, "cached": cached,
+              "unmetered": model["unmetered"], "seconds": model["seconds"]}
+    body = [run_header(run, run_id, now, totals, f"/run/{run_id}")]
 
     for a in pend:
         body.append(gate_card(a, run, now))
 
+    body.append(f"<h2 class='sect'>Swim lanes</h2><p class='sub'>One lane per stage execution, "
+                f"in the order they started; {model['executions']} execution"
+                f"{'s' if model['executions'] != 1 else ''}, {model['retries']} retr"
+                f"{'y' if model['retries'] == 1 else 'ies'}. Click a bar for what that execution "
+                f"did. {ui.keys_hint(('j/k', 'move'), ('Enter', 'open'), ('t', 'traceability'))}</p>")
+    body.append(lanes.render_lanes(model, run_id, GATE_SHORT, GATE_META, STAGE_META))
+
+    # Traceability, one line: the counts and a link to the matrix.
+    m = traceability.build_matrix(run_id, run_root(run_id))
+    if m["present"]["story"]:
+        c = m["counts"]
+        body.append(f"<h2 class='sect'>Traceability</h2><p class='sub'>{len(m['rows'])} acceptance "
+                    f"criteria — <b>{c['complete']}</b> complete · <b>{c['gap']}</b> gaps · "
+                    f"<b>{c['deferred']}</b> deferred · <b>{c['pending']}</b> pending. "
+                    f"<a href='/run/{H(run_id)}/trace' data-key-t style='color:var(--dawn-3);text-decoration:underline'>"
+                    f"open the matrix →</a></p>")
+
+    # Stage folders: the run-folder view (reports, artifacts, consults) per stage dir.
+    by_dir: dict[str, list] = {}
+    for e in execs:
+        by_dir.setdefault(STAGE_DIR.get(e["stage"], e["stage"]), []).append(e)
+    curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
+    body.append("<h2 class='sect'>Stage folders</h2><p class='sub'>What each stage left in "
+                "<code>workflow/runs/</code>: the report (its last Status line counts), "
+                "registered artifacts, and a consult with the role that owns the stage.</p>")
     for i, d in enumerate(BOARD_DIRS):
         name, actor, desc = STAGE_META.get(d, (d, "agent", ""))
         tries = sorted(by_dir.get(d, []), key=lambda e: e["started_at"], reverse=True)
@@ -1131,30 +1440,18 @@ async def run_page(run_id: str, request: Request):
         d_tot = sum(e["total_tokens"] or 0 for e in tries)
         right = ""
         if latest:
-            dur = ((latest["finished_at"] or now) - latest["started_at"]).total_seconds()
-            right = f"{ago(dur)}"
+            secs = sum(((t["finished_at"] or now) - t["started_at"]).total_seconds() for t in tries)
+            right = f"{ui.dur(secs)} · {len(tries)} execution{'s' if len(tries) != 1 else ''}"
             right += (f"<br>{fmt_int(d_tot)} tok · {H(fmt_money(d_cost))}" if d_tot
                       else "<br>unmetered")
-        phase = (f" · {latest['stage'].split('.', 1)[1]}"
-                 if latest and "." in latest["stage"] else "")
         head = (f"<div class='shead'><span class='nm'>{H(name)}</span>"
                 f"<span class='actor'>{'🤖 agent' if actor == 'agent' else '👤 human'}"
-                f" · {H(DIR_RUNNER.get(d, 'ec2'))}{H(phase)}</span>"
+                f" · {H(DIR_RUNNER.get(d, 'ec2'))}</span>"
                 f"{chip(*st)}{chip('current', 'gate') if cur else ''}"
                 f"<span class='right'>{right}</span></div>")
         bits = [head, f"<div class='sdesc'>{H(desc)}</div>"]
         if latest and latest["error"]:
             bits.append(f"<div class='err'>{H(latest['error'][:600])}</div>")
-        if len(tries) > 1 or any(t["status"] == "failed" for t in tries):
-            rows = "".join(
-                f"<div>attempt {t['attempt']} · "
-                f"<span class='{'ok' if t['status'] == 'succeeded' else 'bad' if t['status'] == 'failed' else ''}'>"
-                f"{H(t['status'])}</span> · {H(t['runner'])} · "
-                f"{ago(((t['finished_at'] or now) - t['started_at']).total_seconds())}"
-                + (f" · {H((t['error'] or '').splitlines()[0][:90])}" if t["error"] else "")
-                + "</div>"
-                for t in tries)
-            bits.append(f"<div class='tries'>{rows}</div>")
         text = report_text(run_id, d)
         if text:
             v = report_verdict(text)
@@ -1162,12 +1459,13 @@ async def run_page(run_id: str, request: Request):
             bits.append(f"<details class='report'><summary>report.md{H(v_note)}</summary>"
                         f"<div class='prose'>{render_markdown(text)}</div></details>")
         stage_arts = [a for a in arts if a["stage"] == d]
-        if stage_arts:
-            links = "".join(
-                f"<a href='{H(art_href(a['uri']))}' target='_blank'>"
-                f"{KIND_ICON.get(a['kind'], '')}{H(a['kind'])}</a>"
-                for a in stage_arts)
+        links = "".join(
+            f"<a href='{H(art_href(a['uri']))}' target='_blank'>"
+            f"{KIND_ICON.get(a['kind'], '')}{H(a['kind'])}</a>"
+            for a in stage_arts)
+        if links:
             bits.append(f"<div class='arts'>{links}</div>")
+        bits.append(media_links(run_id, d))
         role = DIR_ROLE.get(d)
         if role and tries:      # a stage that ran can be asked about (consult mode, D11)
             bits.append(f"<div class='arts'><a href='/chat?agent={H(role)}&amp;run={H(run_id)}'>"
@@ -1191,7 +1489,136 @@ async def run_page(run_id: str, request: Request):
                     f"<div>{''.join(rows)}</div>")
 
     return page(f"{run_id} — Lantern Mission Control",
-                f"<main class='page'>{''.join(body)}</main>", user, "/runs", now)
+                f"<main class='page'>{''.join(body)}</main>", user, "/runs", now, kind="run")
+
+
+@app.get("/run/{run_id}/exec/{exec_id}", response_class=HTMLResponse)
+async def exec_drawer(run_id: str, exec_id: int, request: Request, fragment: str = ""):
+    """The execution drawer — a fragment for the run page's aside, or a full page."""
+    user = current_user(request)
+    if not user:
+        if fragment:
+            raise HTTPException(401, "sign in required")
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
+    run = await p.fetchrow("SELECT * FROM runs WHERE id = $1", run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    e = await p.fetchrow(
+        "SELECT * FROM stage_executions WHERE id = $1 AND run_id = $2", exec_id, run_id)
+    if not e:
+        raise HTTPException(404, "execution not found")
+    key = e["idempotency_key"] or f"{run_id}:{e['stage']}:{e['attempt']}"
+    try:
+        memory = await p.fetch(
+            "SELECT entry, created_at FROM role_memory WHERE execution_key = $1 ORDER BY id", key)
+    except asyncpg.PostgresError:
+        memory = []
+    m = drawer.load_execution(run, e, run_root(run_id), memory, now)
+    html_frag = drawer.render_drawer(m, render_markdown, STAGE_META, fragment=bool(fragment))
+    if fragment:
+        return HTMLResponse(html_frag)
+    return page(f"{run_id} · {e['stage']} #{e['attempt']} — Lantern Mission Control",
+                f"<main class='page'><div style='max-width:900px'>{html_frag}</div></main>",
+                user, "/runs", now, kind="exec", auto_reload=False)
+
+
+@app.get("/run/{run_id}/trace", response_class=HTMLResponse)
+async def trace_matrix(run_id: str, request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
+    run = await p.fetchrow("SELECT * FROM runs WHERE id = $1", run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    execs = await p.fetch(
+        "SELECT * FROM stage_executions WHERE run_id = $1 ORDER BY started_at", run_id)
+    tot = sum(e["total_tokens"] or 0 for e in execs)
+    totals = {"cost": sum(lanes.exec_cost(e) for e in execs), "tot": tot,
+              "inp": sum(e["input_tokens"] or 0 for e in execs),
+              "cached": sum(e["cached_input_tokens"] or 0 for e in execs),
+              "unmetered": sum(1 for e in execs if e["total_tokens"] is None)}
+    m = traceability.build_matrix(run_id, run_root(run_id))
+    body = [run_header(run, run_id, now, totals, f"/run/{run_id}/trace"),
+            f"<h2 class='sect'>Traceability{(' — ' + H(m['story_title'])) if m['story_title'] else ''}</h2>"
+            "<p class='sub'>The contract at a glance: every acceptance criterion across the plan's "
+            "tasks, the coding commits, the QA charter and the validator's verdict. Rows are the "
+            "story; columns are what each stage did with it.</p>",
+            traceability.render_matrix(m)]
+    return page(f"{run_id} · traceability — Lantern Mission Control",
+                f"<main class='page'>{''.join(body)}</main>", user, "/runs", now, kind="trace")
+
+
+# ── the factory catalog ──────────────────────────────────────────────────────
+
+@app.get("/factory", response_class=HTMLResponse)
+async def factory_page(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
+    try:
+        repos = [r["product_repo"] for r in await p.fetch(
+            "SELECT DISTINCT product_repo FROM runs WHERE product_repo IS NOT NULL ORDER BY 1")]
+    except asyncpg.PostgresError:
+        repos = []
+    runs_dir = REPO / "workflow" / "runs"
+    plans = [(d.name, d / "02-pre-coding" / "plan.json")
+             for d in (sorted(runs_dir.iterdir()) if runs_dir.is_dir() else [])
+             if (d / "02-pre-coding" / "plan.json").is_file()]
+    c = await asyncio.to_thread(catalog.build_catalog, REPO, dict(os.environ), repos,
+                                STAGE_META, GATE_META, plans)
+    body = ("<div class='runhead' style='padding-bottom:12px'><div><div class='caps'>Factory</div>"
+            "<h1 style='font-family:var(--font-ui);font-weight:600'>What this factory is made of</h1>"
+            "<div class='meta'>Read-only, from files and the environment of the host serving this "
+            "page: roles, the fixed pipeline and its gates, the model stack, every product's "
+            "quality gate, the evals, and the builders a plan declares.</div></div></div>"
+            + catalog.render_catalog(c, render_markdown))
+    return page("Factory — Lantern Mission Control", f"<main class='page'>{body}</main>",
+                user, "/factory", now, kind="factory")
+
+
+# ── the loop primitives (D17), server-side ───────────────────────────────────
+# Retry re-queues a FAILED run at its current stage; rework sends a failed or waiting
+# run back to an earlier stage through pipeline.cmd_rework. Both record the web
+# user as the actor. Approvals are never touched here — that is the gate route.
+
+@app.post("/run/{run_id}/retry")
+async def retry_run(run_id: str, request: Request):
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401, "sign in required")     # fail closed, like gates
+    p = await get_pool()
+    async with p.acquire() as conn:
+        run = await conn.fetchrow("SELECT status, current_stage FROM runs WHERE id = $1", run_id)
+        if not run:
+            raise HTTPException(404, "run not found")
+        if run["status"] != "failed":
+            raise HTTPException(409, f"run is {run['status']} — retry applies to failed runs")
+        await conn.execute(
+            "UPDATE runs SET status = 'running', updated_at = now() WHERE id = $1", run_id)
+        await log_event(conn, run_id, f"human:{user}", "run_retried",
+                        {"stage": run["current_stage"], "channel": "web"})
+        await render_runboard(conn)
+    return RedirectResponse(f"/run/{run_id}", status_code=303)
+
+
+@app.post("/run/{run_id}/rework")
+async def rework_run(run_id: str, request: Request, to_stage: str = Form(""), note: str = Form("")):
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401, "sign in required")
+    if to_stage not in REWORK_TARGETS:
+        raise HTTPException(400, f"rework target must be one of {', '.join(REWORK_TARGETS)}")
+    try:
+        await cmd_rework(run_id, to_stage, user, note.strip())
+    except SystemExit as e:                  # cmd_rework refuses with sys.exit(<reason>)
+        raise HTTPException(409, str(e) or "rework refused") from None
+    return RedirectResponse(f"/run/{run_id}", status_code=303)
 
 
 # ── the codebase connection (D15) ────────────────────────────────────────────
@@ -1330,7 +1757,7 @@ async def repo_picker(run_id: str, request: Request, repo: str = "", error: str 
             error = error or f"could not read {sel}: {str(e)[:300]}"
     body = _repo_picker_body(dict(run), run_id, repos, sel, heads, error)
     return page(f"Codebase — {run_id}", f"<main class='page'>{body}</main>",
-                user, "/runs", now)
+                user, "/runs", now, kind="repo")
 
 
 def _branch_names(repo: str) -> list[str]:
@@ -1432,15 +1859,19 @@ async def decide(approval_id: int, decision: str, request: Request, note: str = 
         raise HTTPException(401, "sign in required")    # fail closed
     if decision not in ("approve", "reject"):
         raise HTTPException(400, "bad decision")
+    status = "approved" if decision == "approve" else "rejected"
     p = await get_pool()
     async with p.acquire() as conn:
         a = await conn.fetchrow(
             """UPDATE approvals SET status=$1, decided_at=now(), decided_by=$2, decision_note=$3
                WHERE id = $4 AND status = 'pending' RETURNING run_id, gate""",
-            "approved" if decision == "approve" else "rejected", user, note, approval_id)
+            status, user, note, approval_id)
         if not a:
             raise HTTPException(409, "approval no longer pending")
-        await log_event(conn, a["run_id"], f"human:{user}", f"gate_{decision}d",
+        # The event type matches the CLI's exactly (pipeline.record_gate_decision writes
+        # `gate_{status}`): one audit stream, whichever surface decided. Until v3 this
+        # route wrote `gate_rejectd` — a typo that split rejections into two names.
+        await log_event(conn, a["run_id"], f"human:{user}", f"gate_{status}",
                         {"gate": a["gate"], "note": note, "channel": "web"})
         if decision == "approve":
             stage = await conn.fetchval("SELECT current_stage FROM runs WHERE id = $1", a["run_id"])

@@ -273,7 +273,7 @@ class TestReviewCards(unittest.TestCase):
         self.assertNotIn("stale", html)
         self.assertIn("/gate/7/approve", html)
         self.assertIn("/gate/7/reject", html)
-        self.assertIn("href='/gates'", html)           # evidence link
+        self.assertIn("href='/gates#gate-7'", html)   # evidence deep-links to the card           # evidence link
 
     def test_exact_24h_card_is_not_stale(self):
         self.assertNotIn("STALE", self.card(DAY))
@@ -285,7 +285,7 @@ class TestReviewCards(unittest.TestCase):
         self.assertIn("4d", html)
         self.assertIn("/gate/7/approve", html)
         self.assertIn("/gate/7/reject", html)
-        self.assertIn("href='/gates'", html)
+        self.assertIn("href='/gates#gate-7'", html)   # evidence deep-links to the card
 
     def test_just_over_24h_is_stale(self):
         self.assertIn("STALE", self.card(DAY + 60))
