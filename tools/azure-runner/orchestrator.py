@@ -32,6 +32,7 @@ from agents import (Agent, ModelSettings, Runner, function_tool, set_default_ope
                     set_default_openai_client, set_tracing_disabled)
 from agents.mcp import MCPServerStdio, MCPServerStreamableHttp
 import factory  # D17: envelopes, write scope, quality gate, fix loop (pure — no SDK import)
+import review   # D19: review-round / fix-execution task blocks (pure — no SDK import)
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -100,6 +101,10 @@ ROLE_FOR_STAGE = {
     # debug lifecycle stages all map to the debug role:
     "01-triage": "debug", "02-repro": "debug", "03-root-cause": "debug",
     "04-fix": "debug", "05-regression": "qa-dev", "06-postmortem": "debug",
+    # D19: review loop after publish + merge babysitter — all three live in 03-coding/
+    "03-coding.review": "reviewer",   # the review bot, one execution per round
+    "03-coding.fix": "coding",        # works the review's must_fix list (or a red regate) on the same branch
+    "03-coding.regate": "coding",     # the babysitter's quality gate on the merged branch: code, no agent turn
 }
 
 # Roles that drive a browser get the Playwright MCP server.
@@ -1125,6 +1130,8 @@ def product_task_block(run_id: str, stage: str) -> str:
                        f"\nFull plan: `read_file('workflow/runs/{run_id}/02-pre-coding/"
                        "task-plan.md')`. Work the tasks IN ORDER; do not re-decide "
                        "architecture or schema.\n")
+    if stage in review.TASK_BLOCK_STAGES:   # D19: a review round or a fix execution
+        out.append(review.task_block(run_id, stage))
     out.append(f"\nThis stage's deliverable is "
                f"`workflow/runs/{run_id}/{stage_dir(stage)}/report.md` plus at least one "
                "`append_memory` call. Both are verified mechanically.\n")

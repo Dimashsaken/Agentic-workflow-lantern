@@ -37,6 +37,8 @@ LANTERN_EXECUTOR=inprocess          # 'docker' = one sandbox container per stage
 LANTERN_MAX_CONCURRENCY=            # default 3 under docker, 1 inprocess
 LANTERN_STAGE_TIMEOUT_MIN=45
 LANTERN_FIX_ROUNDS=3                # D17: quality-gate fix rounds before a red coding stage fails
+LANTERN_REVIEW_ROUNDS=2             # D19: review-bot rounds before a human sees code_complete (0 = off)
+LANTERN_BABYSIT_MINUTES=30          # D19: merge-babysitter cadence for approved, unmerged branches
 LANTERN_SANDBOX_CPUS=1.5
 LANTERN_SANDBOX_MEMORY=2500m
 LANTERN_SANDBOX_IMAGE=lantern-sandbox
@@ -98,6 +100,7 @@ python pipeline.py run workflow/briefs/x.md     # the one call
 python pipeline.py daemon                       # service loop (systemd on EC2)
 python pipeline.py status | approve | reject | retry
 python pipeline.py rework <run-id> --to 03-coding --by <you> --note "…"   # the loop as code (D17)
+python pipeline.py babysit [<run-id>] [--force]   # keep an approved branch mergeable until a human merges (D19)
 python pipeline.py runboard | render-memory     # re-render the Postgres-backed views
 python pipeline.py import-run <run-id>          # backfill a file-era run into the DB
 python pipeline.py set-product | set-coding-mode   # per-run product repo + how stage 3 runs (D14)
@@ -235,6 +238,37 @@ run auto mode on repos you trust until they land.
 - **Rework.** `pipeline.py rework <run-id> --to 02-pre-coding|03-coding|04-qa-dev` sends a
   failed or waiting run backwards: pending approvals expire, the decision is recorded in
   `gate-decisions.md`, the daemon re-runs from there with the same session memory.
+
+## Review rounds and the merge babysitter (D19)
+
+`review.py` adds the two things Boundary's factory does around a pull request, both
+tested by `test_review.py` (fakes + real git, no database, no network):
+
+- **Review loop.** Right after `publish_coding_branch` in auto mode, `after_publish` runs
+  the `reviewer` role as execution `03-coding.review`; its envelope
+  `03-coding/review/review.json` (+ `round-<n>.md`) is validated like every other
+  (`factory.ENVELOPES`: approve ⇔ no blocker/major, `must_fix` ⊇ every blocker/major).
+  `request_changes` → execution `03-coding.fix` (the `coding` role on the same writable
+  checkout; its task block is the `must_fix` list, injected from `review/state.json`) →
+  publish again (same branch, same PR) → next round, at most `LANTERN_REVIEW_ROUNDS`.
+  The `code_complete` payload gains `review: {verdict, rounds[], capped, last}`; the human
+  is pinged once, when the gate opens. Each round is posted as ONE GitHub PR review
+  (`COMMENT` event, inline where the line is in the diff) with the bot token; no token or
+  a non-GitHub remote = run folder only, never a failure. A review or fix execution that
+  fails does not fail the published branch: the gate opens with the error on record.
+- **Merge babysitter.** `pipeline.py babysit <run-id>` (or every eligible run with no
+  argument; the ec2 daemon ticks every `LANTERN_BABYSIT_MINUTES`) works on runs past an
+  approved `code_complete` whose branch is not merged: trial-merge the base into the branch
+  in a temp clone of the host mirror — a conflict writes `03-coding/merge-conflict.md`, logs
+  `merge_conflict`, posts to `LANTERN_ALARM_WEBHOOK` and stops until the base moves (or
+  `--force`); clean → the merge commit (bot identity, `Lantern-Agent: babysitter`) is pushed
+  to the branch, then the product's `lantern.toml` quality commands run as code
+  (`03-coding.regate`: a `stage_executions` row without a model — under the docker executor
+  inside the sandbox image with the mirror mounted read-only, otherwise in the temp clone;
+  record in `03-coding/babysit/regate-<n>.md`), and a red result spends ONE fix execution
+  (`03-coding.fix`, task = the failures) that publishes through the normal handoff path.
+  GitHub's PR `merged` flag (ancestry for other remotes) records `branch_merged` and ends
+  babysitting. It never merges into the base and never resolves a conflict.
 
 ## Direct consult — use one agent, no run (D11)
 

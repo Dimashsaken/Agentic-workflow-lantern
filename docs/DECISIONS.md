@@ -475,3 +475,70 @@ deployment (Terra) lands later. What shipped, and the shape chosen:
   108 s with a four-criterion story mapped 1:1 to the brief's must-haves, and
   `story_signoff` opened. A parser bug surfaced on the way (a blank `Working branch:`
   line swallowed the next line) and is fixed with `test_brief_parsing.py`.
+
+## D19 — 2026-09-08 — Review loop before the human, merge babysitter after: Boundary's rule for a pull request
+
+Session 2 of the five parallel factory sessions (`docs/plans/software-factory-parallel-
+prompts.md`), closing alignment-plan Phase E. The rule from the source: "do not notify a
+human until the review bot is happy, at most three rounds, then a human", and after the
+human approves, "keep the branch mergeable until a human merges". Humans still merge;
+agents never do. What was built and the shapes chosen:
+
+- **A `reviewer` role and a typed `review.json`, validated like every other envelope.**
+  `03-coding.review` runs the new role on the read-only checkout (already on the run's
+  branch, D15) against `story.json`, `plan.json`, the handoff's exact commit range,
+  `gate.md` and the coding report; it writes `03-coding/review/round-<n>.md` +
+  `review.json` and appends its section to the shared `report.md` (the D17 convention).
+  `factory._check_review` computes the verdict from the severities — `approve` ⇔ no
+  blocker/major — and requires `must_fix` ⊆ findings and ⊇ every blocker/major. The
+  second rule is not in the source; it is what makes the loop converge: a blocker the
+  reviewer does not put on the fix list would never be fixed and would eat every round.
+  Style is a finding only where it hides a bug; security smells are flagged `major` for
+  the `security` role, never decided.
+- **The loop runs as code in `review.py`, after publish, bounded by `LANTERN_REVIEW_ROUNDS`
+  (2).** A round is one review; `request_changes` runs a fix execution `03-coding.fix` —
+  the `coding` role, writable, on the same branch, its task block the `must_fix` list —
+  then publishes again (same branch, same PR) and reviews again. The LAST review is never
+  followed by an unreviewed fix, so what the human sees is a review of the code that is
+  actually on the branch. Approve, the cap, or a failing execution all end the loop and
+  the `code_complete` gate opens with `review: {verdict, rounds[], capped, last}` in its
+  payload (Mission Control, session 5, renders it). A failed review or fix execution does
+  NOT fail the stage: the branch is already published and valid, the failure is on record,
+  and re-running a whole coding stage over a broken review would be the wrong loop. Why
+  the state travels through `03-coding/review/state.json` rather than env vars: the
+  sandbox's prompt builder reads the mounted run dir, so the round number and the fix
+  list reach the container the same way every other handoff does (D4).
+- **One PR review per round, always a `COMMENT` event.** A bot `APPROVE` could satisfy a
+  "one approving review" branch rule and a bot `REQUEST_CHANGES` would have to be dismissed
+  by hand after a human overrules it at `code_complete`; the verdict is advisory, so it
+  goes in the text. Inline comments where the line is in the diff; a 422 falls back to
+  body-only; no token or a non-GitHub remote means the run folder is the only record —
+  never a failure (the D14 rule for PR-API refusals, applied again).
+- **The merge babysitter is code with one agent turn in reserve.** `pipeline.py babysit`
+  and the ec2 daemon's tick (`LANTERN_BABYSIT_MINUTES`, 30) take every auto run past an
+  approved `code_complete` whose branch is not merged: a trial merge of the base in a temp
+  clone of the host mirror; a conflict writes `03-coding/merge-conflict.md`, logs
+  `merge_conflict`, alarms, and waits for the base to move (`--force` retries); a clean
+  merge is committed with the bot identity and a `Lantern-Agent: babysitter` trailer,
+  pushed, and then the product's quality commands re-run as CODE — `03-coding.regate`, a
+  `stage_executions` row without a model (inside the sandbox image under the docker
+  executor, in the temp clone otherwise) — and only a red result spends a fix execution.
+  Why not an agent execution for the regate: the coding handoff's "did this execution do
+  work" rule (D15) fails an execution that commits nothing, and the coding gate's
+  write-scope check diffs from the execution's start, which after a merge includes
+  everything the base brought in. Both are right for coding and wrong for a regate, so
+  the regate does not go through them. GitHub's PR `merged` flag (squash merges leave no
+  ancestry) or git ancestry for other remotes records `branch_merged` and ends it.
+- **What it deliberately does not do.** It never merges into the base and never resolves
+  a conflict; a bot `APPROVE` is never posted; human-mode runs are not babysat (the branch
+  is a developer's); a failed fix after a red regate leaves the merge commit on the branch
+  — the PR then shows the truth — and alarms rather than reverting. The regate outside
+  the docker executor runs the product's commands on the host, the same containment
+  D14 already accepts for trusted repos until the egress allowlist lands.
+- **Shared-file hooks beyond the listed anchors, stated for the merge:** `STAGE_DIR` learns
+  the three sub-stages; the two `stage == "03-coding"` writability conditions in
+  `run_agent_stage` / `run_agent_stage_docker` also accept `review.WRITABLE_STAGES`
+  (session 1's builders need the same widening — keep whichever condition covers both);
+  `orchestrator.product_task_block` calls `review.task_block` for the review and fix
+  stages; `cmd_daemon` starts the babysit slot. Proof: `test_review.py` (31 tests — the
+  envelope, the loop with fakes, PR review bodies, the babysitter on real git).

@@ -85,3 +85,26 @@ This is "connect to the codebase and work" the way a developer's coding agent do
 
 Limits you should design around: no network credentials (pushes and publishes fail by
 design), Python 3.12 + Node 22 + git in the image, no browser in this stage.
+
+## 9. Fix executions — after the review bot, or after the merge babysitter (D19)
+
+A `03-coding.fix` execution is you again, on the same branch, with every earlier commit
+in place — and a different task. The end of your prompt says which:
+
+- **The review's must-fix list.** The `reviewer` requested changes; its findings are
+  in `03-coding/review/round-<n>.md` and the ones you must resolve are listed in your
+  task block (id, severity, file:line, summary, suggestion). Work that list, not the
+  plan: a test for every behaviour change, one commit per id (`<run-id>: fix R-1 — …`),
+  the gate commands run by you before you finish, then a `## Fix — round <n>` section
+  APPENDED to `03-coding/report.md` (own `- **Status:**` line) saying per id what
+  changed. Disagree with a finding? Say so under its id in the report and leave the
+  code; the next review round decides. The reviewer reviews again afterwards; the
+  human sees the branch only when it approves or the rounds run out.
+- **A red regate.** The merge babysitter merged the base into your branch after a human
+  approved `code_complete`, and the product's quality commands went red. Fix what the
+  merge broke and nothing else — no features, no plan tasks — commit, and append a
+  `## Regate fix` section. The failures (only) are in your task block.
+
+Same rules as §7 otherwise: never push, never touch another branch, never rewrite
+history; the handoff is a bundle of your commits since this execution started, so an
+execution that commits nothing fails honestly.

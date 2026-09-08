@@ -49,6 +49,7 @@ ENVELOPES = {
     "00-story.write": ("story", "story.json", "story.md"),
     "02-pre-coding": ("plan", "plan.json", "task-plan.md"),
     "05-post-coding.validate": ("validation", "validation.json", "validation.md"),
+    "03-coding.review": ("review", "review/review.json", "review/round-<n>.md"),  # D19: <n> = the round
 }
 
 
@@ -112,6 +113,8 @@ def check_envelope(run_id: str, stage: str, product_root: Path | None = None) ->
     sdir = stage_dir(stage)
     d = run_dir(run_id) / sdir
     problems: list[str] = []
+    if "<n>" in md_name:        # D19: a per-round twin, named by the envelope's round
+        md_name = md_name.replace("<n>", _peek_round(d / json_name))
     md = d / md_name
     if not md.is_file() or md.stat().st_size == 0:
         problems.append(f"{sdir}/{md_name} missing or empty — the human-readable twin of "
@@ -129,7 +132,8 @@ def check_envelope(run_id: str, stage: str, product_root: Path | None = None) ->
     if data.get("run_id") != run_id:
         problems.append(f"{sdir}/{json_name}: run_id must be '{run_id}'")
     checker = {"research": _check_research, "story": _check_story,
-               "plan": _check_plan, "validation": _check_validation}[kind]
+               "plan": _check_plan, "validation": _check_validation,
+               "review": _check_review}[kind]   # D19
     problems.extend(f"{sdir}/{json_name}: {p}" for p in checker(data, run_id, product_root))
     return problems
 
@@ -298,6 +302,79 @@ def _check_validation(data: dict, run_id: str, product_root: Path | None) -> lis
                  + (f"; fix-now: {len(fix_now)}" if fix_now else "")
                  + f" — fix on the branch, then `pipeline.py rework {run_id} --to 03-coding`"
                  " (auto mode) or `retry` once the developer has pushed the fix")
+    return p
+
+
+# ── review envelope (D19) ────────────────────────────────────────────────────
+# 03-coding/review/review.json — the review bot's verdict on the published branch,
+# one file per round beside it (round-<n>.md). Presence AND validity: the verdict is
+# COMPUTED from the findings (approve ⇔ no blocker/major), must_fix names real findings
+# and every blocker/major, so a fix execution that works the must_fix list can actually
+# turn the next round green instead of chasing a verdict the reviewer never explained.
+
+REVIEW_VERDICTS = ("approve", "request_changes")
+REVIEW_SEVERITIES = ("blocker", "major", "minor", "nit")
+REVIEW_MUST_FIX = ("blocker", "major")
+
+
+def _peek_round(path: Path) -> str:
+    """The `round` of a review envelope as text, or '?' — it names the markdown twin."""
+    data, _ = _load_json(path) if path.is_file() else (None, None)
+    r = (data or {}).get("round")
+    return str(r) if isinstance(r, int) and not isinstance(r, bool) else "?"
+
+
+def _check_review(data: dict, run_id: str, product_root: Path | None) -> list[str]:
+    p: list[str] = []
+    rnd = data.get("round")
+    if not isinstance(rnd, int) or isinstance(rnd, bool) or rnd < 1:
+        p.append("round must be a positive integer (1 = the first review of this branch)")
+    findings = data.get("findings")
+    if not isinstance(findings, list) or not all(isinstance(x, dict) for x in findings):
+        return p + ["findings must be a list of {id, severity, file, line, summary, suggestion} "
+                    "(an empty list is allowed — it means approve)"]
+    seen: set[str] = set()
+    serious: set[str] = set()
+    for i, x in enumerate(findings):
+        fid = x.get("id")
+        if not _nonempty_str(fid):
+            p.append(f"findings[{i}].id is required (R-1, R-2, …)")
+            continue
+        if fid in seen:
+            p.append(f"duplicate finding id {fid}")
+        seen.add(fid)
+        sev = x.get("severity")
+        if sev not in REVIEW_SEVERITIES:
+            p.append(f"{fid}: severity must be one of {'/'.join(REVIEW_SEVERITIES)}")
+        elif sev in REVIEW_MUST_FIX:
+            serious.add(fid)
+        if not _nonempty_str(x.get("summary")):
+            p.append(f"{fid}: summary is required — what is wrong, in one sentence")
+        if not isinstance(x.get("file", ""), str):
+            p.append(f"{fid}: file must be a path string ('' when it is not about one file)")
+        line = x.get("line")
+        if line is not None and (not isinstance(line, int) or isinstance(line, bool) or line < 1):
+            p.append(f"{fid}: line must be a positive integer or null")
+        if sev in REVIEW_MUST_FIX and not _nonempty_str(x.get("suggestion")):
+            p.append(f"{fid}: a {sev} needs a suggestion — the smallest change that resolves it")
+    must_fix = data.get("must_fix", [])
+    if not _str_list(must_fix):
+        p.append("must_fix must be a list of finding ids")
+        must_fix = []
+    unknown = [m for m in must_fix if m not in seen]
+    if unknown:
+        p.append(f"must_fix names findings that do not exist: {', '.join(unknown)}")
+    missing = sorted(serious - set(must_fix))
+    if missing:
+        p.append(f"every blocker/major is must-fix — add {', '.join(missing)} to must_fix, or "
+                 "lower the severity if it is really minor")
+    expected = "approve" if not serious else "request_changes"
+    verdict = data.get("verdict")
+    if verdict not in REVIEW_VERDICTS:
+        p.append(f"verdict must be one of {'/'.join(REVIEW_VERDICTS)}")
+    elif verdict != expected:
+        p.append(f"verdict says '{verdict}' but the findings say '{expected}' — approve ⇔ no "
+                 "blocker/major; the verdict is computed from the severities, not chosen")
     return p
 
 

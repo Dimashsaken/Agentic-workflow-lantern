@@ -94,11 +94,27 @@ sequence of reviewable commits mapped to the task plan.
   failures — go back to the agent for at most `LANTERN_FIX_ROUNDS` rounds (default 3);
   still red = the stage fails and nothing is handed off. `gate.json` + `gate.md` in the
   stage dir are the record; the handoff itself is refused if a commit leaves the scope.
+  **Then the review bot (D19):** once the host has published the branch, the `reviewer`
+  runs as `03-coding.review` — correctness, missing tests, plan conformance, security
+  smells (flagged for `security`, never decided) — and writes `03-coding/review/round-<n>.md`
+  + `review.json` (validated: approve ⇔ no blocker/major; `must_fix` ⊇ every blocker/major).
+  `request_changes` → a fix execution `03-coding.fix` (the `coding` role, writable, same
+  branch, the `must_fix` list as its task) → the branch is published again (same PR) →
+  the next round. At most `LANTERN_REVIEW_ROUNDS` reviews (default 2); approve, the cap,
+  or a failed execution all end the loop, and only then is a human pinged. Each round is
+  also posted as one PR review from the bot identity when the host has a token.
 **Out:** the branch; `report.md` listing commits, deviations from the plan, and known
 gaps for QA to probe; in auto mode also `handoff.json` + `branch.bundle` (the evidence)
-and `pr.md` (where it went).
+and `pr.md` (where it went); `review/` with every round's review (D19).
 **Gate:** code-complete declared — by the developer, or by a human reviewing the agent's
-PR; all tasks in the plan checked off or explicitly deferred.
+PR with the last review attached; all tasks in the plan checked off or explicitly deferred.
+**After approval — the merge babysitter (D19):** every `LANTERN_BABYSIT_MINUTES` (30) the
+daemon, or `pipeline.py babysit <run-id>`, keeps an approved, unmerged branch mergeable:
+a trial merge of the base on the host — a conflict stops with `03-coding/merge-conflict.md`,
+an event and an alarm; clean → the merge commit is pushed to the branch, the product's
+`lantern.toml` quality commands re-run as code (`03-coding.regate`, no agent turn), and
+only a red result spends one fix execution. A merged PR (GitHub API, or git ancestry for
+other remotes) records `branch_merged` and ends it. It never merges into the base.
 
 ## Stage 4 — QA in dev (`qa-dev` agent) → `04-qa-dev/`
 
@@ -161,7 +177,8 @@ verify PostHog events fire as specced.
   Mechanically (D17): `pipeline.py rework <run-id> --to 03-coding` sends a failed or
   waiting run back to the builder (same branch, same session memory, fresh attempt);
   inside the coding stage the quality gate feeds failures back for `LANTERN_FIX_ROUNDS`
-  rounds before a human sees it.
+  rounds before a human sees it, and the review bot's `must_fix` list goes to a fix
+  execution for `LANTERN_REVIEW_ROUNDS` rounds before a human sees `code_complete` (D19).
 - **Envelopes are the contract (D17).** Stages 0, 2 and 5b write a typed JSON envelope
   beside their markdown (`research.json`, `story.json`, `plan.json`, `validation.json`;
   exact shapes in each role's skills). The orchestrator validates presence AND validity,
