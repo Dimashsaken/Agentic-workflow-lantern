@@ -1,6 +1,6 @@
 {
   "plan": {
-    "generated_at": "2026-09-08T14:44:26+00:00",
+    "generated_at": "2026-09-08T14:52:01+00:00",
     "mode": "frozen",
     "n_inputs": 0,
     "role": "pre-coding",
@@ -13,7 +13,7 @@
     }
   },
   "repro": {
-    "generated_at": "2026-09-08T14:44:26+00:00",
+    "generated_at": "2026-09-08T14:52:01+00:00",
     "mode": "frozen",
     "n_inputs": 0,
     "role": null,
@@ -26,9 +26,9 @@
     }
   },
   "triage": {
-    "generated_at": "2026-09-08T14:44:26+00:00",
+    "generated_at": "2026-09-08T14:52:01+00:00",
     "mode": "frozen",
-    "n_inputs": 0,
+    "n_inputs": 1,
     "role": "debug",
     "suite": "triage",
     "summary": {
@@ -37,11 +37,11 @@
       "correct": 0,
       "misses": [],
       "n": 0,
-      "unscored": 0
+      "unscored": 1
     }
   },
   "validate": {
-    "generated_at": "2026-09-08T14:44:26+00:00",
+    "generated_at": "2026-09-08T14:52:01+00:00",
     "mode": "frozen",
     "n_inputs": 0,
     "role": "validator",

@@ -1,6 +1,6 @@
 # Factory evals — REPORT
 
-Generated 2026-09-08 14:44 UTC at commit `7302094893d1` from frozen data: 6 briefs, 1 stories, 0 plans, 2 validations, 0 repros.
+Generated 2026-09-08 14:52 UTC at commit `0c210604d08a` from frozen data: 7 briefs, 1 stories, 0 plans, 2 validations, 1 repros.
 
 <!-- lantern-evals-fingerprint: 4b2680ba3fe06fda2b4343b4a8572b31a6432c0c075e0b060f31b3f78bcd5a67 -->
 
@@ -12,7 +12,7 @@ Generated 2026-09-08 14:44 UTC at commit `7302094893d1` from frozen data: 6 brie
 |---|---|---|---|---|
 | plan | frozen | 0 | mean plan coverage | n/a |
 | validate | frozen | 0 | validator vs QA agreement | n/a |
-| triage | frozen | 0 | classification accuracy | n/a |
+| triage | frozen | 1 | classification accuracy | n/a |
 | repro | frozen | 0 | repro rate | n/a |
 
 ## plan — story criteria the plan accounts for (pre-coding)
@@ -25,7 +25,7 @@ No run with both a validation.json and a QA bugs.md yet.
 
 ## triage — predicted classification vs. the size of the real fix (debug)
 
-Truth from the coding handoff's diff: trivial ≤ 10 lines, small ≤ 60 (`LANTERN_SMALL_FIX_MAX_LINES`), else large; `needs-human` and runs without a fix are unscored. Scored: 0, correct: 0, unscored: 0.
+Truth from the coding handoff's diff: trivial ≤ 10 lines, small ≤ 60 (`LANTERN_SMALL_FIX_MAX_LINES`), else large; `needs-human` and runs without a fix are unscored. Scored: 0, correct: 0, unscored: 1.
 
 
 ## repro — bug runs whose repro stage reproduced the defect (debug)

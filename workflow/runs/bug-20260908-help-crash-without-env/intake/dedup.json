@@ -1,0 +1,8 @@
+{
+  "kind": "dedup",
+  "run_id": "bug-20260908-help-crash-without-env",
+  "threshold": 0.45,
+  "computed_at": "2026-09-08T14:48:24+00:00",
+  "candidates": [],
+  "note": "harness-computed text similarity over past intake reports, story titles and briefs; triage must list every candidate under duplicates or not_duplicates"
+}

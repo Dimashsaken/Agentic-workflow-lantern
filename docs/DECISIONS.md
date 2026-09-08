@@ -749,4 +749,14 @@ numbers (alignment plan §1.8, §4 Phase F). What shipped, and the shape chosen:
   against Azure (frozen scoring is tested; the live path with a fake); and Slack intake
   (`--source slack`) is the same function session 4's bridge will call.
 - **Proof (live, 2026-09-08, in-process on `gpt-5.6-sol`, product = this repo by local
-  path):** see the paragraph appended below after the run.
+  path at commit 0c21060):** `pipeline.py bug` on a real defect — `pipeline.py bug --help`
+  crashes with `KeyError: 'AZURE_OPENAI_ENDPOINT'` in a checkout without `.env`, because
+  `main()` builds the Azure client before argparse runs — created
+  `bug-20260908-help-crash-without-env` (no dedup candidates: nothing similar exists) and
+  one `step_run` executed `01-triage`: 170 s, 1.08 M input tokens (90 % cached), 8.6 k
+  output. `triage.json` validated on the first attempt — sev-3, `small`, not already fixed
+  (the agent cited the base sha and the 2026-08-25 commit that introduced the ordering,
+  and noted that `repos`/`evals` bypass it), a four-step repro plan the next stage can turn
+  into a subprocess test — and `triage.md` states in its second line that nothing from the
+  report was executed. Code then advanced the run to `02-repro` without a gate, and the
+  memory row landed. The defect itself is left for the lifecycle to fix.
