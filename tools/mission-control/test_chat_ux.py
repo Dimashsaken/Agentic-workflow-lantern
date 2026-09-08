@@ -199,19 +199,81 @@ class Transcript(unittest.TestCase):
         self.assertNotIn("class='copy'",
                          chat.agent_block(turn(final_text=None, status="stopped"), "LANTERN"))
 
-    def test_composer_carries_the_advisory_line_the_queue_and_the_pill(self):
-        html = chat.composer("sid", "lantern", {"lantern": {"name": "Lantern"}},
-                             0.32, 3, None, disabled=False)
-        self.assertIn("advisory, read-only", html)
-        self.assertIn("id='queued'", html)
-        self.assertIn("id='jumplatest'", html)
-        self.assertIn("$0.32 this chat", html)
+    def test_composer_says_what_this_agent_can_do_plus_the_queue_and_the_pill(self):
+        # The line has to be TRUE per agent, not merely present: since D21 the
+        # orchestrator can act (behind a typed confirmation) while every specialist
+        # is still D11's read-only consult. A single hard-coded line would lie about
+        # one of them.
+        lantern = chat.composer("sid", "lantern", {"lantern": {"name": "Lantern"}},
+                                0.32, 3, None, disabled=False)
+        self.assertIn("acts only on your typed confirmation", lantern)
+        self.assertNotIn("advisory, read-only", lantern)
+        specialist = chat.composer("sid", "security", {"security": {"name": "security"}},
+                                   0.0, 1, None, disabled=False)
+        self.assertIn("advisory, read-only", specialist)
+        for html in (lantern, specialist):
+            self.assertIn("id='queued'", html)
+            self.assertIn("id='jumplatest'", html)
+        self.assertIn("$0.32 this chat", lantern)
 
     def test_a_disabled_composer_still_says_why_it_is_there(self):
         html = chat.composer("sid", "lantern", {"lantern": {"name": "Lantern"}},
                              0.0, 0, None, disabled=True)
         self.assertIn("disabled", html)
         self.assertIn("nothing billed yet", html)
+
+
+class DecisionCards(unittest.TestCase):
+    """Confirmation cards (D21). The card is rendered by the SERVER from the trace, so
+    what the reader sees is what the tool actually asked for — not the model's prose
+    about it — and the phrase on screen is the one the server will match."""
+
+    CARD = {"kind": "card", "verb": "approve", "subject": "story_signoff on feat-1",
+            "phrase": "confirm approve story_signoff on feat-1",
+            "title": "Approve `story_signoff` on `feat-1`",
+            "lines": ["stage: 00-story.write", "recorded as: dimash"],
+            "run_id": "feat-1", "gate": "story_signoff"}
+
+    def test_the_card_shows_the_phrase_and_links_to_the_run(self):
+        html = chat.card_html(self.CARD)
+        self.assertIn("confirm approve story_signoff on feat-1", html)
+        self.assertIn("needs your confirmation", html)
+        self.assertIn("/run/feat-1", html)
+        self.assertIn("stage: 00-story.write", html)
+        self.assertIn("Nothing has happened yet", html)
+
+    def test_a_card_is_never_folded_away_behind_the_tool_count(self):
+        # Six-plus tool calls fold; a decision the reader has to make must not.
+        trace = tools(8) + [self.CARD]
+        html = chat.trace_html(trace)
+        self.assertIn("tool calls</summary>", html)          # the work folded
+        card = html.split("</details>")[-1]                  # what is left outside the fold
+        self.assertIn("confirm approve story_signoff on feat-1", card)
+
+    def test_an_executed_action_says_what_changed_and_who_it_was(self):
+        ok = chat.action_html({"kind": "action", "action": "approved `story_signoff`",
+                               "ok": True, "by": "dimash", "run_id": "feat-1",
+                               "detail": "advancing."})
+        self.assertIn("done", ok)
+        self.assertIn("dimash", ok)
+        self.assertIn("/run/feat-1", ok)
+        bad = chat.action_html({"kind": "action", "action": "approved `x`", "ok": False,
+                                "by": "dimash", "detail": "no pending approval"})
+        self.assertIn("not applied", bad)
+        self.assertIn("no pending approval", bad)
+
+    def test_card_text_is_escaped_like_every_other_surface(self):
+        html = chat.card_html({**self.CARD, "title": "<script>alert(1)</script>"})
+        self.assertNotIn("<script>", html)
+
+    def test_the_client_renders_cards_live_and_only_types_the_phrase(self):
+        js = chat.chat_js("sid", "LANTERN", None)
+        self.assertIn("case 'card':", js)
+        self.assertIn("case 'action':", js)
+        # "Type it for me" fills the composer; it must never send on the reader's behalf.
+        usephrase = js.split(".usephrase")[1].split("});")[0]
+        self.assertNotIn("submit()", usephrase)
+        self.assertNotIn("/send", usephrase)
 
 
 if __name__ == "__main__":

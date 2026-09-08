@@ -3,9 +3,11 @@
 Where developers *talk* to the pipeline. Mission Control's board answers "where is
 my feature?"; Chat answers everything you would otherwise walk over to a colleague
 for: "why did QA fail?", "what would security say about storing this token?",
-"what's blocked right now and what does it cost?". It is the web surface of
-**consult mode (D11)** — the same advisory, read-only line, with history, live
-activity, and a token ledger attached.
+"what's blocked right now and what does it cost?" — and, since D21, "start that
+run", "approve the story gate", "send it back to coding". It is the web surface
+of **consult mode (D11)**, with history, live activity and a token ledger
+attached, plus the factory's own controls behind a confirmation you type
+yourself.
 
 ## The two ways to talk (matches D11's two ways to use an agent)
 
@@ -24,11 +26,72 @@ activity, and a token ledger attached.
    role. Specialist calls are visible in the transcript and metered into the
    same turn ledger.
 
-Both stay **advisory and read-only** — no write tools, no gate access, no run
-mutation. That is D11's deliberate line, and the web changes nothing about it:
-work that changes the product or a run goes through a pipeline run, where
-verification and gates exist. The chat UI says so on every composer footer
-rather than letting anyone discover it by surprise.
+Specialists stay **advisory and read-only** — no write tools, no gate access, no
+run mutation. That is D11's line and it has not moved: work that changes the
+*product* goes through a pipeline run, where verification and gates exist.
+
+**Lantern itself can act (D21).** It has five write tools — `start_run`,
+`set_product`, `rework`, `retry`, `decide_gate` — because the alternative was
+worse than the risk: a chat that can see every blocked run and every waiting
+gate, and answers "now go and type this somewhere else", wastes the one thing
+the factory is short of, which is human attention. What makes it safe is not
+the model's judgement but the protocol below: the agent proposes, the human
+confirms in their own words, and the SERVER checks. The composer footer says
+which of the two you are talking to, on every screen.
+
+## The confirmation protocol (what makes write tools safe)
+
+`start_run`, `decide_gate` and `rework` are two-step, always:
+
+1. The agent calls the tool. The server validates the request against the
+   database — is this run real, is that gate actually pending — and returns a
+   **decision card** without doing anything: what would happen, to which run,
+   recorded as whom, and one exact phrase (`confirm approve story_signoff on
+   feat-20260908-status-facts`).
+2. The human types that phrase in their own message. On the next call the server
+   looks for it **in the text of the turn it is currently serving** and only
+   then calls `pipeline.py`.
+
+The mechanism is one closure: `run_chat_turn` builds the tools over *this turn's*
+`user_text`, so `confirmed()` has nothing else to read. Three consequences, and
+each is a test in `test_chat_tools.py`:
+
+- **The model cannot self-confirm.** It can print the phrase, quote it, or claim
+  it was said; none of that is the argument `confirmed()` sees.
+- **A confirmation does not carry over.** Approve one gate, and the next turn's
+  tools are built over the next message — an old phrase is simply gone.
+- **A phrase authorises exactly one act.** The verb and the subject are in it, so
+  an approval phrase cannot be spent on a rejection or on another run.
+
+`retry` and `set_product` act on the first call. They are stage-local and
+reversible — re-queueing a stopped run, or pointing a run at a repository the
+host then verifies — and a confirmation turn for them would train people to type
+the phrase without reading it, which is how confirmations stop working.
+
+**Identity, everywhere.** Every write is recorded as the signed-in web user:
+`pipeline.py`'s own `by` parameter, plus one `pipeline_action` event with actor
+`human:{user}` and `channel: web-chat`. No action is ever attributed to the
+agent, because no action is ever the agent's — this is the same audit log the
+CLI and the Slack bridge write into, and it must answer "who approved this" the
+same way for all three. What the chat still cannot do: merge anything, write
+files, or move a gate the pipeline says is not pending.
+
+**Cards are rendered by the server**, from the trace, never from the model's
+prose — so the card on screen is what the tool actually asked for, and the
+phrase shown is the one that will be matched. "Type it for me" fills the
+composer and stops; the confirmation still leaves as the reader's own message.
+Cards and executed actions are never folded behind the "N tool calls" summary.
+
+## Starting a run from an idea
+
+`start_run` takes either a `brief_path` or a rough `idea`. Given an idea it
+fills `workflow/briefs/<slug>.md` from `_TEMPLATE.md` (`brief_composer.py`),
+then validates the result with `parse_brief_product` and
+`parse_brief_coding_mode` — the *same* parsers `pipeline.py run` uses, so a
+brief that composes is a brief that runs. Missing product repo, missing coding
+mode, an idea too thin to make a title: those come back as a question to put to
+the developer, never as a default. A brief file written by a human is never
+overwritten; composed ones carry a marker comment and may be refreshed.
 
 ## What the references gave us (read 2026-08-31, not remembered)
 
@@ -150,9 +213,9 @@ this, so the audit log sees one stream of consults regardless of surface.
    phase + elapsed time + live tool count + Stop (Esc also stops, as in Claude
    Code; a stopped turn keeps the tokens it already burned), and a per-turn
    ledger line (model · tokens · cached % · est. $ · duration). Composer pinned
-   at bottom with the advisory-line status footer ("UI-UX CONSULT · ADVISORY,
-   READ-ONLY · $0.32 THIS CHAT" — or "NOTHING BILLED YET", which is the design
-   system's own example copy). Sessions scoped to a run (`run_id` set) carry
+   at bottom with the status footer, whose middle segment is true for THIS agent
+   ("UI-UX CONSULT · ADVISORY, READ-ONLY · $0.32 THIS CHAT"; "LANTERN CONSULT ·
+   ACTS ONLY ON YOUR TYPED CONFIRMATION · NOTHING BILLED YET"). Sessions scoped to a run (`run_id` set) carry
    the run chip and the agent is pointed at the run folder in its instructions.
 
    **The reading window is fixed** — the rule the rest of the screen obeys.
@@ -199,7 +262,9 @@ stage spend instead of hiding in the events log.
 - A turn that crashed before usage arrived shows **unmetered**, never $0.00.
 - Verdict-free rendering: the transcript shows what the agent actually did
   (tool lines from the trace), not a summary of it.
-- The advisory/read-only line is on-screen at the composer, always.
+- The line at the composer is on-screen always, and is true for the agent you
+  are talking to: read-only for a specialist, "acts only on your typed
+  confirmation" for Lantern. One hard-coded line would lie about one of them.
 - Browser roles (`ui-ux`, `qa-dev`, …) consult here **without** their Playwright
   MCP in v1 — the agent card says so ("browser tools: CLI consults only for
   now") instead of silently degrading. `pipeline.py ask -i` remains the path
@@ -210,9 +275,15 @@ stage spend instead of hiding in the events log.
 ## Roadmap
 
 - v1 (now): everything above. `tools/mission-control/test_chat_ux.py` pins the
-  reading contract (fixed window, hidden thinking, queue, fold) with stdlib
-  unittest — no database, no browser.
+  reading contract (fixed window, hidden thinking, queue, fold) and the decision
+  cards with stdlib unittest — no database, no browser;
+  `tools/azure-runner/test_chat_tools.py` pins the confirmation protocol.
 - v2: opt-in Playwright MCP for browser-role consults (`LANTERN_CHAT_BROWSER=1`);
   file/image drop into the composer; Slack surface reusing `chat_service`.
-- v3: "promote this consult" — draft a brief from a conversation and hand it to
-  `pipeline.py run` (the human still starts the run; the gate line does not move).
+- v2 shipped early, and larger than planned: the Slack surface reusing
+  `chat_service` is `tools/slack-bridge/` (D21), and "promote this consult" —
+  v3's item — is `start_run` with the brief composer behind it. The human still
+  starts the run and still decides every gate; what moved is where they can be
+  standing when they do it.
+- Still open: opt-in Playwright MCP for browser-role consults
+  (`LANTERN_CHAT_BROWSER=1`), and file/image drop into the composer.

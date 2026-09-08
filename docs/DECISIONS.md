@@ -475,3 +475,75 @@ deployment (Terra) lands later. What shipped, and the shape chosen:
   108 s with a four-criterion story mapped 1:1 to the brief's must-haves, and
   `story_signoff` opened. A parser bug surfaced on the way (a blank `Working branch:`
   line swallowed the next line) and is fixed with `test_brief_parsing.py`.
+
+## D21 — 2026-09-08 — Agentic access: the factory is operated from chat and Slack, behind a typed confirmation
+
+The two reference designs agree on the surface Lantern lacked: IndyDevDan's factory is
+*operated by an agent* and installs itself into a codebase (B 6:41, 24:53), and
+Boundary's dispatcher listens in Slack so the human's part of the loop happens where the
+human already is (C). Lantern could see everything and do nothing: the `lantern` chat
+knew which gate had been waiting eleven hours and could only answer "run this command
+somewhere else". This closes that, without moving the gate line.
+
+- **The orchestrator gets five write tools; specialists get none.** `start_run`,
+  `set_product`, `rework`, `retry`, `decide_gate` on the `lantern` agent only. D11's
+  read-only rule was never about the *surface* — it was about work sneaking past
+  verification. A gate decided in chat still writes the same `approvals` row, still
+  renders `gate-decisions.md`, still advances the same state machine. What would break
+  the rule is an agent deciding something, and that is what the confirmation prevents.
+- **The server verifies the confirmation, in the human's own most recent message.** The
+  tool renders a decision card and returns without acting; the human types
+  `confirm approve story_signoff on feat-20260908-status-facts`; the next call is checked
+  against the text of the turn being served. The mechanism is a closure —
+  `run_chat_turn` builds the tools over that turn's `user_text` — so the model has no
+  path to the argument `confirmed()` reads. It cannot confirm itself by printing the
+  phrase, cannot claim the human said it, and cannot spend an old turn's confirmation:
+  the tools are rebuilt every turn. A missing confirmation returns guidance, never an
+  action. Why a typed phrase rather than a button: the phrase names the verb AND the
+  subject, so it authorises exactly one act on exactly one run, and it survives being
+  relayed through any surface that can carry text — which is what made the same
+  protocol work unchanged when the Slack bridge arrived.
+- **`retry` and `set_product` act on the first call.** They are stage-local and
+  reversible. Putting a confirmation on everything is how confirmations stop being read.
+- **Reuse, not reimplementation.** `PipelineExecutor` calls `pipeline.py`'s own `cmd_*`
+  coroutines and turns their CLI manners (print, `sys.exit("why")`) into a result dict.
+  A second copy of the gate logic in the chat layer is exactly how two surfaces start
+  disagreeing about what an approval is. It also means a refusal *reads* like the CLI's.
+- **Identity is the point of the audit log.** Every action is recorded as the signed-in
+  human — `human:dimash` from the web, `human:slack:U…` from Slack, `channel` on the
+  event — and never as the agent. The chat and the bridge are surfaces for a person's
+  decision; an event that named the agent would make the log useless for the only
+  question anyone asks of it.
+- **Slack is a bridge, not a gateway.** ~600 lines of Bolt in Socket Mode with its own
+  systemd unit, reading the same Postgres: `@lantern <idea>` opens a run and the thread
+  that follows it (`runs.slack_thread_ts`), gates post there with Approve/Reject, clicks
+  ack inside Slack's 3 s and then write through `cmd_decide`. Two fail-closed allowlists
+  (approvers decide gates, operators start and loop runs; unset means nobody), channel
+  scoping, and `staging_deploy` / `prod_signoff` refused server-side — a Slack session is
+  easier to take over than the Tailscale-only web app, and those two gates put code in
+  front of users. The alternative considered and rejected in the symphony plan §3 stays
+  rejected: routing approvals through OpenClaw or Hermes would share a blast radius with
+  tools holding our PAT.
+- **`pipeline.py init-product <path>`** installs the factory into a product repo: detect
+  the stack from the files that exist, write `lantern.toml` with real commands, append a
+  marked block to the repo's `AGENTS.md`, print how to point a run at it. Two refusals
+  are the design: an existing `lantern.toml` is kept unless `--force` (it is the team's
+  gate, possibly tuned), and existing `AGENTS.md` text is appended to, never rewritten.
+  A repo with no recognised stack gets a `lantern.toml` whose test command fails loudly
+  rather than a green gate that proves nothing.
+- **The brief composer** turns a rough idea into `workflow/briefs/<slug>.md` from the
+  template and validates it with `parse_brief_product` / `parse_brief_coding_mode` — the
+  same parsers `pipeline.py run` uses, so a brief that composes is a brief that runs.
+  Missing repo or coding mode is a question put to the human, never a default. A brief
+  written by hand is never overwritten.
+- **Not done, on purpose:** `@lantern ask <role>` (consult mode inside a Slack thread) —
+  a consult reads the whole repo including unreleased security findings, and reading a
+  long agent answer in a thread is worth little against that; the Chat tab is where
+  consults belong. No gate is decidable by an agent under any flag. The Slack bridge is
+  dormant until a workspace app exists (a human, one-time action; the manifest is in
+  `tools/slack-bridge/README.md`), and nothing else depends on it.
+- **Proof:** `test_chat_tools.py` (30 checks — the confirmation matrix, identity on every
+  event, the composer's briefs parsing back), `tools/slack-bridge/test_bridge.py` (36 —
+  allowlists, ack-before-pipeline timing, gate cards, relay), `test_init_product.py`
+  (19 — a fixture repo per stack, both refusals, the written `lantern.toml` read back by
+  `factory.quality_config`), and the decision-card rendering in `test_chat_ux.py`.

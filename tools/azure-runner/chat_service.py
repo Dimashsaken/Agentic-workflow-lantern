@@ -3,7 +3,14 @@
 Web consult mode: the same advisory, read-only agents as `pipeline.py ask` (D11),
 plus an orchestrator agent ("lantern") that reads the pipeline database and can
 hand questions to specialists, plus user-created custom agents. Harness-agnostic
-on purpose: FastAPI imports it today, a Slack surface can import it tomorrow.
+on purpose: FastAPI imports it today, the Slack bridge imports it now.
+
+Since D21 the orchestrator also has HANDS: start_run, decide_gate, rework, retry,
+set_product — `pipeline.py`'s own commands behind `PipelineExecutor`, never a second
+implementation. Three of them act only after the human types a confirmation phrase
+that THIS server read in THIS turn's human message (`confirmed()`); the model can
+neither self-confirm nor reuse an older turn's confirmation. Everything is recorded
+against the signed-in human, so a chat approval is auditably a person's.
 
 What lives where:
   - conversation context (what the model re-reads) — the Agents SDK's own
@@ -18,10 +25,13 @@ What lives where:
 """
 
 import asyncio
+import contextlib
+import io
 import json
 import os
 import re
 import secrets
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -279,13 +289,14 @@ def run_scope_note(run_id: str) -> str:
         "happened. Answers should cite the files they used.")
 
 
-def build_lantern_instructions() -> str:
-    """The orchestrator chat: the system contract + the pipeline database in view."""
+def build_lantern_instructions(by: str = "the developer", can_write: bool = False) -> str:
+    """The orchestrator chat: the system contract + the pipeline database in view,
+    and — since D21 — the factory's controls, behind the confirmation protocol."""
     contract = (REPO / "AGENTS.md").read_text(encoding="utf-8")
     return (
         "# Lantern — orchestrator consult\n"
-        "You are **Lantern**, the voice of the agentic delivery pipeline, consulted "
-        "by a signed-in developer from Mission Control. You speak first-person, "
+        f"You are **Lantern**, the voice of the agentic delivery pipeline, consulted "
+        f"by {by}, a signed-in developer, from Mission Control. You speak first-person, "
         "concrete and calm; you admit uncertainty instead of faking data.\n\n"
         "You are the one chat that sees everything:\n"
         "- `pipeline_snapshot` — the live board: every open run, its stage, what it "
@@ -299,12 +310,13 @@ def build_lantern_instructions() -> str:
         "- `ask_specialist(role, question)` — hand ONE sharp question to a fleet "
         "role (their charter/skills/memory answer it) when the developer needs "
         "depth you don't have. Quote whose answer it is when you relay it.\n\n"
-        "The deliberate line (D11): consults are advisory and read-only. You cannot "
-        "start runs, decide gates, or change files — when asked to, say exactly "
-        "what the human should do instead (`pipeline.py run ...`, the Gates tab, a "
-        "brief in workflow/briefs/). Numbers you report come from the tools, never "
-        "from memory of them.\n\n"
-        "# The system you narrate (AGENTS.md, verbatim)\n\n" + contract)
+        "Numbers you report come from the tools, never from memory of them.\n"
+        + (WRITE_TOOL_PROTOCOL.replace("{by}", by) if can_write else
+           "You are advisory and read-only in this session: no write tools are "
+           "attached. When asked to start a run or decide a gate, say exactly what "
+           "the human should do instead (`pipeline.py run ...`, the Gates tab, a "
+           "brief in workflow/briefs/).\n")
+        + "\n# The system you narrate (AGENTS.md, verbatim)\n\n" + contract)
 
 
 async def build_custom_instructions(conn, row) -> str:
@@ -451,6 +463,407 @@ async def spend_summary(days: int = 7) -> str:
         await conn.close()
 
 
+# ── operating the factory from chat: the executor + the confirmation gate (D21) ──
+
+class PipelineExecutor:
+    """Runs `pipeline.py`'s own `cmd_*` coroutines and turns their CLI manners (print,
+    `sys.exit("why")`) into a result dict.
+
+    Reuse over reimplementation, deliberately: the approval row, `gate-decisions.md`,
+    the runboard render, the rework rules and every event those commands write stay in
+    exactly ONE place. A second copy of the gate logic living in the chat layer is how
+    the two surfaces would quietly start disagreeing about what an approval is.
+
+    Every call also logs one `pipeline_action` event whose actor is the HUMAN who asked
+    (`human:{by}` — `human:slack:U123` from the bridge), never the agent, so the audit
+    log answers "who did this" identically for CLI, web chat and Slack.
+    """
+
+    def __init__(self, channel: str = "web-chat"):
+        self.channel = channel
+
+    async def _log(self, run_id: str | None, by: str, action: str, data: dict) -> None:
+        conn = await asyncpg.connect(db_urls()[1])
+        try:
+            await conn.execute(
+                "INSERT INTO events (run_id, actor, type, data) VALUES ($1,$2,$3,$4)",
+                run_id, f"human:{by}", "pipeline_action",
+                json.dumps({"action": action, "channel": self.channel, **data}))
+        finally:
+            await conn.close()
+
+    async def _call(self, coro) -> dict:
+        """Capture what the command printed; a SystemExit is a refusal, not a crash."""
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                await coro
+        except SystemExit as e:                 # pipeline.py's way of saying no
+            out = buf.getvalue().strip()
+            print(out, file=sys.stderr) if out else None
+            return {"ok": False, "error": str(e) or "refused", "output": out}
+        except Exception as e:                  # noqa: BLE001 — surface, never swallow
+            out = buf.getvalue().strip()
+            print(out, file=sys.stderr) if out else None
+            return {"ok": False, "error": f"{type(e).__name__}: {e}", "output": out}
+        out = buf.getvalue().strip()
+        print(out) if out else None             # the journal still sees it
+        return {"ok": True, "output": out}
+
+    async def start_run(self, brief_path: str, run_id: str | None, by: str, repo: str,
+                        base_branch: str, coding_mode: str, working_branch: str = "") -> dict:
+        import pipeline
+        brief = Path(brief_path)
+        if run_id is None:
+            # Mirrors cmd_run's own default so the caller can name the run it just made;
+            # passing it explicitly means the id reported IS the id created.
+            run_id = f"feat-{datetime.now(timezone.utc):%Y%m%d}-{brief.stem.lstrip('_').lower()}"
+        res = await self._call(pipeline.cmd_run(
+            brief_path, run_id, by, False, repo, base_branch, coding_mode, working_branch))
+        res["run_id"] = run_id if res["ok"] else None
+        await self._log(res["run_id"], by, "start_run",
+                        {"brief": brief_path, "product_repo": repo, "base_branch": base_branch,
+                         "coding_mode": coding_mode, "ok": res["ok"],
+                         "error": res.get("error")})
+        return res
+
+    async def decide(self, run_id: str, gate: str, by: str, note: str, approved: bool) -> dict:
+        import pipeline
+        res = await self._call(pipeline.cmd_decide(run_id, gate, by, note, approved))
+        await self._log(run_id, by, "decide_gate",
+                        {"gate": gate, "decision": "approve" if approved else "reject",
+                         "note": note, "ok": res["ok"], "error": res.get("error")})
+        return res
+
+    async def rework(self, run_id: str, to_stage: str, by: str, note: str) -> dict:
+        import pipeline
+        res = await self._call(pipeline.cmd_rework(run_id, to_stage, by, note))
+        await self._log(run_id, by, "rework",
+                        {"to": to_stage, "note": note, "ok": res["ok"], "error": res.get("error")})
+        return res
+
+    async def retry(self, run_id: str, by: str) -> dict:
+        import pipeline
+        res = await self._call(pipeline.cmd_retry(run_id))
+        await self._log(run_id, by, "retry", {"ok": res["ok"], "error": res.get("error")})
+        return res
+
+    async def set_product(self, run_id: str, by: str, repo: str, branch: str,
+                          working: str = "") -> dict:
+        import pipeline
+        res = await self._call(pipeline.cmd_set_product(run_id, repo, branch, working))
+        await self._log(run_id, by, "set_product",
+                        {"repo": repo, "branch": branch, "working_branch": working,
+                         "ok": res["ok"], "error": res.get("error")})
+        return res
+
+
+CONFIRM_WORD = "confirm"
+
+
+def _norm(text: str) -> str:
+    """Confirmation matching forgives case, punctuation and spacing — and nothing else.
+    The WORDS have to be the human's own."""
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
+def confirmation_phrase(verb: str, subject: str) -> str:
+    return f"{CONFIRM_WORD} {verb} {subject}"
+
+
+def confirmed(user_text: str, phrase: str) -> bool:
+    """Is this exact phrase in the human's own most recent message?
+
+    The whole safety property of the write tools is in this one call, and in WHERE its
+    argument comes from: `run_chat_turn` closes the tools over the text of the turn
+    being served. The model can print the phrase, repeat it, or claim it was said — the
+    server never looks at anything the model produced, and a phrase from an earlier turn
+    is not the argument, so it cannot re-authorise a later action.
+    """
+    n = _norm(user_text)
+    return bool(n) and _norm(phrase) in n
+
+
+class WriteToolError(RuntimeError):
+    pass
+
+
+async def _run_row(run_id: str) -> dict | None:
+    conn = await asyncpg.connect(db_urls()[1])
+    try:
+        r = await conn.fetchrow(
+            """SELECT id, status, current_stage, coding_mode, product_repo, product_branch,
+                      product_working_branch, created_by FROM runs WHERE id = $1""", run_id)
+        return dict(r) if r else None
+    finally:
+        await conn.close()
+
+
+async def _pending_gate(run_id: str, gate: str) -> dict | None:
+    conn = await asyncpg.connect(db_urls()[1])
+    try:
+        r = await conn.fetchrow(
+            """SELECT id, gate, requested_at, payload FROM approvals
+               WHERE run_id = $1 AND gate = $2 AND status = 'pending'""", run_id, gate)
+        return dict(r) if r else None
+    finally:
+        await conn.close()
+
+
+def make_write_tools(publish, by: str, user_text: str, run_scope: str | None = None,
+                     executor: PipelineExecutor | None = None) -> list:
+    """The `lantern` chat agent's hands (D21).
+
+    Three of the five act on a run's fate — starting it, sending it backwards, deciding a
+    gate — and all three are two-step: the tool renders a decision card and returns
+    WITHOUT acting; the developer types the confirmation phrase in their own next
+    message; the server checks that message and only then calls the pipeline. The model
+    is never the authority for its own action, and `by` is the signed-in web user on
+    every event, so a chat approval is auditably a human's.
+    """
+    ex = executor or PipelineExecutor("web-chat")
+
+    def card(verb: str, subject: str, title: str, lines: list[str],
+             run_id: str | None = None, gate: str | None = None) -> str:
+        phrase = confirmation_phrase(verb, subject)
+        publish({"kind": "card", "verb": verb, "subject": subject, "phrase": phrase,
+                 "title": title, "lines": lines, "run_id": run_id, "gate": gate})
+        body = "\n".join(f"- {ln}" for ln in lines)
+        return (f"NOT DONE — this needs {by}'s explicit confirmation first.\n\n"
+                f"{title}\n{body}\n\n"
+                f"Show this to the developer and ask them to reply with exactly:\n\n"
+                f"    {phrase}\n\n"
+                "Then call this tool again with the same arguments. Do not write that "
+                "phrase yourself and do not claim it was said: the server reads the "
+                "developer's own most recent message and refuses anything else.")
+
+    def done(action: str, res: dict, run_id: str | None = None, gate: str | None = None) -> str:
+        publish({"kind": "action", "action": action, "ok": bool(res.get("ok")),
+                 "run_id": run_id, "gate": gate, "by": by,
+                 "detail": (res.get("output") or res.get("error") or "")[:OUT_SNIPPET]})
+        if res.get("ok"):
+            return (f"DONE — {action}, recorded as {by}.\n"
+                    + (res.get("output") or "").strip())
+        return (f"REFUSED by the pipeline — nothing changed.\n{res.get('error', '')}\n"
+                f"{(res.get('output') or '').strip()}").strip()
+
+    @function_tool
+    async def start_run(idea: str, brief_path: str, product_repo: str, base_branch: str,
+                        coding_mode: str, must_haves: str) -> str:
+        """Start a pipeline run — TWO STEPS, the developer confirms the second.
+
+        Give EITHER `idea` (a rough description in the developer's words; a brief is
+        composed from workflow/briefs/_TEMPLATE.md and written for them) OR `brief_path`
+        (an existing brief in the repo). `product_repo` is the repository the run
+        implements (URL or on-box path) and is required for coding mode `auto`;
+        `base_branch` defaults to main; `coding_mode` is `human` (the developer codes
+        stage 3 themselves) or `auto` (the coding agent implements the approved plan and
+        the host opens the pull request). `must_haves` is optional — one per line, they
+        seed the story's acceptance criteria.
+
+        Missing required fields come back as a question, not a guess. Pass "" for
+        anything you were not told.
+        """
+        import brief_composer
+        idea, brief_path = (idea or "").strip(), (brief_path or "").strip()
+        mode = (coding_mode or "").strip().lower()
+        base = (base_branch or "").strip() or "main"
+        repo = (product_repo or "").strip()
+        if bool(idea) == bool(brief_path):
+            return ("Give exactly one of `idea` (I compose the brief) or `brief_path` "
+                    "(a brief that already exists in workflow/briefs/).")
+        if brief_path:
+            p = (REPO / brief_path).resolve()
+            if not p.exists() or not p.is_file():
+                return f"no brief at `{brief_path}` — list workflow/briefs/ with list_dir first."
+            found = brief_composer.check_brief_file(p)
+            repo = repo or found["product_repo"]
+            base = found["base_branch"] if base == "main" else base
+            mode = mode or found["coding_mode"]
+            slug, title = p.stem, found["title"]
+            rel = brief_path.replace("\\", "/")
+            preview: list[str] = []
+        else:
+            title = " ".join(idea.split())[:80]
+            composed = brief_composer.compose(
+                {"title": title, "problem": idea, "must_haves": must_haves,
+                 "product_repo": repo, "base_branch": base, "coding_mode": mode or "human",
+                 "existing_context": "Started from the Chat tab; the researcher maps the "
+                                     "codebase before the story is written."},
+                by=by)
+            slug = composed["slug"]
+            rel = f"workflow/briefs/{slug}.md"
+            preview = composed["markdown"].splitlines()[:14]
+            if composed["missing"] or composed["problems"]:
+                asks = {"title": "a one-line title", "problem": "the problem in the user's words",
+                        "product_repo": "the product repo (URL or on-box path)",
+                        "coding_mode": "the coding mode — `human` or `auto`"}
+                want = [asks.get(m, m) for m in composed["missing"]] + composed["problems"]
+                return ("I cannot start this run yet. Ask the developer for:\n"
+                        + "\n".join(f"- {w}" for w in want)
+                        + "\nThen call start_run again with everything filled in.")
+        if not mode:
+            return ("Ask the developer which coding mode: `human` (they implement stage 3 "
+                    "in their own session) or `auto` (the coding agent implements the "
+                    "approved plan and the host opens the pull request).")
+        if not repo:
+            return ("Ask the developer which product repository this run implements — a "
+                    "GitHub URL or a path on this host. `pipeline.py repos` lists what the "
+                    "host can offer; a run without one blocks at stage 2.")
+        run_id = brief_composer.run_id_for(brief_composer.slugify(slug))
+        if not confirmed(user_text, confirmation_phrase("start", slug)):
+            lines = [f"run id: `{run_id}`", f"brief: `{rel}`", f"product repo: {repo}",
+                     f"base branch: {base}", f"coding mode: {mode}"]
+            if preview:
+                lines.append("brief preview:\n```\n" + "\n".join(preview) + "\n```")
+            if mode == "auto":
+                lines.append("auto mode: the coding agent will implement the approved plan "
+                             "and the host will open a pull request a human reviews.")
+            return card("start", slug, f"Start run `{run_id}`", lines, run_id=run_id)
+        if not brief_path:
+            try:
+                p = brief_composer.write_brief(slug, composed["markdown"])
+            except (FileExistsError, ValueError) as e:
+                return f"REFUSED — {e}"
+            rel = str(p.relative_to(REPO)).replace("\\", "/")
+        res = await ex.start_run(rel, run_id, by, repo, base, mode, "")
+        return done(f"started run `{run_id}` from `{rel}`", res, run_id=run_id)
+
+    @function_tool
+    async def decide_gate(run_id: str, gate: str, decision: str, note: str) -> str:
+        """Approve or reject a pending human gate AS THE SIGNED-IN DEVELOPER — two steps.
+
+        `decision` is `approve` or `reject`. Rejecting marks the run failed; rework then
+        retry is how it comes back. `note` is the reason, recorded in gate-decisions.md
+        and the approvals row — always ask for one on a rejection.
+
+        The first call shows the developer what they are about to decide and the phrase
+        they must type. Only their own typed confirmation lets the second call through.
+        Never approve a gate you were not asked to approve, and never invent the note.
+        """
+        run_id, gate = (run_id or "").strip(), (gate or "").strip()
+        decision = (decision or "").strip().lower()
+        if decision not in ("approve", "reject"):
+            return "decision must be `approve` or `reject`."
+        run = await _run_row(run_id)
+        if not run:
+            return f"no run `{run_id}` — call pipeline_snapshot to see what exists."
+        pending = await _pending_gate(run_id, gate)
+        if not pending:
+            return (f"`{run_id}` has no pending `{gate}` gate (status {run['status']}, stage "
+                    f"{run['current_stage']}). Nothing to decide.")
+        subject = f"{gate} on {run_id}"
+        if not confirmed(user_text, confirmation_phrase(decision, subject)):
+            waited = ""
+            if pending.get("requested_at"):
+                hrs = (datetime.now(timezone.utc) - pending["requested_at"]).total_seconds() / 3600
+                waited = f"waiting {hrs:.1f} h"
+            lines = [f"stage: {run['current_stage']}", f"decision: {decision.upper()}",
+                     f"note: {note.strip() or '(none — ask for one)'}",
+                     f"recorded as: {by}"]
+            if waited:
+                lines.append(waited)
+            lines.append("the artifact being decided is in `workflow/runs/"
+                         f"{run_id}/` — read it to them before they confirm")
+            if decision == "reject":
+                lines.append("rejecting marks the run FAILED; it returns through rework + retry")
+            return card(decision, subject, f"{decision.title()} `{gate}` on `{run_id}`",
+                        lines, run_id=run_id, gate=gate)
+        res = await ex.decide(run_id, gate, by, note.strip(), decision == "approve")
+        return done(f"{decision}d `{gate}` on `{run_id}`", res, run_id=run_id, gate=gate)
+
+    @function_tool
+    async def rework(run_id: str, to_stage: str, note: str) -> str:
+        """Send a failed or gate-waiting run BACK to an earlier stage (D17's loop) —
+        two steps, the developer confirms.
+
+        `to_stage` is one of 02-pre-coding, 03-coding, 04-qa-dev. Pending approvals on the
+        run expire; the same branch and session memory are kept and the stage runs again.
+        `note` says why — it lands in gate-decisions.md, so make it the actual finding.
+        """
+        import pipeline
+        run_id, to_stage = (run_id or "").strip(), (to_stage or "").strip()
+        if to_stage not in pipeline.REWORK_TARGETS:
+            return f"to_stage must be one of {', '.join(pipeline.REWORK_TARGETS)}."
+        run = await _run_row(run_id)
+        if not run:
+            return f"no run `{run_id}`."
+        subject = f"{run_id} to {to_stage}"
+        if not confirmed(user_text, confirmation_phrase("rework", subject)):
+            return card("rework", subject, f"Send `{run_id}` back to `{to_stage}`",
+                        [f"now at: {run['current_stage']} ({run['status']})",
+                         f"reason: {note.strip() or '(none — ask for one)'}",
+                         "pending approvals on this run expire",
+                         "the branch and the stage's session memory are kept",
+                         f"recorded as: {by}"], run_id=run_id)
+        res = await ex.rework(run_id, to_stage, by, note.strip())
+        return done(f"sent `{run_id}` back to `{to_stage}`", res, run_id=run_id)
+
+    @function_tool
+    async def retry(run_id: str) -> str:
+        """Re-queue a failed run at its CURRENT stage — a fresh attempt with the same
+        session memory. Use after the blocker a stage reported has been answered (for a
+        BLOCKED stage that usually means the brief or the run folder was edited).
+        Reversible and stage-local, so it runs on your say-so; say what you retried.
+        """
+        run_id = (run_id or "").strip()
+        run = await _run_row(run_id)
+        if not run:
+            return f"no run `{run_id}`."
+        if run["status"] not in ("failed", "waiting_gate", "running"):
+            return f"`{run_id}` is {run['status']} — retry applies to a run that stopped."
+        res = await ex.retry(run_id, by)
+        return done(f"re-queued `{run_id}` at `{run['current_stage']}`", res, run_id=run_id)
+
+    @function_tool
+    async def set_product(run_id: str, product_repo: str, base_branch: str,
+                          working_branch: str) -> str:
+        """Point an existing run at a product repository (D15). The host syncs its mirror
+        and proves the branches exist, so a wrong repo fails here rather than inside a
+        sandbox three stages later. `working_branch` is an EXISTING feat/*|fix/*|proto/*
+        branch to continue on — pass "" for a fresh branch derived from the run id.
+        """
+        run_id = (run_id or "").strip()
+        repo = (product_repo or "").strip()
+        if not repo:
+            return "which repository? A GitHub URL or a path on this host (`pipeline.py repos`)."
+        run = await _run_row(run_id)
+        if not run:
+            return f"no run `{run_id}`."
+        res = await ex.set_product(run_id, by, repo, (base_branch or "").strip() or "main",
+                                   (working_branch or "").strip())
+        return done(f"pointed `{run_id}` at {repo}", res, run_id=run_id)
+
+    return [start_run, decide_gate, rework, retry, set_product]
+
+
+WRITE_TOOL_PROTOCOL = """
+# Acting on the factory (D21)
+
+You have five tools that CHANGE things: `start_run`, `decide_gate`, `rework`, `retry`,
+`set_product`. Everything else you have is read-only. The rules are not negotiable and
+the server enforces them — arguing with them only wastes the developer's turn.
+
+- **Three of them need the developer's own confirmation: `start_run`, `decide_gate`,
+  `rework`.** Call the tool once: it returns a decision card and does nothing. Show the
+  card, ask for the exact phrase, and call the tool again after they have typed it. The
+  server checks THEIR most recent message for that phrase. You cannot confirm on their
+  behalf — writing the phrase yourself, or saying it was said, changes nothing and will
+  be visible in the transcript.
+- **Never decide a gate you were not asked to decide**, never turn "looks fine" into an
+  approval, and never invent the note. On a rejection, ask what the reason is first: it
+  is written into `gate-decisions.md`, where the next stage reads it.
+- **You act as {by}.** Every action is recorded with their identity, in the same audit
+  log as CLI and Slack actions. That is why the confirmation matters.
+- **What you still cannot do:** merge anything, edit files, or move a gate the pipeline
+  says is not pending. Those refusals come back as REFUSED — relay them plainly instead
+  of trying another route.
+- Before you act, read enough to be accurate: `pipeline_snapshot` for what is waiting,
+  `run_detail` for one run, `read_file` for the artifact the gate is actually about.
+  A gate card without the artifact in it is not a decision, it is a prompt to guess.
+"""
+
+
 # ── building the agent for one session ───────────────────────────────────────
 
 def make_custom_append_memory(slug: str, execution_key: str):
@@ -505,7 +918,8 @@ def make_ask_specialist(publish, usage_sink: list[dict]):
     return ask_specialist
 
 
-async def build_chat_agent(conn, session, publish, usage_sink: list[dict]) -> Agent:
+async def build_chat_agent(conn, session, publish, usage_sink: list[dict],
+                           by: str = "", user_text: str = "") -> Agent:
     slug = session["agent"]
     directory = await agent_directory(conn)
     info = directory.get(slug)
@@ -514,12 +928,17 @@ async def build_chat_agent(conn, session, publish, usage_sink: list[dict]) -> Ag
     scope = run_scope_note(session["run_id"]) if session["run_id"] else ""
 
     if info["kind"] == "orchestrator":
+        # D21: only the orchestrator gets hands, and only for a signed-in human whose
+        # own words this turn are what the confirmation gate reads. A turn with no
+        # identity (a replay, a future non-web caller) is read-only by construction.
+        actor = by or session["created_by"]
+        write = make_write_tools(publish, actor, user_text, session["run_id"]) if by else []
         return Agent(
             name="lantern", model=agent_model(info),
             model_settings=agent_model_settings(info),
-            instructions=build_lantern_instructions() + scope,
+            instructions=build_lantern_instructions(actor, can_write=bool(write)) + scope,
             tools=[read_file, list_dir, pipeline_snapshot, run_detail, spend_summary,
-                   make_ask_specialist(publish, usage_sink)])
+                   make_ask_specialist(publish, usage_sink)] + write)
     if info["kind"] == "fleet":
         await render_role_memory(conn, slug)       # same freshness rule as cmd_ask
         return Agent(
@@ -620,7 +1039,11 @@ async def run_chat_turn(pool: asyncpg.Pool, session, turn_id: int, user_text: st
     try:
         ensure_client()
         async with pool.acquire() as conn:
-            agent = await build_chat_agent(conn, session, publish, usage_sink)
+            # `user_text` is THIS turn's human message and nothing else — the write
+            # tools close over it, so a confirmation can only ever come from the
+            # message being served (D21).
+            agent = await build_chat_agent(conn, session, publish, usage_sink,
+                                           by=by, user_text=user_text)
         sdk_session = SQLAlchemySession(session["id"], engine=_sdk_engine(),
                                         create_tables=True)
         result = run_streamed(agent, input=user_text, session=sdk_session,

@@ -170,7 +170,7 @@ has. No new scope beyond what's listed.
   hourly `lantern-usage-check.timer` enabled and already firing clean. Dollar rates
   stay provisional until Azure invoice lines confirm them; token counts are exact.*
 
-### Phase 1 — Slack front-door, core only (~Sep 8 → Sep 15)
+### Phase 1 — Slack front-door, core only — **DONE 2026-09-08** (D21)
 
 One Bolt-Python app, **Socket Mode** (outbound WebSocket — no public endpoint on the
 Tailscale-only box), new systemd unit `lantern-slack` beside Mission Control, reading the
@@ -180,27 +180,34 @@ before Sep 8: a Socket-Mode custom app runs even on the free tier (with the ~10-
 and 90-day history limit — approvals live in Postgres, so history loss is cosmetic), but
 if an upgrade is wanted it's a real budget line, not $0.
 
-- [ ] **S1.1** Run threads: on run creation, post to `#lantern-runs`; every state change
-  (`events` table → poll or LISTEN/NOTIFY) is a threaded reply. `thread_ts` ↔ `run_id`
-  mapping in a new table. The convergent industry pattern (Codex/Devin/Cursor) verbatim.
-- [ ] **S1.2** Gate approvals: pending `approvals` post as Block Kit messages with
-  Approve/Reject buttons + payload summary (UX options render their PNGs). `block_actions`
-  → server-side allowlist mapping Slack user ID → approver name → write the row with
-  `channel='slack'`. Fail-closed unchanged: rejected = failed run, same as CLI/web.
-  **[v2]** Slack-session compromise = gate authority, so the two highest-stakes gates —
-  `staging_deploy` and `prod_signoff` — stay Mission-Control/CLI-only (Tailscale) until
-  the team explicitly decides otherwise; Slack carries `ux_signoff`, `plan_signoff`,
-  `code_complete`.
-- [ ] **S1.3** *(moved into Phase 2 window)* `@lantern ask <role>` → consult mode (D11),
-  reply in-thread; `@lantern run <brief-ref>` → start a run. **[v2]** The server-side
-  user allowlist applies to **every** `@lantern` verb, not just `run` — consult mode
-  reads the whole repo including unreleased security findings — and the app only
-  responds in named channels. Slack workspace membership is not an authorization
-  boundary.
+- [x] **S1.1 DONE (2026-09-08)** Run threads: `@lantern <idea>` opens the run and the
+  thread in one act, so `thread_ts` is the mention's own timestamp; state changes
+  (`events` table, polled every `LANTERN_SLACK_POLL_S`) are threaded replies. Mapping
+  stored as `runs.slack_channel`/`runs.slack_thread_ts` rather than a new table — it is
+  one nullable pair per run, and a join table would buy nothing. Poll, not
+  LISTEN/NOTIFY: ten seconds is invisible to a human waiting on a gate and a poll
+  survives a database restart without a reconnect dance.
+- [x] **S1.2 DONE (2026-09-08)** Gate approvals: pending `approvals` post into the run's
+  thread as Block Kit cards with Approve/Reject buttons and the payload summary;
+  `block_actions` acks first (Slack's 3 s) and then writes through `pipeline.cmd_decide`
+  with `by="slack:<user id>"`, only for `LANTERN_SLACK_APPROVERS` — anyone else gets an
+  ephemeral "not an approver" and the refusal is logged with their Slack identity.
+  `staging_deploy` and `prod_signoff` post without buttons and are refused server-side,
+  as v2 required; the Slack-carried set is `story_signoff`, `ux_signoff`, `plan_signoff`,
+  `code_complete` (`LANTERN_SLACK_GATES`). Proof: `tools/slack-bridge/test_bridge.py`.
+- [~] **S1.3 PARTLY DONE (2026-09-08)** `@lantern <idea>` and `@lantern run <brief>`
+  start runs, and `/lantern-rework` / `/lantern-retry` run D17's loops — all behind
+  `LANTERN_SLACK_OPERATORS`, in `LANTERN_SLACK_CHANNELS` only, exactly as v2 required.
+  `@lantern ask <role>` (consult mode in-thread) is deliberately NOT shipped: a consult
+  reads the whole repo including unreleased security findings, and the value of reading
+  a long agent answer inside a Slack thread is low next to that. The Chat tab is where
+  consults belong; revisit with evidence that the switch costs real time.
 - [ ] **S1.4** *(moved into Phase 2 window)* Weekly cost digest to Slack from the token
   ledger + AWS daily spend; the P0.4 daily alarm also posts here.
-- Acceptance: one run's gates (the three Slack-carried ones) decided from Slack, with
-  `events` showing `channel='slack'` actors.
+- Acceptance: one run's gates decided from Slack, with `events` showing `slack:` actors.
+  **Code complete and unit-proven 2026-09-08; the live acceptance needs a Slack workspace
+  app, which is a human, one-time action** (`tools/slack-bridge/README.md` carries the
+  manifest). Until it is installed the bridge is dormant — nothing else depends on it.
 
 ### Phase 2 — Wrap Codex in: autonomous coding stage (~Sep 15 → Oct 13, 4 weeks)
 

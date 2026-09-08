@@ -130,6 +130,12 @@ ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_working_branch text;
 -- implements the approved plan in a sandbox, the host pushes the branch as the bot
 -- identity and opens the PR that becomes the code_complete gate's payload.
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS coding_mode text NOT NULL DEFAULT 'human';
+-- D21: the Slack thread that follows this run. thread_ts is Slack's message timestamp
+-- and doubles as the correlation key — gate cards, state relays and button clicks all
+-- land in the one thread the run opened. NULL = the run was never started from Slack
+-- (nothing about a run depends on these; the bridge is a front-end, not the truth).
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS slack_channel text;
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS slack_thread_ts text;
 
 -- ── Chat surface (docs/CHAT.md, D13): web consults with history and a ledger ──
 -- chat_sessions.id doubles as the Agents SDK session key ('consult:{user}:{agent}:{name}'),
