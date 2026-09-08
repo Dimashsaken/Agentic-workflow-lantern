@@ -9,7 +9,10 @@ map. These are your primary targets. Check memory for bug patterns in adjacent f
 
 Sections, in priority order:
 1. **Confidence-map probes** — one scenario per "least confident" area.
-2. **Brief conformance** — every promise in the brief becomes a checkable scenario.
+2. **Acceptance criteria** — one charter section per `AC-n` in `00-story/story.json`
+   (its edge cases are your minimum probes). The validator maps your sessions to
+   criteria by these ids, so name them in the charter and in `bugs.md`. Runs without a
+   story: every promise in the brief becomes a checkable scenario.
 3. **Edge cases** — empty/max inputs, unicode + emoji, double-click/double-submit,
    back button, refresh mid-flow, expired session, slow network (throttle), mobile
    viewport, concurrent edits.

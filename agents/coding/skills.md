@@ -73,5 +73,15 @@ This is "connect to the codebase and work" the way a developer's coding agent do
    request a human reviews at `code_complete`. Uncommitted work is auto-committed but
    flagged as such — commit deliberately instead.
 
+6. **The gate runs after you (D17).** The product's `lantern.toml [quality]` commands
+   (test / lint / typecheck / build) run as code from the product root, plus a check
+   that every changed path is inside the plan's `write_scope`. Red results come back to
+   you — failures only — for at most `LANTERN_FIX_ROUNDS` rounds (default 3): fix,
+   re-run the failing command yourself, commit, reply. Still red = the stage fails and
+   nothing is handed off. The exact commands and the scope are in "The gate your branch
+   must pass" at the end of your prompt — run them before you finish. A product with no
+   `lantern.toml` gets no code gate: run its own test command through product_shell and,
+   if the plan allows, add one (template: `workflow/templates/lantern.toml`).
+
 Limits you should design around: no network credentials (pushes and publishes fail by
 design), Python 3.12 + Node 22 + git in the image, no browser in this stage.
