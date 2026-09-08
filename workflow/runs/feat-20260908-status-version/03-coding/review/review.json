@@ -1,0 +1,8 @@
+{
+  "kind": "review",
+  "run_id": "feat-20260908-status-version",
+  "round": 1,
+  "verdict": "approve",
+  "findings": [],
+  "must_fix": []
+}

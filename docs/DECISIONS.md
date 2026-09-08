@@ -535,6 +535,15 @@ agents never do. What was built and the shapes chosen:
   — the PR then shows the truth — and alarms rather than reverting. The regate outside
   the docker executor runs the product's commands on the host, the same containment
   D14 already accepts for trusted repos until the egress allowlist lands.
+- **One pre-existing bug, found by the first live review round and fixed at its site.**
+  `pipeline.product_checkout` re-clones a run's checkout per stage and cleaned the old one
+  with `shutil.rmtree(..., ignore_errors=True)`. git writes objects mode 0444, and on
+  Windows a read-only file cannot be unlinked, so the tree survived and the next clone died
+  with "already exists and is not an empty directory". It had never fired because the
+  coding stage was the last in-process stage of a run to touch the checkout; the review
+  execution runs right after it. The fix is `review.force_rmtree` (chmod-and-retry, `onexc`
+  on 3.12) called from that one line — stage 4+ of any auto run on an in-process runner was
+  broken the same way. Regression: `test_review.py::CheckoutReuse`.
 - **Shared-file hooks beyond the listed anchors, stated for the merge:** `STAGE_DIR` learns
   the three sub-stages; the two `stage == "03-coding"` writability conditions in
   `run_agent_stage` / `run_agent_stage_docker` also accept `review.WRITABLE_STAGES`

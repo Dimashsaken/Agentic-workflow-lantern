@@ -1353,7 +1353,11 @@ def product_checkout(repo: str, branch: str, run_id: str, work: str = "") -> Pat
     mirror = sync_product_mirror(repo)
     dest = PRODUCT_MIRROR_DIR / "checkouts" / run_id
     if dest.exists():
-        shutil.rmtree(dest, ignore_errors=True)
+        # D19: force_rmtree, not ignore_errors — git's objects are read-only, so on
+        # Windows the old call silently left the tree and the clone below failed with
+        # "already exists and is not an empty directory" for EVERY stage after the
+        # coding stage of the same run (found by the first live review round).
+        review.force_rmtree(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     r = _git("clone", "--no-hardlinks", "--branch", branch, str(mirror), str(dest))
     if r.returncode != 0:

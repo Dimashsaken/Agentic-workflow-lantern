@@ -1,0 +1,25 @@
+{
+  "kind": "story",
+  "run_id": "feat-20260908-status-version",
+  "title": "status --json reports the pipeline version",
+  "user_story": "As a script or dashboard reading `pipeline.py status --json`, I want the output to say which pipeline version produced it, so that I can tell old and new shapes apart.",
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "text": "The object printed by `pipeline.py status --json` has a top-level key `pipeline_version` whose value equals `PIPELINE_VERSION` in pipeline.py.",
+      "edge_cases": [
+        "no active runs and no pending gates: the key is still present"
+      ]
+    },
+    {
+      "id": "AC-2",
+      "text": "A unit test in tools/azure-runner/test_status_json.py fails when `pipeline_version` is missing or does not equal PIPELINE_VERSION.",
+      "edge_cases": []
+    }
+  ],
+  "non_goals": [
+    "changing the human-readable status table",
+    "database changes"
+  ],
+  "open_questions": []
+}

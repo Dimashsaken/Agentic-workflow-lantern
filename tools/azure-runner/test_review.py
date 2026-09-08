@@ -50,13 +50,7 @@ def git(*args, cwd: Path) -> str:
 
 
 def rmtree(path: Path) -> None:
-    def fix(fn, p, _e):
-        try:
-            os.chmod(p, stat.S_IWRITE)
-            fn(p)
-        except OSError:
-            pass
-    shutil.rmtree(path, onerror=fix)
+    r.force_rmtree(path)
 
 
 class FakeConn:
@@ -603,6 +597,59 @@ class Babysitter(Base):
 
 
 # ── knobs ────────────────────────────────────────────────────────────────────
+
+class CheckoutReuse(unittest.TestCase):
+    """The bug the first live review round found (2026-09-08): a run's product checkout is
+    re-cloned per stage, and after the CODING stage it holds git objects written 0444. The
+    old `shutil.rmtree(..., ignore_errors=True)` left them on Windows, so the next stage's
+    clone died with "already exists and is not an empty directory" — the review execution,
+    and equally stage 4+ of any auto run on an in-process runner. Tested here because the
+    review loop is what exposed it; the fix lives in pipeline.product_checkout."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="reuse-"))
+
+    def tearDown(self):
+        r.force_rmtree(self.tmp)
+
+    def test_force_rmtree_removes_read_only_files(self):
+        d = self.tmp / "tree" / "deep"
+        d.mkdir(parents=True)
+        ro = d / "object"
+        ro.write_text("x", encoding="utf-8")
+        os.chmod(ro, stat.S_IREAD)
+        shutil.rmtree(self.tmp / "tree", ignore_errors=True)          # what the old code did
+        if ro.exists():                                               # Windows: still there
+            r.force_rmtree(self.tmp / "tree")
+        self.assertFalse((self.tmp / "tree").exists())
+
+    def test_product_checkout_can_be_recreated_after_a_commit(self):
+        os.environ.setdefault("LANTERN_DATABASE_URL", "postgresql+asyncpg://lantern:none@localhost:5432/lantern")
+        import pipeline as p
+        seed = self.tmp / "seed"
+        seed.mkdir()
+        git("init", "-q", "-b", "main", cwd=seed)
+        git("config", "user.name", "t", cwd=seed)
+        git("config", "user.email", "t@example.invalid", cwd=seed)
+        (seed / "app.py").write_text("V = 1\n", encoding="utf-8")
+        git("add", "-A", cwd=seed)
+        git("commit", "-q", "-m", "seed", cwd=seed)
+        mirrors, run = self.tmp / "mirrors", "feat-20260908-reuse"
+        with mock.patch.object(p, "PRODUCT_MIRROR_DIR", mirrors):
+            co = p.product_checkout(str(seed), "main", run)
+            # the coding stage: a commit in the checkout writes read-only loose objects
+            git("config", "user.name", "bot", cwd=co)
+            git("config", "user.email", "bot@example.invalid", cwd=co)
+            git("checkout", "-q", "-b", "feat/20260908-reuse", cwd=co)
+            (co / "new.py").write_text("NEW = 2\n", encoding="utf-8")
+            git("add", "-A", cwd=co)
+            git("commit", "-q", "-m", "work", cwd=co)
+            self.assertTrue([f for f in (co / ".git" / "objects").rglob("*") if f.is_file()])
+            again = p.product_checkout(str(seed), "main", run)        # the next stage
+        self.assertEqual(again, co)
+        self.assertTrue((again / "app.py").is_file())
+        self.assertFalse((again / "new.py").exists())                 # a fresh tree, as designed
+
 
 class Knobs(unittest.TestCase):
     def test_rounds_and_cadence_env(self):

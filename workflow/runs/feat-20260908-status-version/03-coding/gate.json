@@ -1,0 +1,40 @@
+{
+  "kind": "quality_gate",
+  "run_id": "feat-20260908-status-version",
+  "stage": "03-coding",
+  "execution_key": "feat-20260908-status-version:03-coding:1",
+  "round": 0,
+  "source": "lantern.toml [quality]",
+  "configured": [
+    "test",
+    "lint"
+  ],
+  "passed": true,
+  "results": [
+    {
+      "name": "test",
+      "command": "$LANTERN_PYTHON tools/azure-runner/test_model_stack.py && $LANTERN_PYTHON tools/azure-runner/test_factory.py && $LANTERN_PYTHON tools/azure-runner/test_coding_stage.py && $LANTERN_PYTHON tools/azure-runner/test_review.py && $LANTERN_PYTHON -m unittest discover -q -s tools/azure-runner -p test_status_json.py && $LANTERN_PYTHON -m unittest discover -q -s tools/mission-control -p test_gate_latency.py",
+      "exit": 0,
+      "passed": true,
+      "seconds": 96.2,
+      "output_tail": "ix_subset (__main__.Envelope.test_ids_unique_and_must_fix_subset) ... ok\ntest_kind_and_run_id_still_checked (__main__.Envelope.test_kind_and_run_id_still_checked) ... ok\ntest_registered_and_valid_approve (__main__.Envelope.test_registered_and_valid_approve) ... ok\ntest_round_twin_must_exist (__main__.Envelope.test_round_twin_must_exist) ... ok\ntest_shape_rules (__main__.Envelope.test_shape_rules) ... ok\ntest_valid_request_changes (__main__.Envelope.test_valid_request_changes) ... ok\ntest_verdict_is_computed (__main__.Envelope.test_verdict_is_computed) ... ok\ntest_babysit_due_once_per_interval (__main__.Knobs.test_babysit_due_once_per_interval) ... ok\ntest_rounds_and_cadence_env (__main__.Knobs.test_rounds_and_cadence_env) ... ok\ntest_approve_on_round_two_means_one_fix (__main__.Loop.test_approve_on_round_two_means_one_fix) ... ok\ntest_failed_fix_keeps_the_review (__main__.Loop.test_failed_fix_keeps_the_review) ... [feat-20260908-review-proof] fix execution after round 1 FAILED \u00e2\u20ac\u201d the gate opens with the review: coding handoff failed: added no commits\nok\ntest_failed_review_execution_opens_the_gate_without_it (__main__.Loop.test_failed_review_execution_opens_the_gate_without_it) ... [feat-20260908-review-proof] review round 1 FAILED \u00e2\u20ac\u201d the gate opens without it: postconditions failed: review.json invalid\nok\ntest_never_approve_is_capped_with_the_last_review_attached (__main__.Loop.test_never_approve_is_capped_with_the_last_review_attached) ... ok\ntest_one_round_never_fixes_and_zero_skips (__main__.Loop.test_one_round_never_fixes_and_zero_skips) ... ok\ntest_pr_review_is_posted_per_round_when_a_pr_exists (__main__.Loop.test_pr_review_is_posted_per_round_when_a_pr_exists) ... ok\ntest_review_block_carries_round_context (__main__.Loop.test_review_block_carries_round_context) ... ok\ntest_wrong_round_in_review_json_is_an_error (__main__.Loop.test_wrong_round_in_review_json_is_an_error) ... [feat-20260908-review-proof] review round 1 FAILED \u00e2\u20ac\u201d the gate opens without it: 03-coding/review/review.json missing or not round 1 after the review execution\nok\ntest_422_falls_back_to_body_only (__main__.PullRequestReview.test_422_falls_back_to_body_only) ... ok\ntest_api_trouble_is_never_a_failure (__main__.PullRequestReview.test_api_trouble_is_never_a_failure) ... ok\ntest_no_token_means_run_folder_only (__main__.PullRequestReview.test_no_token_means_run_folder_only) ... ok\ntest_request_body_is_one_comment_review_with_inline_findings (__main__.PullRequestReview.test_request_body_is_one_comment_review_with_inline_findings) ... ok\ntest_stage_maps_and_the_task_block_hook (__main__.Wiring.test_stage_maps_and_the_task_block_hook) ... ok\n\n----------------------------------------------------------------------\nRan 31 tests in 35.942s\n\nOK\n----------------------------------------------------------------------\nRan 7 tests in 0.016s\n\nOK\ngate latency query failed: aggregate blew up\n----------------------------------------------------------------------\nRan 35 tests in 0.237s\n\nOK\n"
+    },
+    {
+      "name": "lint",
+      "command": "$LANTERN_PYTHON -m compileall -q tools/azure-runner tools/mission-control",
+      "exit": 0,
+      "passed": true,
+      "seconds": 0.3,
+      "output_tail": ""
+    },
+    {
+      "name": "write-scope",
+      "command": "changed paths \u2286 ['tools/azure-runner/pipeline.py', 'tools/azure-runner/test_status_json.py']",
+      "exit": 0,
+      "passed": true,
+      "seconds": 0.0,
+      "output_tail": "2 changed path(s), all in scope"
+    }
+  ],
+  "ran_at": "2026-09-08T14:56:30+00:00"
+}

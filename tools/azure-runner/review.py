@@ -484,14 +484,25 @@ def _is_ancestor(ancestor: str, descendant: str, cwd: Path) -> bool:
     return _git("merge-base", "--is-ancestor", ancestor, descendant, cwd=cwd).returncode == 0
 
 
-def _rmtree(path: Path) -> None:
+def force_rmtree(path: Path) -> None:
+    """rmtree that survives git's read-only objects.
+
+    git writes loose objects and packs mode 0444, and on Windows a read-only file cannot
+    be unlinked — so `shutil.rmtree(..., ignore_errors=True)` leaves the tree behind and
+    the next `git clone` into that path dies with "already exists and is not an empty
+    directory". Found live on 2026-09-08: the review execution is the first stage that
+    reuses a run's checkout right after the coding stage committed into it.
+    """
     def _chmod_retry(fn, p, _exc):
         try:
             os.chmod(p, stat.S_IWRITE)
             fn(p)
         except OSError:
             pass
-    shutil.rmtree(path, onerror=_chmod_retry)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_chmod_retry)
+    else:
+        shutil.rmtree(path, onerror=_chmod_retry)
 
 
 def _scrub(text: str, authed: str, plain: str) -> str:
@@ -513,14 +524,14 @@ def trial_merge(mirror: Path, base: str, branch: str, run_id: str,
     clone = Path(tempfile.mkdtemp(prefix=f"lantern-babysit-{run_id[:24]}-"))
     r = _git("clone", "--quiet", "--no-hardlinks", "--branch", branch, str(mirror), str(clone))
     if r.returncode != 0:
-        _rmtree(clone)
+        force_rmtree(clone)
         raise RuntimeError(f"could not clone the mirror on {branch}: {r.stderr.strip()[-300:]}")
     _git("config", "user.name", identity[0], cwd=clone)
     _git("config", "user.email", identity[1], cwd=clone)
     _git("config", "commit.gpgsign", "false", cwd=clone)
     base_sha = _sha(f"refs/remotes/origin/{base}", clone)
     if not base_sha:
-        _rmtree(clone)
+        force_rmtree(clone)
         raise RuntimeError(f"base branch {base} is not in the mirror")
     msg = (f"{run_id}: merge {base} ({base_sha[:12]}) into {branch}\n\n"
            "Kept mergeable by the Lantern merge babysitter (D19) after a human approved "
@@ -797,7 +808,7 @@ async def babysit_run(conn, run_id: str, runner: str = "ec2", deps: Deps | None 
         print(f"[{run_id}] {branch} updated with {base} and fixed — head {str(fresh.get('head_sha', ''))[:12]}")
         return {"outcome": "fixed", **data}
     finally:
-        _rmtree(clone)
+        force_rmtree(clone)
 
 
 def _comment_updated(deps: Deps, repo: str, handoff: dict, run_id: str, data: dict) -> None:
