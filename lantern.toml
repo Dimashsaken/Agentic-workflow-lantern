@@ -1,0 +1,10 @@
+# Lantern's own quality gate — used when the product under a run IS this repository
+# (dogfood runs). The coding stage's gate (tools/azure-runner/factory.py) runs these
+# from the repo root with $LANTERN_PYTHON = the interpreter running the harness, which
+# carries this repo's dependencies both in the sandbox (/opt/lantern/venv) and on a
+# laptop (tools/azure-runner/.venv). Only failures go back to the coding agent.
+
+[quality]
+test = "$LANTERN_PYTHON tools/azure-runner/test_model_stack.py && $LANTERN_PYTHON tools/azure-runner/test_factory.py && $LANTERN_PYTHON tools/azure-runner/test_coding_stage.py && $LANTERN_PYTHON -m unittest discover -q -s tools/azure-runner -p test_status_json.py && $LANTERN_PYTHON -m unittest discover -q -s tools/mission-control -p test_gate_latency.py"
+lint = "$LANTERN_PYTHON -m compileall -q tools/azure-runner tools/mission-control"
+timeout_s = 900

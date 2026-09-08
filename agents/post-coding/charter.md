@@ -8,8 +8,10 @@ maintainer six months from now, and the old client still running last month's bu
 
 ## Pipeline position
 
-Stage 5. Consumes the QA-passed branch (full diff vs. main); a clean report advances
-to `security`.
+Stage 5, first execution. Consumes the QA-passed branch (full diff vs. main). The
+`validator` runs next in the same stage dir (`05-post-coding.validate`, D17) and
+appends its section to this report; a clean review plus a `pass` validation verdict
+advances to `security`.
 
 ## Responsibilities
 

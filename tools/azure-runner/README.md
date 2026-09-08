@@ -16,9 +16,17 @@ AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
 AZURE_OPENAI_API_KEY=<from SSM>
 AZURE_OPENAI_API_VERSION=<current GA version>
 
-# Deployment routing — set to whichever of the org's deployments fits each slot:
-LANTERN_MODEL_REASONING=sol    # pre-coding, post-coding, security, debug, ui-ux design
-LANTERN_MODEL_FAST=terra       # QA charter execution, batch checks, ui-ux divergence
+# Model stack (D16) — three tiers, each an Azure deployment name. Only REASONING is
+# required: CODING falls back to FAST, FAST to REASONING.
+LANTERN_MODEL_REASONING=gpt-5.6-terra   # research, scoping, planning, review, security, debug, ui-ux design
+LANTERN_MODEL_CODING=gpt-5.6-luna       # stage-3 auto mode: the builder executing an approved plan
+LANTERN_MODEL_FAST=gpt-5.6-luna         # volume execution: QA charter runs, ui-ux divergence
+# Reasoning effort per tier (minimal|low|medium|high|xhigh, or 'default' to send none).
+# Defaults are token-max: reasoning=high, coding=high, fast=medium.
+LANTERN_EFFORT_REASONING=high
+LANTERN_EFFORT_CODING=high
+LANTERN_EFFORT_FAST=medium
+LANTERN_EFFORT_CHAT=            # optional override for interactive consults (Chat tab, `ask`)
 
 # Runner affinity (docs/plans/ui-ux-agent-paper.md):
 LANTERN_RUNNER=ec2                               # 'workstation' on the design machine
@@ -28,6 +36,7 @@ LANTERN_PAPER_MCP_URL=http://127.0.0.1:29979/mcp # Paper Desktop's local MCP end
 LANTERN_EXECUTOR=inprocess          # 'docker' = one sandbox container per stage
 LANTERN_MAX_CONCURRENCY=            # default 3 under docker, 1 inprocess
 LANTERN_STAGE_TIMEOUT_MIN=45
+LANTERN_FIX_ROUNDS=3                # D17: quality-gate fix rounds before a red coding stage fails
 LANTERN_SANDBOX_CPUS=1.5
 LANTERN_SANDBOX_MEMORY=2500m
 LANTERN_SANDBOX_IMAGE=lantern-sandbox
@@ -60,9 +69,20 @@ LANTERN_POOL_SPENT_OFFSET_USD=0     # est. credits burned before the ledger exis
 LANTERN_ALARM_WEBHOOK=              # Slack-compatible webhook; unset = journal only
 ```
 
-Deployment names (`sol`, `terra`, …) are org-internal Azure deployment labels — the
-runner treats them as opaque strings. If one is clearly the stronger model, it goes in
-`REASONING`; measure and swap freely, it's one env var.
+### Model stack
+
+Deployment names (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, …) are org-internal
+Azure deployment labels — the runner treats them as opaque strings and reasons about
+three **tiers** (`tier_for()` in `orchestrator.py` is the only place routing policy
+lives): `reasoning` for judgement-heavy stages, `coding` for the stage-3 builder,
+`fast` for volume execution. The intended split is the strong deployment for research,
+scoping and planning and a cheap one for coding — the planner/builder pattern of the
+software-factory reference designs (`docs/plans/software-factory-alignment.md`).
+**As of 2026-09-08 the resource has ONE deployment (`gpt-5.6-sol`)**; the tiers all
+resolve to it until `gpt-5.6-terra` / `gpt-5.6-luna` are created in the Azure portal —
+`smoke_test.py` probes whatever the three vars name. A cheap coding tier is only safe
+once the deterministic build gates of that plan's Phase B exist; until then point
+`LANTERN_MODEL_CODING` at the strong deployment.
 
 ## The pipeline runner (the "one call")
 
@@ -77,6 +97,7 @@ python pipeline.py init-db                      # once
 python pipeline.py run workflow/briefs/x.md     # the one call
 python pipeline.py daemon                       # service loop (systemd on EC2)
 python pipeline.py status | approve | reject | retry
+python pipeline.py rework <run-id> --to 03-coding --by <you> --note "…"   # the loop as code (D17)
 python pipeline.py runboard | render-memory     # re-render the Postgres-backed views
 python pipeline.py import-run <run-id>          # backfill a file-era run into the DB
 python pipeline.py set-product | set-coding-mode   # per-run product repo + how stage 3 runs (D14)
@@ -183,6 +204,37 @@ Python 3.12, Node 22 and git; other toolchains need an image change). Knobs:
 `test_coding_stage.py` (no database). Still open, stated plainly: sandbox egress is not
 yet allowlisted (plan item C2.5) and the sandbox DB role is not yet restricted (C2.0) —
 run auto mode on repos you trust until they land.
+
+## The gate, the envelopes and the loops (D17)
+
+`factory.py` holds the software-factory mechanics — pure functions, no SDK, tested by
+`test_factory.py`:
+
+- **Quality gate.** A product repo declares its checks in `lantern.toml`:
+
+  ```toml
+  [quality]
+  test = "npm test -- --runInBand"
+  lint = "npm run lint"
+  typecheck = "npx tsc --noEmit"
+  timeout_s = 900
+  ```
+
+  After the coding agent's turn (auto mode) the commands run from the product root
+  through bash, plus a **write-scope** check against `02-pre-coding/plan.json`. The
+  result is written to `03-coding/gate.json` + `gate.md`; failures (only) go back to the
+  agent for `LANTERN_FIX_ROUNDS` rounds; still red = the stage fails, and the handoff is
+  refused if a commit leaves the scope. `$LANTERN_PYTHON` in a command is the harness
+  interpreter — this repo's own `lantern.toml` uses it to run its test suites when the
+  product under a run is Lantern itself.
+- **Envelopes.** `00-story/research.json`, `00-story/story.json`,
+  `02-pre-coding/plan.json`, `05-post-coding/validation.json` are validated as
+  postconditions (shapes in the role skills; `factory.ENVELOPES`). A plan must map every
+  story criterion to a task or defer it with a reason; a validation must give every
+  criterion exactly one evidenced verdict and a verdict that matches the statuses.
+- **Rework.** `pipeline.py rework <run-id> --to 02-pre-coding|03-coding|04-qa-dev` sends a
+  failed or waiting run backwards: pending approvals expire, the decision is recorded in
+  `gate-decisions.md`, the daemon re-runs from there with the same session memory.
 
 ## Direct consult — use one agent, no run (D11)
 

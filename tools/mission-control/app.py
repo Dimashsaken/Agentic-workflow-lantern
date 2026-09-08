@@ -75,15 +75,17 @@ SESSION_TTL = 7 * 24 * 3600
 EC2_SLOTS = 2            # daemon concurrency cap (docs/ORCHESTRATION.md, D10)
 
 STAGE_META = {
+    "00-story":       ("0 · Research & story",     "agent",  "A read-only researcher maps the codebase, then the story writer turns the brief into numbered acceptance criteria you approve."),
     "01-ui-ux":       ("1 · UI/UX design",         "agent",  "Explores 2–3 flow options, builds a prototype, records a walkthrough video."),
     "02-pre-coding":  ("2 · Planning",              "agent",  "Blast-radius analysis, schema plan, ordered task plan."),
     "03-coding":      ("3 · Coding",                "human",  "The plan is implemented — by the assigned developer in their own session, or in auto mode by the coding agent, which ends in a pull request."),
     "04-qa-dev":      ("4 · QA in dev",             "agent",  "Executes a test charter against the dev build — every session on video."),
-    "05-post-coding": ("5 · Code review",           "agent",  "Cleanliness, hidden tech debt, backward compatibility."),
+    "05-post-coding": ("5 · Review & validation",   "agent",  "Cleanliness, hidden tech debt, backward compatibility — then the validator gives every acceptance criterion a verdict with evidence."),
     "06-security":    ("6 · Security & deploy risk","agent",  "Vulnerabilities, dependency audit, go/no-go for staging."),
     "07-qa-staging":  ("7 · QA in staging",         "agent",  "Re-runs the charter on staging, verifies analytics events, videos for sign-off."),
 }
 GATE_META = {
+    "story_signoff":  ("Approve the story",      "Numbered acceptance criteria and edge cases — everything downstream is planned, built, tested and validated against these."),
     "ux_signoff":     ("Pick the UX option",     "Watch the walkthrough, then approve the recommended flow (or reject with a note)."),
     "plan_signoff":   ("Approve plan & schema",  "Schema changes always need a human yes before any code is written."),
     "code_complete":  ("Code-complete?",         "Every planned task is done and tests are green — the developer confirms it, or in auto mode you review the coding agent's pull request and approve here."),
@@ -91,6 +93,7 @@ GATE_META = {
     "prod_signoff":   ("Ship to production",     "The final human decision. Review the staging QA videos first."),
 }
 GATE_SHORT = {
+    "story_signoff": "story sign-off",
     "ux_signoff": "UX sign-off", "plan_signoff": "plan sign-off",
     "code_complete": "code-complete", "staging_deploy": "staging deploy",
     "prod_signoff": "prod sign-off",
@@ -509,6 +512,16 @@ def gate_card(a, run, now, inline: bool = True) -> str:
             f"did not — approving here approves a stage that says it isn't done. "
             f"Its open question:{q}</div>")
 
+    if a["gate"] == "story_signoff":             # D17: the story IS the payload
+        story_md = REPO / "workflow" / "runs" / a["run_id"] / "00-story" / "story.md"
+        try:
+            story = story_md.read_text(encoding="utf-8")
+        except OSError:
+            story = ""
+        if story:
+            bits.append(f"<details class='report' open><summary>The story being approved — "
+                        f"00-story/story.md</summary><div class='prose'>{render_markdown(story)}"
+                        f"</div></details>")
     h = payload.get("handoff") or {}
     if h:                                        # ux_signoff: the rich handoff
         cards = []

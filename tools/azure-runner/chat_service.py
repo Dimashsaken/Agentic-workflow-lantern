@@ -34,7 +34,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from orchestrator import (
     BROWSER_ROLES, REPO, azure_v1_client, build_consult_instructions,
-    consult_roles, db_urls, list_dir, make_append_memory, model_for, read_file,
+    consult_roles, db_urls, deployment_for_tier, list_dir, make_append_memory, model_for,
+    model_settings_for, read_file,
     render_role_memory, usage_dict,
 )
 
@@ -54,7 +55,7 @@ SHUTTING_DOWN = False
 def chat_configured() -> tuple[bool, str]:
     """Can this process actually run a model turn? (Never crash the board over env.)"""
     missing = [v for v in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY",
-                           "LANTERN_MODEL_REASONING", "LANTERN_MODEL_FAST")
+                           "LANTERN_MODEL_REASONING")
                if not os.environ.get(v)]
     if missing:
         return False, "model backend not configured — set " + ", ".join(missing)
@@ -149,8 +150,16 @@ async def create_custom_agent(conn, name: str, purpose: str, instructions: str,
 def agent_model(info: dict) -> str:
     if info["kind"] == "fleet":
         return model_for(info["name"])
-    var = "LANTERN_MODEL_FAST" if info.get("model_pref") == "fast" else "LANTERN_MODEL_REASONING"
-    return os.environ.get(var, "")
+    return deployment_for_tier("fast" if info.get("model_pref") == "fast" else "reasoning")
+
+
+def agent_model_settings(info: dict):
+    """Reasoning effort for a chat agent: fleet roles route by role; the orchestrator and
+    custom agents carry a model_pref, which names a tier."""
+    if info["kind"] == "fleet":
+        return model_settings_for(info["name"], purpose="chat")
+    tier = "fast" if info.get("model_pref") == "fast" else "reasoning"
+    return model_settings_for(info.get("name", "custom"), purpose="chat", tier=tier)
 
 
 # ── sessions ─────────────────────────────────────────────────────────────────
@@ -483,6 +492,7 @@ def make_ask_specialist(publish, usage_sink: list[dict]):
         finally:
             await conn.close()
         agent = Agent(name=role, model=model_for(role),
+                      model_settings=model_settings_for(role, purpose="chat"),
                       instructions=build_consult_instructions(role),
                       tools=[read_file, list_dir])
         result = await run_oneshot(agent, input=question, max_turns=SPECIALIST_MAX_TURNS)
@@ -506,6 +516,7 @@ async def build_chat_agent(conn, session, publish, usage_sink: list[dict]) -> Ag
     if info["kind"] == "orchestrator":
         return Agent(
             name="lantern", model=agent_model(info),
+            model_settings=agent_model_settings(info),
             instructions=build_lantern_instructions() + scope,
             tools=[read_file, list_dir, pipeline_snapshot, run_detail, spend_summary,
                    make_ask_specialist(publish, usage_sink)])
@@ -513,11 +524,13 @@ async def build_chat_agent(conn, session, publish, usage_sink: list[dict]) -> Ag
         await render_role_memory(conn, slug)       # same freshness rule as cmd_ask
         return Agent(
             name=slug, model=agent_model(info),
+            model_settings=agent_model_settings(info),
             instructions=build_consult_instructions(slug) + scope,
             tools=[read_file, list_dir,
                    make_append_memory(slug, None, None, session["id"])])
     return Agent(
         name=info["name"], model=agent_model(info),
+        model_settings=agent_model_settings(info),
         instructions=await build_custom_instructions(conn, info["row"]) + scope,
         tools=[read_file, list_dir,
                make_custom_append_memory(slug, session["id"])])

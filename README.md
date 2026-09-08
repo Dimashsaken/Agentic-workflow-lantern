@@ -1,4 +1,10 @@
-# Agentic Workflow — Lantern
+# Software Factory — Lantern
+
+**Lantern is the codename; the product is a software factory:** a system of agents plus
+code that takes a feature brief to a reviewed pull request and a signed-off staging
+run, repeatably, with humans only at the gates. The design lineage and the gap analysis
+against the reference software-factory designs live in
+[docs/plans/software-factory-alignment.md](docs/plans/software-factory-alignment.md).
 
 A fixed, repeatable feature-development pipeline run by a fleet of role agents, each
 with a persistent charter, skill set, and memory. Humans (Justin + the assigned
@@ -24,9 +30,10 @@ the OpenAI Agents SDK on EC2 plus Codex CLI for developers (decision D7).
 
 1. Copy `workflow/briefs/_TEMPLATE.md` → `workflow/briefs/<slug>.md`, fill it in.
 2. Create the run folder: `workflow/runs/feat-YYYYMMDD-<slug>/`.
-3. Run the first stage:
-   `python tools/azure-runner/orchestrator.py feat-YYYYMMDD-<slug> 01-ui-ux`
-   (or the equivalent in an interactive Codex session at the repo root).
+3. Start the run: `python tools/azure-runner/pipeline.py run workflow/briefs/<slug>.md`.
+   Stage 0 maps the codebase and writes the story you approve first (`story_signoff`);
+   the daemon takes it from there. (One stage by hand:
+   `python tools/azure-runner/orchestrator.py <run-id> 00-story.scout`.)
 4. Review at each gate; the run folder accumulates every stage's report and artifacts.
 
 ## Reporting a bug

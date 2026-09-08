@@ -1,9 +1,13 @@
-# Lantern — Agentic Feature-Development Pipeline
+# Software Factory (codename Lantern) — Agentic Feature-Development Pipeline
 
 Lantern is the control plane for a **fixed, multi-agent software-delivery pipeline**.
 Justin writes a feature brief, assigns a developer, and the feature flows through the
-same sequence of role agents every time: UI/UX → pre-coding → coding → QA (dev) →
-post-coding → security → QA (staging). Bugs flow through a parallel debug lifecycle.
+same sequence of role agents every time: story (a read-only researcher maps the code,
+a story writer turns the brief into numbered acceptance criteria) → UI/UX → pre-coding
+→ coding (in auto mode the product's own tests run as a code gate) → QA (dev) →
+post-coding review + validation (every criterion gets a verdict with evidence) →
+security → QA (staging). Bugs flow through a parallel debug lifecycle. The design
+rule behind the gates: **agents propose, code disposes** (D17).
 
 **All models come from Azure OpenAI** (the org's startup credits). The fleet runs on
 the OpenAI-native stack: the **OpenAI Agents SDK** executes pipeline stages on EC2,
@@ -28,7 +32,7 @@ workflow/DEBUG-LIFECYCLE.md   bug intake → repro → fix → regression
 workflow/briefs/        feature briefs from Justin (start from _TEMPLATE.md)
 workflow/runs/          one folder per feature/bug run; all stage artifacts live here
 workflow/templates/     stage report + handoff templates
-tools/azure-runner/     the fleet runtime: pipeline.py (one-call loop) + orchestrator.py (single stage) + schema.sql
+tools/azure-runner/     the fleet runtime: pipeline.py (one-call loop) + orchestrator.py (single stage) + factory.py (envelopes, quality gate, fix loop — D17) + schema.sql
 tools/qa-recorder/      Playwright-based QA with built-in video recording
 tools/mission-control/  web UI: gate inbox, run board, verification timeline, fleet chat (docs/MISSION-CONTROL.md, docs/CHAT.md)
 infra/ec2/              EC2 provisioning: bootstrap.sh + systemd units + operations
@@ -36,6 +40,7 @@ docs/ORCHESTRATION.md   the one-call concept→live loop: Postgres state machine
 docs/AGENT-TOOLING.md   runtime stack, per-agent tools/MCP matrix, GitHub identity, orientation protocol
 docs/DECISIONS.md       architecture decisions (read before changing the design)
 .mcp.json               reference list of shared MCP servers (wired per-harness, see AGENT-TOOLING §2)
+lantern.toml            this repo's own quality gate; a product repo carries its own (workflow/templates/lantern.toml)
 .claude/agents/         dormant Claude Code wrappers — not part of the fleet (see DECISIONS D7)
 ```
 
@@ -47,7 +52,9 @@ Every agent session, **before doing anything else**, reads in this order:
 2. `agents/<role>/skills.md` — how this role does its work
 3. `agents/<role>/memory.md` — judgement accumulated from past runs
 4. `workflow/RUNBOARD.md` — what's in flight, then the active run folder
-   `workflow/runs/<run-id>/` — the brief and all upstream stage reports
+   `workflow/runs/<run-id>/` — the brief, `00-story/story.json` (the acceptance
+   criteria every stage is checked against, D17), all upstream stage reports and
+   their typed envelopes (`research.json`, `plan.json`, `validation.json`)
 5. The product repo — checked out **read-only** under the `product/` path prefix, with
    the `product_git` tool for history and search. Since D15 the **end of your system
    prompt** already carries it: an `<env>` block (repo, origin, base branch, the branch
@@ -82,11 +89,12 @@ everyone downstream — the checks are sound under concurrent runs by design
 
 | # | Stage dir        | Agent        | Key output                                   | Gate to advance                    |
 |---|------------------|--------------|----------------------------------------------|------------------------------------|
+| 0 | `00-story`       | `researcher` → `story` | `research.md/json` (read-only codebase map — every path verified), `story.md/json` (user story + numbered acceptance criteria) | Justin/developer approves the story (`story_signoff`) |
 | 1 | `01-ui-ux`       | `ui-ux`      | 2–3 flow options on Paper → PNGs + handoff package + video | Justin/developer picks an option   |
 | 2 | `02-pre-coding`  | `pre-coding` | Blast-radius report, schema plan, task plan  | Schema + plan approved             |
-| 3 | `03-coding`      | developer, or `coding` agent (auto mode, D14) | Implementation on a feature branch — a pull request in auto mode | Code complete (in auto mode a human reviews the PR) |
+| 3 | `03-coding`      | developer, or `coding` agent (auto mode, D14) | Implementation on a feature branch — a pull request in auto mode; the product's `lantern.toml` quality commands + the plan's write scope run as a code gate with a bounded fix loop (D17) | Code complete (in auto mode a human reviews the PR) |
 | 4 | `04-qa-dev`      | `qa-dev`     | Test design + executed runs + **videos**     | No open sev-1/sev-2 bugs           |
-| 5 | `05-post-coding` | `post-coding`| Cleanliness / tech-debt / backward-compat    | Findings resolved or waived        |
+| 5 | `05-post-coding` | `post-coding` → `validator` | Cleanliness / tech-debt / backward-compat, then `validation.md/json` — a verdict per acceptance criterion with evidence (D17) | Findings resolved or waived; validation verdict `pass` |
 | 6 | `06-security`    | `security`   | Deploy-risk + vulnerability report           | No unmitigated high-risk findings  |
 | — | *deploy to staging (human)* |   |                                              |                                    |
 | 7 | `07-qa-staging`  | `qa-staging` | Staging QA runs + **videos**                 | Justin signs off for production    |
@@ -144,10 +152,15 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 ## Models and providers
 
 - **Single provider: Azure OpenAI.** Every agent brain is one of the org's GPT
-  deployments (`sol`, `terra`, …). Deployment routing per role is configured in the
-  orchestrator (`tools/azure-runner`): the stronger deployment for reasoning-heavy
-  stages (pre-coding, security, debug, post-coding), the faster one for volume
-  execution (QA charter runs).
+  deployments (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, …). Routing is a
+  three-tier **model stack** (D16, `tier_for()` in `tools/azure-runner/orchestrator.py`):
+  `reasoning` for research, scoping, planning, review, security and debug;
+  `coding` for the stage-3 builder in auto mode; `fast` for volume execution (QA
+  charter runs, ui-ux divergence). Each tier is one env var (`LANTERN_MODEL_<TIER>`)
+  with a fallback chain, plus a reasoning-effort knob (`LANTERN_EFFORT_<TIER>`,
+  token-max defaults high/high/medium). Right model at the right cost — the same
+  planner-strong / builder-cheap split the software-factory reference designs use
+  (`docs/plans/software-factory-alignment.md`).
 - Harnesses: **OpenAI Agents SDK** (pipeline stages) and **Codex CLI** (coding stage).
   Both read this file and both are wired to the same MCP tool layer
   (`docs/AGENT-TOOLING.md` §2). Decision record: `docs/DECISIONS.md` D7.
@@ -159,10 +172,11 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 
 ## Human-in-the-loop gates (never automate past these)
 
-1. Choosing the UX option (stage 1 → 2)
-2. Approving schema/migration changes (stage 2 → 3)
-3. Deploying to staging (stage 6 → 7) and to production (after stage 7)
-4. Anything the pre-coding agent flags as `HITL: required` in its report
+1. Approving the story — the acceptance criteria (stage 0 → 1)
+2. Choosing the UX option (stage 1 → 2)
+3. Approving schema/migration changes (stage 2 → 3)
+4. Deploying to staging (stage 6 → 7) and to production (after stage 7)
+5. Anything the pre-coding agent flags as `HITL: required` in its report
 
 ## Conventions
 
@@ -173,3 +187,11 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 - Commits from agent sessions reference the run ID: `feat-20260824-bulk-export: <message>`.
 - When a stage is blocked, the report says `Status: BLOCKED` with a single unambiguous
   question — downstream agents do not guess.
+- **Agents propose, code disposes (D17).** Stages with a typed envelope
+  (`research.json`, `story.json`, `plan.json`, `validation.json` — shapes in each role's
+  skills) fail mechanically when it is missing or invalid; the coding stage hands off
+  nothing while the product's quality commands are red or a commit leaves the plan's
+  `write_scope`. Loops run as code: gate failures return to the builder for
+  `LANTERN_FIX_ROUNDS` rounds, then a human; a failed validation or QA round goes back
+  to stage 3 with `pipeline.py rework <run-id> --to 03-coding`. Second executions in a
+  shared stage dir append their section to `report.md`; the last `Status:` line counts.

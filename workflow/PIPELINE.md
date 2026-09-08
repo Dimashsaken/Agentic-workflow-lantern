@@ -8,12 +8,33 @@ everything upstream and writes its own `<stage-dir>/report.md` using
 `workflow/templates/stage-report.md`. If it's not in the run folder, it didn't happen.
 
 ```
-brief ──▶ 01 ui-ux ──▶ 02 pre-coding ──▶ 03 coding ──▶ 04 qa-dev ──▶ 05 post-coding ──▶ 06 security ──▶ [staging deploy] ──▶ 07 qa-staging ──▶ [prod]
-            ▲ gate:            ▲ gate:                       │ gate:                          ▲ gate:                              ▲ gate:
-            pick option        approve schema                no sev-1/2 bugs                  no high-risk findings               Justin sign-off
+brief ──▶ 00 story ──▶ 01 ui-ux ──▶ 02 pre-coding ──▶ 03 coding ──▶ 04 qa-dev ──▶ 05 post-coding + validate ──▶ 06 security ──▶ [staging deploy] ──▶ 07 qa-staging ──▶ [prod]
+            ▲ gate:      ▲ gate:       ▲ gate:            ▲ code gate:    │ gate:            ▲ a verdict per criterion       ▲ gate:                                 ▲ gate:
+            approve      pick option   approve schema     tests green +   no sev-1/2 bugs    (fail → rework to 03)           no high-risk findings                   Justin sign-off
+            criteria                                      write scope
 ```
 
 ---
+
+## Stage 0 — Research & story (`researcher` → `story` agents) → `00-story/`
+
+Two executions in one stage dir (D17). Ray Fu's agents 1 and 2: map the code before
+anyone plans against it, then write the contract everything else is checked against.
+
+- `00-story.scout` (EC2, `researcher`, reasoning tier): read-only. Opens the code the
+  feature will touch and writes `research.md` + `research.json` — patterns to imitate
+  (exemplar paths), similar features to reuse, risks with severity, conventions, likely
+  files. **Every path cited must exist in the checkout** (the harness verifies).
+- `00-story.write` (EC2, `story`, reasoning tier): reads the brief + research and writes
+  `story.md` + `story.json` — one user story, acceptance criteria `AC-1…AC-n` (each one
+  observable, one behaviour, with edge cases), non-goals. Appends its section to the
+  scout's `report.md`.
+
+**In:** the feature brief + the product repo (read-only).
+**Out:** `research.md`, `research.json`, `story.md`, `story.json`, `report.md`.
+**Gate:** `story_signoff` — Justin or the assigned developer approves the criteria in
+Mission Control (the story renders inline). Reject with a note → `retry` re-enters the
+story execution with the same session memory. `HITL: required`.
 
 ## Stage 1 — UI/UX (`ui-ux` agent) → `01-ui-ux/`
 
@@ -44,7 +65,9 @@ package that option and mark the rest `[rejected]`. `HITL: required`.
 code-structure plan, new-package justification, coding-principles callouts, and an
 explicit decision: does any part of implementation require human-in-the-loop?
 **Out:** `blast-radius.md`, `schema-plan.md`, `task-plan.md` (ordered, sized tasks for
-the developer).
+the developer), `plan.json` (D17: tasks → acceptance criteria, `write_scope` globs the
+builder may change, `schema_changes`, `hitl_required`, `deferred_criteria` with reasons —
+every story criterion is planned or explicitly deferred).
 **Gate:** schema plan and task plan approved by the developer; schema changes always
 `HITL: required`.
 
@@ -65,6 +88,12 @@ sequence of reviewable commits mapped to the task plan.
   the harness bundles the committed branch into the run folder, and the HOST verifies
   the bundle, pushes the branch and opens the pull request. That PR is the
   `code_complete` payload a human reviews in Mission Control. Agents never merge.
+  **The gate runs as code (D17):** after the agent's turn the product's `lantern.toml`
+  `[quality]` commands (test / lint / typecheck / build) run from the product root, plus
+  a check that every changed path is inside the plan's `write_scope`. Failures — only
+  failures — go back to the agent for at most `LANTERN_FIX_ROUNDS` rounds (default 3);
+  still red = the stage fails and nothing is handed off. `gate.json` + `gate.md` in the
+  stage dir are the record; the handoff itself is refused if a commit leaves the scope.
 **Out:** the branch; `report.md` listing commits, deviations from the plan, and known
 gaps for QA to probe; in auto mode also `handoff.json` + `branch.bundle` (the evidence)
 and `pr.md` (where it went).
@@ -91,6 +120,16 @@ n+1 queries), and **backward compatibility** (API contracts, schema rollback saf
 feature-flag defaults, old-client behaviour).
 **Out:** findings list, each tagged `fix-now` / `debt-ticket` / `waived`.
 **Gate:** all `fix-now` items resolved.
+
+**Then `05-post-coding.validate` (`validator` agent, D17):** reads `story.json`,
+`plan.json`, the coding handoff + diff, the QA charter / bugs / media manifest and the
+review above, and gives every acceptance criterion exactly one verdict — `covered` /
+`missing` / `skipped` / `off-spec` / `insecure` — with evidence a human can open.
+**Out:** `validation.md`, `validation.json` (verdict computed from the statuses:
+`pass` only when everything is covered and `fix_now` is empty); appends its section to
+`report.md`. **Gate:** verdict `pass`; `fail` stops the run here with the `fix_now` list —
+fix on the branch, then `pipeline.py rework <run-id> --to 03-coding` (auto mode) or
+`retry` after the developer pushed the fix.
 
 ## Stage 6 — Security & deploy risk (`security` agent) → `06-security/`
 
@@ -119,6 +158,17 @@ verify PostHog events fire as specced.
   question and stops. It does not improvise around missing decisions.
 - **Loops are normal.** QA→coding and security→coding loops stay inside the same run
   folder; append to the existing reports rather than overwriting (`## Round 2` etc.).
+  Mechanically (D17): `pipeline.py rework <run-id> --to 03-coding` sends a failed or
+  waiting run back to the builder (same branch, same session memory, fresh attempt);
+  inside the coding stage the quality gate feeds failures back for `LANTERN_FIX_ROUNDS`
+  rounds before a human sees it.
+- **Envelopes are the contract (D17).** Stages 0, 2 and 5b write a typed JSON envelope
+  beside their markdown (`research.json`, `story.json`, `plan.json`, `validation.json`;
+  exact shapes in each role's skills). The orchestrator validates presence AND validity,
+  cross-checked against the story, so a claim never stands in for a deliverable. Second
+  executions in a shared stage dir (`00-story.write`, `05-post-coding.validate`) append
+  their section to the existing `report.md`; the last `Status:` line is the one that
+  counts.
 - **Every stage feeds memory.** A bug that QA missed in dev but staging caught means
   `qa-dev` appends a memory entry. A security finding that pre-coding should have
   predicted means `pre-coding` appends one. This is how the pipeline gets better.
