@@ -268,3 +268,20 @@ codex exec "Consolidate agents/qa-dev/memory.md per the memory protocol in AGENT
 
 Wrap in a systemd oneshot or a small queue script per stage as volume grows. Logs to
 CloudWatch; a failed stage run should page nobody — it writes BLOCKED and waits.
+
+## Deploying D16/D17 (model stack, story stage, quality gate)
+
+No sandbox image rebuild: `factory.py` and the new roles are plain repo files, and the
+entrypoint rsyncs the repo copy into every container. What changes on the box:
+
+1. Ship the commit (bundle over scp or `git pull --ff-only`), then `pipeline.py init-db`
+   (idempotent; only a comment changed in `schema.sql`).
+2. Put the model stack in SSM `/lantern/dotenv` and the box `.env`:
+   `LANTERN_MODEL_REASONING` / `_CODING` / `_FAST` (all `gpt-5.6-sol` until terra/luna
+   exist), `LANTERN_EFFORT_*`, `LANTERN_FIX_ROUNDS=3`.
+3. **Restart the daemon** — it loads `pipeline.py` at start, and the stage table now
+   begins at `00-story.scout` (`PIPELINE_VERSION=3`). Runs already past stage 0 keep
+   their `current_stage` keys unchanged; new runs start with the researcher.
+4. Product repos need a `lantern.toml` (`workflow/templates/lantern.toml`) for the
+   coding gate to run anything; without one the gate is green with nothing configured
+   and the coding agent is told so in its prompt.

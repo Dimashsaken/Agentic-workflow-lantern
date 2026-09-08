@@ -35,7 +35,8 @@ work order and the baseline every later reviewer checks the diff against.
 
 ## Outputs
 
-- `02-pre-coding/blast-radius.md`, `schema-plan.md`, `task-plan.md`, `report.md`.
+- `02-pre-coding/blast-radius.md`, `schema-plan.md`, `task-plan.md`, `plan.json` (D17:
+  tasks → criteria, write scope, deferrals), `report.md`.
 
 ## Gate it enforces
 

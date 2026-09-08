@@ -27,9 +27,11 @@ from uuid import uuid4
 import asyncpg
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from agents import (Agent, Runner, function_tool, set_default_openai_api,
+from openai.types.shared import Reasoning
+from agents import (Agent, ModelSettings, Runner, function_tool, set_default_openai_api,
                     set_default_openai_client, set_tracing_disabled)
 from agents.mcp import MCPServerStdio, MCPServerStreamableHttp
+import factory  # D17: envelopes, write scope, quality gate, fix loop (pure — no SDK import)
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -82,6 +84,9 @@ def azure_v1_client() -> AsyncOpenAI:
     return AsyncOpenAI(base_url=endpoint, api_key=os.environ["AZURE_OPENAI_API_KEY"])
 
 ROLE_FOR_STAGE = {
+    "00-story": "story",            # manual whole-stage key (Mission Control consult link)
+    "00-story.scout": "researcher", # pipeline: read-only codebase map (D17)
+    "00-story.write": "story",      # pipeline: user story + acceptance criteria (D17)
     "01-ui-ux": "ui-ux",            # manual whole-stage run (Phase-1 workstation sessions)
     "01-ui-ux.diverge": "ui-ux",    # pipeline: divergence phase (EC2, fast model)
     "01-ui-ux.design": "ui-ux",     # pipeline: Paper convergence phase (workstation)
@@ -89,6 +94,7 @@ ROLE_FOR_STAGE = {
     "03-coding": "coding",          # only executed when runs.coding_mode = 'auto' (D14)
     "04-qa-dev": "qa-dev",
     "05-post-coding": "post-coding",
+    "05-post-coding.validate": "validator",   # D17: a verdict per acceptance criterion
     "06-security": "security",
     "07-qa-staging": "qa-staging",
     # debug lifecycle stages all map to the debug role:
@@ -111,9 +117,30 @@ def is_qa_video_stage(stage: str) -> bool:
 # Stage executions that get the Paper MCP server (desktop-bound — workstation only).
 PAPER_STAGES = {"01-ui-ux", "01-ui-ux.design"}
 
-# Deployment routing: strong model for judgement-heavy roles, fast one for execution.
+# ── Model stack (D16) ────────────────────────────────────────────────────────
+# Three price/latency classes — the "right model at the right cost" stack of a
+# software factory. Deployment names are org-internal Azure labels; the code reasons
+# about TIERS. Env: LANTERN_MODEL_REASONING / _CODING / _FAST (deployment names) and
+# LANTERN_EFFORT_REASONING / _CODING / _FAST (reasoning effort per tier).
+#
+#   reasoning — research, scoping, planning, review, security, debug, ui-ux design
+#   coding    — stage-3 auto mode: the builder that executes an approved plan
+#   fast      — volume execution: QA charter runs, ui-ux divergence
+#
+# Only REASONING is mandatory: CODING falls back to FAST, FAST to REASONING, so a
+# resource with one deployment (2026-09-08: gpt-5.6-sol is the only deployment on
+# lantern-prod-agent; terra/luna 404) still routes every stage. Deploy the target
+# models, set the vars, and the tiers separate with no code change.
+MODEL_TIERS = ("reasoning", "coding", "fast")
+TIER_FALLBACK = {"coding": "fast", "fast": "reasoning"}
 FAST_ROLES = {"qa-dev", "qa-staging"}
 FAST_STAGES = {"01-ui-ux.diverge"}  # divergence is volume work, not judgement
+CODING_ROLES = {"coding"}
+EFFORT_LEVELS = ("minimal", "low", "medium", "high", "xhigh")
+# Token-max defaults: the judgement and building tiers think hard; only the volume
+# tier is throttled. 'default' (or 'off') leaves the deployment's own setting.
+DEFAULT_EFFORT = {"reasoning": "high", "coding": "high", "fast": "medium"}
+_ROUTING_NOTES: set[str] = set()
 
 
 def stage_dir(stage: str) -> str:
@@ -121,13 +148,73 @@ def stage_dir(stage: str) -> str:
     return stage.split(".", 1)[0]
 
 
+def tier_for(role: str, stage: str | None = None) -> str:
+    """Model tier for a role/stage — the only place routing policy lives."""
+    if role in FAST_ROLES or stage in FAST_STAGES:
+        return "fast"
+    if role in CODING_ROLES:
+        return "coding"
+    return "reasoning"
+
+
+def _note_once(msg: str) -> None:
+    if msg not in _ROUTING_NOTES:
+        _ROUTING_NOTES.add(msg)
+        print(f"[model-stack] {msg}", file=sys.stderr)
+
+
+def deployment_for_tier(tier: str) -> str:
+    """Azure deployment name for a tier, walking the fallback chain."""
+    if tier not in MODEL_TIERS:
+        raise ValueError(f"unknown model tier {tier!r}")
+    t: str | None = tier
+    while t is not None:
+        deployment = os.environ.get(f"LANTERN_MODEL_{t.upper()}", "").strip()
+        if deployment:
+            if t != tier:
+                _note_once(f"LANTERN_MODEL_{tier.upper()} unset — the {tier} tier uses "
+                           f"the {t} deployment '{deployment}'")
+            return deployment
+        t = TIER_FALLBACK.get(t)
+    sys.exit("Missing env var LANTERN_MODEL_REASONING (Azure deployment name, e.g. "
+             "gpt-5.6-sol) — see tools/azure-runner/README.md 'Model stack'")
+
+
 def model_for(role: str, stage: str | None = None) -> str:
-    fast = role in FAST_ROLES or stage in FAST_STAGES
-    var = "LANTERN_MODEL_FAST" if fast else "LANTERN_MODEL_REASONING"
-    deployment = os.environ.get(var)
-    if not deployment:
-        sys.exit(f"Missing env var {var} (Azure deployment name, e.g. sol/terra)")
-    return deployment
+    return deployment_for_tier(tier_for(role, stage))
+
+
+def effort_for(tier: str) -> str | None:
+    """Reasoning effort for a tier; None = send nothing (deployment default)."""
+    raw = os.environ.get(f"LANTERN_EFFORT_{tier.upper()}", "").strip().lower()
+    if not raw:
+        raw = DEFAULT_EFFORT[tier]
+    if raw in ("default", "none", "off"):
+        return None
+    if raw not in EFFORT_LEVELS:
+        _note_once(f"LANTERN_EFFORT_{tier.upper()}={raw!r} is not one of "
+                   f"{'/'.join(EFFORT_LEVELS)} — using '{DEFAULT_EFFORT[tier]}'")
+        raw = DEFAULT_EFFORT[tier]
+    return raw
+
+
+def model_settings_for(role: str, stage: str | None = None,
+                       purpose: str = "stage", tier: str | None = None) -> ModelSettings:
+    """Per-tier ModelSettings for an Agent. purpose='chat' lets LANTERN_EFFORT_CHAT
+    override the tier (interactive consults may want less thinking than a stage);
+    `tier` bypasses role routing — custom chat agents carry a model_pref, not a role."""
+    if tier is not None and tier not in MODEL_TIERS:
+        raise ValueError(f"unknown model tier {tier!r}")
+    effort = effort_for(tier or tier_for(role, stage))
+    if purpose == "chat":
+        chat = os.environ.get("LANTERN_EFFORT_CHAT", "").strip().lower()
+        if chat in EFFORT_LEVELS:
+            effort = chat
+        elif chat in ("default", "none", "off"):
+            effort = None
+    if effort is None:
+        return ModelSettings()
+    return ModelSettings(reasoning=Reasoning(effort=effort))
 
 
 # Env keys the MCP child process needs. MCPServerStdio spawns children with the MCP
@@ -220,6 +307,31 @@ PHASE_NOTES = {
         "option's JSX with the `collect_jsx` tool — the host writes get_jsx output "
         "verbatim; JSX copied through your own context is rejected. Finish by writing "
         "handoff.json (skills §3D) — the gate payload is built from it."),
+    "00-story.scout": (
+        "\n\n# Phase note\nThis execution is the READ-ONLY research phase (D17). Deliver "
+        "00-story/research.md + research.json (skills §5): every path you cite must be one "
+        "you opened — the harness verifies each exists in the checkout. Do not write a "
+        "story, a plan or a design; the story writer runs next in this same stage."),
+    "00-story.write": (
+        "\n\n# Phase note\nThis execution writes the story (D17): 00-story/story.md + "
+        "story.json with numbered acceptance criteria (skills §4). research.md/json from "
+        "the scout phase are already in the stage directory — read them, do not redo "
+        "them. The scout also wrote 00-story/report.md: APPEND your own `## Story phase` "
+        "section to it (with its own `- **Status:**` line — the last status line counts) "
+        "instead of overwriting it. story.json is validated mechanically (ids AC-n, "
+        "unique, non-empty text) and is what a human approves at story_signoff."),
+    "03-coding": (
+        "\n\n# Phase note\nAfter your turn the harness runs the product's quality commands "
+        "as code and checks the plan's write scope ('The gate your branch must pass' at "
+        "the end of this prompt). Only failures come back to you, for a bounded number of "
+        "fix rounds; a red gate hands off nothing."),
+    "05-post-coding.validate": (
+        "\n\n# Phase note\nThis execution is the VALIDATION phase (D17): one verdict per "
+        "acceptance criterion in 00-story/story.json, with evidence, written to "
+        "05-post-coding/validation.md + validation.json (skills §4). The post-coding "
+        "review already wrote 05-post-coding/report.md — APPEND a `## Validation phase` "
+        "section to it (own `- **Status:**` line; the last one counts), never overwrite "
+        "the review. Your verdict is computed from your statuses and is checked."),
 }
 
 
@@ -800,6 +912,8 @@ def check_coding_handoff(run_id: str, sdir: str, verify_in: Path | None = None) 
                         f"namespace {'|'.join(p + '*' for p in CODING_BRANCH_PREFIXES)}")
     if not h.get("commits"):
         problems.append("handoff.json lists no commits")
+    # D17: the plan's write scope is enforced on the handoff, not just advised.
+    problems.extend(factory.check_write_scope(run_id, list(h.get("files_changed") or [])))
     bundle = REPO / str(h.get("bundle") or f"workflow/runs/{run_id}/{sdir}/{CODING_BUNDLE}")
     if not bundle.is_file() or bundle.stat().st_size == 0:
         problems.append(f"bundle {bundle.name} missing or empty")
@@ -971,6 +1085,22 @@ def product_task_block(run_id: str, stage: str) -> str:
     else:
         out.append(f"\nRead the brief first: `read_file('workflow/runs/{run_id}/brief.md')`.\n")
 
+    # D17: the acceptance criteria are the contract every stage is checked against —
+    # ids + text in the prompt, the full story a read_file away.
+    story = rd / "00-story" / "story.json"
+    if story.is_file() and stage_dir(stage) != "00-story":
+        try:
+            sdata = json.loads(story.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            sdata = {}
+        crit = [c for c in (sdata.get("acceptance_criteria") or []) if isinstance(c, dict)]
+        if crit:
+            out.append("\n**Acceptance criteria** (the contract every stage is checked "
+                       f"against — full story: `read_file('workflow/runs/{run_id}/00-story/"
+                       "story.json')`):\n"
+                       + "\n".join(f"- {c.get('id')}: {str(c.get('text', ''))[:220]}"
+                                   for c in crit[:12]) + "\n")
+
     plan = rd / "02-pre-coding" / "task-plan.md"
     # Stage dirs are numbered ('02-pre-coding'), so the prefix orders them without
     # importing pipeline.py's table — orchestrator is the module pipeline imports.
@@ -1059,7 +1189,8 @@ def product_note(run_id: str, stage: str) -> str:
                 "approved task plan yourself, in a WRITABLE checkout already on your branch."
     return ("\n\n" + head + "\n" + product_env_block() + product_docs_block()
             + product_task_block(run_id, stage)
-            + (coding_work_contract() if product_writable() else readonly_work_contract()))
+            + (coding_work_contract() + factory.coding_gate_note(run_id, product_root())
+               if product_writable() else readonly_work_contract()))
 
 
 def export_dir() -> Path:
@@ -1283,6 +1414,16 @@ def check_stage_inputs(run_id: str, stage: str) -> str | None:
                     "report and divergence/*.html skeletons must exist before Paper "
                     "convergence — pull the diverge commit into this runner's checkout "
                     "(run folders sync between runners through git), then retry")
+    if stage == "00-story.write":
+        sdir = REPO / "workflow/runs" / run_id / "00-story"
+        if not (sdir / "research.md").is_file() or not (sdir / "research.json").is_file():
+            return ("00-story.write inputs missing from this checkout: the scout phase's "
+                    "research.md + research.json must exist before the story is written "
+                    "(D17) — run or pull the scout execution, then retry")
+    if stage == "05-post-coding.validate":
+        if not (REPO / "workflow/runs" / run_id / "05-post-coding" / "report.md").is_file():
+            return ("05-post-coding.validate needs the post-coding review's report.md in "
+                    "this checkout first (D17) — the validator appends to it")
     if stage == "03-coding":
         # Auto-coding implements the APPROVED plan — without it the agent would code
         # from the brief alone, which is exactly the vague-ticket failure the plan
@@ -1332,14 +1473,17 @@ def report_blocker(report: Path) -> str | None:
         text = report.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-    m = re.search(r"^\s*[-*]?\s*\**Status:?\**:?\s*\**\s*([A-Za-z_]+)", text, re.M)
-    if not m or m.group(1).upper() != "BLOCKED":
+    # The LAST status line counts: a second execution in the same stage dir (D17 —
+    # 00-story.write after .scout, 05-post-coding.validate after the review) appends
+    # its section to the existing report, so an earlier PASS must not mask its BLOCKED.
+    ms = re.findall(r"^\s*[-*]?\s*\**Status:?\**:?\s*\**\s*([A-Za-z_]+)", text, re.M)
+    if not ms or ms[-1].upper() != "BLOCKED":
         return None
-    q = re.search(r"^#+\s*Open questions.*?$(.*?)(?=^#|\Z)", text, re.M | re.S)
-    if not q:
+    qs = re.findall(r"^#+\s*Open questions.*?$(.*?)(?=^#|\Z)", text, re.M | re.S)
+    if not qs:
         return ""
     lines = [ln.strip().lstrip("-*").strip()
-             for ln in q.group(1).splitlines() if ln.strip()]
+             for ln in qs[-1].splitlines() if ln.strip()]
     return lines[0][:400] if lines else ""
 
 
@@ -1371,7 +1515,12 @@ async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
                 "opened for a blocked stage. Answer its open question, then `retry`. "
                 f"Question: {blocked_q or '(none stated — the report must state exactly one)'}")
     missing.extend(check_claimed_artifacts(run_id, sdir))
+    # D17: typed envelopes — presence AND validity, cross-checked against the story;
+    # cited paths verified against the checkout when this process has one.
+    missing.extend(factory.check_envelope(
+        run_id, stage, product_root() if product_wired() else None))
     if role == "coding":
+        missing.extend(factory.check_quality_gate(run_id, sdir, execution_key))
         # The branch bundle is the deliverable; a report without one is a claim.
         # Verified against the checkout when this process has one (container /
         # in-process); the host re-check verifies again against its mirror before
@@ -1451,6 +1600,7 @@ async def main() -> None:
         agent = Agent(
             name=role,
             model=model_for(role, args.stage),
+            model_settings=model_settings_for(role, args.stage),
             instructions=build_instructions(role, args.run_id, args.stage),
             tools=stage_tools(role, args.run_id, args.stage, execution_key, paper),
             mcp_servers=mcp_servers,
@@ -1459,14 +1609,26 @@ async def main() -> None:
         # needs it to pre-link the attempt-scoped media URLs in its report.
         _tail = execution_key.rsplit(":", 1)[-1]
         attempt_note = f" (attempt {_tail})" if _tail.isdigit() else ""
-        result = await Runner.run(
-            agent,
-            input=f"Begin your {args.stage} session for run {args.run_id}{attempt_note}. "
-                  "Do not reply with a plan — start calling tools now and keep working "
-                  "until the report is on disk and append_memory has been called.",
-            session=session,
-            max_turns=max_turns_for(role),
-        )
+        kickoff = (f"Begin your {args.stage} session for run {args.run_id}{attempt_note}. "
+                   "Do not reply with a plan — start calling tools now and keep working "
+                   "until the report is on disk and append_memory has been called.")
+
+        async def run_turn(text: str):
+            return await Runner.run(agent, input=text, session=session,
+                                    max_turns=max_turns_for(role))
+
+        if role == "coding" and product_writable():
+            # D17: build turn → the product's quality commands as code → failures back
+            # to the agent, bounded by LANTERN_FIX_ROUNDS. Agents propose, code disposes.
+            results, gate = await factory.coding_turns(
+                run_turn, kickoff, run_id=args.run_id, stage=args.stage,
+                root=product_root(), execution_key=execution_key,
+                since_sha=os.environ.get("LANTERN_CODING_START_SHA") or None)
+            print(f"GATE: {'green' if gate['passed'] else 'RED'} after {gate['round']} "
+                  "fix round(s)", file=sys.stderr)
+        else:
+            results = [await run_turn(kickoff)]
+        result = results[-1]
         print(result.final_output)
         if role == "coding":
             # The checkout dies with this process; bundle the committed branch into
@@ -1474,8 +1636,9 @@ async def main() -> None:
             for p in finalize_coding(args.run_id, args.stage):
                 print(f"FINALIZE: {p}", file=sys.stderr)
         print(USAGE_MARKER + json.dumps(
-            {**usage_dict(result), "model": model_for(role, args.stage)}))
-        calls = sum(1 for i in result.new_items if type(i).__name__ == "ToolCallItem")
+            {**factory.merge_usage([usage_dict(r) for r in results]),
+             "model": model_for(role, args.stage)}))
+        calls = sum(1 for r in results for i in r.new_items if type(i).__name__ == "ToolCallItem")
         if calls == 0:
             print("\nDIAGNOSIS: the agent ended its turn without calling a single tool — the "
                   "stage stopped before doing any work. Re-run it (see 'How to run your turn' "

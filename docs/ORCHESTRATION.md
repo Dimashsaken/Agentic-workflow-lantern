@@ -61,12 +61,14 @@ when we outgrow one machine.
 
 | Stage | Type | Verified by | Gate after |
 |-------|------|-------------|-----------|
+| 00-story.scout (EC2) | agent | postconditions + research.json (every cited path exists) | — |
+| 00-story.write (EC2) | agent | postconditions + story.json validates + a human reads story.md | `story_signoff` |
 | 01-ui-ux.diverge (EC2) | agent | postconditions + judge scores in report | — |
 | 01-ui-ux.design (workstation) | agent | postconditions + human reviews PNGs/video | `ux_signoff` |
 | 02-pre-coding | agent | postconditions + typed plan artifacts | `plan_signoff` (schema = always human) |
-| 03-coding | **human** (developer + Codex CLI) | tests green, self-review | `code_complete` |
+| 03-coding | **human** (developer + Codex CLI), or the `coding` agent in auto mode | human: tests green, self-review; auto: the product's `lantern.toml` quality commands + the plan's write scope run as code, failures fed back for a bounded number of rounds (D17) | `code_complete` |
 | 04-qa-dev | agent | executed, video-recorded charter | — (loops back on sev-1/2) |
-| 05-post-coding | agent | findings table, fix-now resolved | — |
+| 05-post-coding (+ .validate) | agent | findings table, fix-now resolved; then validation.json — one verdict per acceptance criterion, `pass` required (D17) | — |
 | 06-security | agent | go/no-go with evidence | `staging_deploy` (human deploys) |
 | 07-qa-staging | agent | staging runs + PostHog event checks | `prod_signoff` |
 
@@ -163,6 +165,8 @@ python pipeline.py daemon
 python pipeline.py status
 python pipeline.py approve feat-20260825-bulk-export ux_signoff --by justin --note "option B"
 python pipeline.py retry feat-20260825-bulk-export
+# the loop as code (D17): a failed validation / QA round goes back to the builder
+python pipeline.py rework feat-20260825-bulk-export --to 03-coding --by justin --note "AC-2 off-spec"
 # rendered views (also refresh automatically on every state change / stage start)
 python pipeline.py runboard
 python pipeline.py render-memory [--role ui-ux]

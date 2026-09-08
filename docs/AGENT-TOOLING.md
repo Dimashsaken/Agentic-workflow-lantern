@@ -176,11 +176,14 @@ database** — agents read it during orientation but never write it.
 
 | Agent | MCP / CLIs | Credentials (SSM) | May write to |
 |-------|-----------|-------------------|--------------|
+| researcher | git (read), product repo clone (read-only) | — | run folder only (`00-story/research.*`) |
+| story | run folder reads | — | run folder only (`00-story/story.*`) |
 | ui-ux | `paper` (workstation only), `playwright`, qa-recorder | — | run folder, `proto/*` branches |
 | pre-coding | `github`, git (read), product repo clone | github bot token | run folder only |
 | coding (developer) | developer's own gh/git + product tooling | human's own | `feat/*`, `fix/*` |
 | qa-dev | `playwright` (video-recording, orchestrator-configured), qa-recorder, `github` (read + PR comments) | github, `/lantern/qa/dev/*` (as `QA_*`) | run folder, PR comments, regression specs on the feature branch |
 | post-coding | git diff, `github` (PR review comments) | github | run folder, PR comments |
+| validator | git diff (read), run-folder evidence (QA manifest, handoff) | — | run folder only (`05-post-coding/validation.*`) |
 | security | git, `npm audit`, `github` (read), WebSearch for advisories | github | run folder only (vuln details follow charter confidentiality) |
 | qa-staging | `playwright` (video-recording, orchestrator-configured), qa-recorder, `posthog`, `github` (read) | github, posthog, `/lantern/qa/staging/*` (as `QA_*`) | run folder, PR comments |
 | debug | `posthog`, CloudWatch logs (read), git, `github`, qa-recorder | github, posthog | bug run folder, `fix/*` (trivial fixes only, per charter) |

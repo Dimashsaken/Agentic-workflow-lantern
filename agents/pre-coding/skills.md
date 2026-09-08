@@ -7,6 +7,11 @@ Standard reads (charter → skills → memory → run folder). Read
 stage-1 recommendation is not the decision. Then load that option and skim
 `01-ui-ux/report.md` handoff notes.
 
+Read `00-story/story.json` — the acceptance criteria; every task you write maps to
+them — and `00-story/research.md` + `research.json`: the scout already mapped the code
+(patterns to imitate, similar features, risks, likely files). Start from that map; do
+not re-discover it.
+
 Then orient in the **product repo**, which is checked out read-only under `product/`:
 `read_file('product/AGENTS.md')` (or its README) for conventions and commands,
 `product_git('log', ['--oneline','-20'])`, `product_git('branch', ['-a'])`, and
@@ -47,6 +52,20 @@ paths.
 - Ordered tasks, each ≤ half a day, each ending in a reviewable/commitable state,
   with dependencies marked. Risky/irreversible steps first-reviewed: tag `HITL: required`.
 - End with a "definition of code-complete" checklist QA will hold stage 3 to.
+- Write the typed twin `02-pre-coding/plan.json` (D17). The builder's `write_scope` is
+  enforced on every commit, and every story criterion must be planned or deferred:
+
+  ```json
+  {"kind": "plan", "run_id": "<run-id>",
+   "tasks": [{"id": 1, "title": "save endpoint + tests", "size": "S", "hitl": false, "criteria": ["AC-1", "AC-3"]}],
+   "write_scope": ["src/api/**", "src/ui/saved/**", "tests/**"],
+   "schema_changes": false, "hitl_required": false,
+   "deferred_criteria": [{"id": "AC-4", "reason": "PostHog project not provisioned in dev"}]}
+  ```
+
+  Globs are repo-relative (`**` = any depth); include the test paths and any config the
+  tasks touch — a scope that is too tight fails the handoff, one that is too wide
+  defeats the point.
 
 ## 6. Session end
 

@@ -1,0 +1,79 @@
+{
+  "kind": "research",
+  "run_id": "feat-20260908-status-facts",
+  "patterns": [
+    {
+      "path": "tools/azure-runner/pipeline.py",
+      "note": "Status uses two shared database reads, a small row-to-dict JSON shaper, and a separate human renderer."
+    },
+    {
+      "path": "tools/azure-runner/test_status_json.py",
+      "note": "Focused unittest coverage fixes exact JSON keys, two-query behavior, JSON-only stdout, and byte-exact human output using a fake async connection."
+    },
+    {
+      "path": "tools/azure-runner/chat_service.py",
+      "note": "The adjacent machine-readable snapshot captures one UTC now and computes request ages from it."
+    },
+    {
+      "path": "tools/mission-control/ui.py",
+      "note": "The existing elapsed-time helper truncates to an integer and clamps future timestamps to zero."
+    },
+    {
+      "path": "tools/azure-runner/schema.sql",
+      "note": "The requested run columns already exist; pipeline_version is non-null text and both branch columns are nullable."
+    }
+  ],
+  "similar_features": [
+    {
+      "name": "machine-readable pipeline status",
+      "paths": [
+        "tools/azure-runner/pipeline.py",
+        "tools/azure-runner/test_status_json.py",
+        "tools/azure-runner/README.md",
+        "workflow/runs/feat-20260907-status-json/brief.md"
+      ]
+    },
+    {
+      "name": "gate-age rendering",
+      "paths": [
+        "tools/mission-control/app.py",
+        "tools/mission-control/ui.py",
+        "tools/mission-control/test_gate_latency.py"
+      ]
+    },
+    {
+      "name": "base and working branch provenance",
+      "paths": [
+        "tools/azure-runner/pipeline.py",
+        "tools/azure-runner/schema.sql",
+        "docs/DECISIONS.md"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "The checkout still stamps PIPELINE_VERSION as 2 and its feature stage list begins at stage 1, so exposing the stored value alone cannot distinguish v3 runs unless another change stamps version 3.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Adding print-time age to the currently deterministic status_payload contract can make repeated direct calls differ at an integer-second boundary; future timestamps also require the specified nonnegative result.",
+      "severity": "medium"
+    },
+    {
+      "risk": "No in-repo Slack or chat caller consumes status --json; focused status tests are the only current compatibility guard for the expanded keys.",
+      "severity": "low"
+    }
+  ],
+  "likely_files": [
+    "tools/azure-runner/pipeline.py",
+    "tools/azure-runner/test_status_json.py",
+    "tools/azure-runner/README.md"
+  ],
+  "conventions": [
+    "Run python3 -m unittest test_status_json -v from tools/azure-runner (tools/azure-runner/test_status_json.py).",
+    "Use python pipeline.py status --json for machine output; plain python pipeline.py status retains the human table (tools/azure-runner/README.md).",
+    "Use stdlib unittest, asyncio.run, dict fixtures, and a fake connection rather than a live database (tools/azure-runner/test_status_json.py).",
+    "Keep console output plain ASCII for Windows consoles (tools/azure-runner/pipeline.py).",
+    "Preserve exactly two status reads and ISO-format timezone-aware timestamps (tools/azure-runner/pipeline.py)."
+  ]
+}

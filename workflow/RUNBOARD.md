@@ -9,13 +9,15 @@ thing every agent reads after its role files (orientation step 1 —
 
 | Run ID | What | Stage | Status | Waiting on | Updated |
 |--------|------|-------|--------|------------|---------|
-| feat-20260907-status-json | Feature Brief: Machine-readable pipeline status | 03-coding | waiting_gate | gate `code_complete` | 2026-09-07 |
-| feat-20260831-gate-latency | Feature Brief: Gate latency on the board | 03-coding | waiting_gate | gate `code_complete` | 2026-09-01 |
-| feat-20260825-candidate-compare | Feature Brief: Candidate compare — pick who advances | 02-pre-coding | failed | rework, then `pipeline.py retry` | 2026-08-31 |
-| feat-20260825-role-health | Feature Brief: Role health — is this pipeline alive? | 02-pre-coding | failed | rework, then `pipeline.py retry` | 2026-08-31 |
+| feat-20260908-status-facts | Feature Brief: Status JSON carries branch and version facts | 00-story.write | waiting_gate | gate `story_signoff` | 2026-09-08 |
+| feat-20260825-demo-export |  | 01-ui-ux.design | waiting_gate | gate `ux_signoff` (rec: background-job) | 2026-09-07 |
+| feat-20260825-demo-billing |  | 01-ui-ux.design | running | runner `workstation` | 2026-08-31 |
+| feat-20260820-demo-sso |  | 04-qa-dev | running | runner `ec2` | 2026-08-31 |
+| feat-20260825-candidate-compare | Feature Brief: Candidate compare — pick who advances | 01-ui-ux.design | waiting_gate | gate `ux_signoff` (rec: verdict) | 2026-08-26 |
+| feat-20260825-role-health | Feature Brief: Role health — is this pipeline alive? | 01-ui-ux.design | waiting_gate | gate `ux_signoff` (rec: diagnosis-brief) | 2026-08-26 |
 
 ## Recently completed (last 30 days)
 
 | Run ID | What | Completed |
 |--------|------|-----------|
-| feat-20260907-pipeline-smoke | Feature Brief: Gate latency on the board (pipeline smoke run, stages 4–7 on the box) | 2026-09-07 |
+| feat-20260810-demo-onboarding |  | 2026-08-31 |
