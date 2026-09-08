@@ -1,0 +1,48 @@
+{
+  "kind": "research",
+  "run_id": "feat-20260909-trace-proof",
+  "patterns": [
+    {
+      "path": "src/notes.py",
+      "note": "Complete product API exemplar: one small class with private in-memory state, typed snake_case methods, and direct return values."
+    },
+    {
+      "path": "tests/test_notes.py",
+      "note": "Complete test exemplar: standard-library unittest drives the public NoteStore lifecycle and checks return values plus observable list state."
+    }
+  ],
+  "similar_features": [
+    {
+      "name": "existing note lifecycle",
+      "paths": [
+        "src/notes.py",
+        "tests/test_notes.py"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "delete is explicitly typed as bool, but only one in-repository truthiness consumer is visible; external consumers relying on exact boolean identity or type cannot be traced from this checkout",
+      "severity": "high"
+    },
+    {
+      "risk": "the sole test covers only a successful deletion of the only note, with no missing-id, remaining-note, repeated-delete, or exact-return-value coverage",
+      "severity": "medium"
+    },
+    {
+      "risk": "the UI motivating the outcome is not present in this one-module product, so its integration contract cannot be inspected here",
+      "severity": "low"
+    }
+  ],
+  "likely_files": [
+    "src/notes.py",
+    "tests/test_notes.py"
+  ],
+  "conventions": [
+    "README.md: A minimal note store used to exercise the Lantern factory. One module, one test file.",
+    "lantern.toml quality command: $LANTERN_PYTHON tests/test_notes.py (timeout 120 seconds)",
+    "tests/test_notes.py uses standard-library unittest and adds src to sys.path",
+    "src/notes.py uses snake_case methods, underscore-prefixed private state, four-space indentation, and built-in generic type annotations",
+    "No lint, formatter, build, dependency, migration, or feature-flag convention is declared in the tracked checkout"
+  ]
+}

@@ -166,6 +166,23 @@ class ImportedAndSubPhaseLanes(unittest.TestCase):
         self.assertEqual(model["columns"], 1)
         self.assertEqual(model["executions"], 0)
 
+    def test_a_bug_run_shows_only_what_it_executed(self):
+        """The debug lifecycle is not the feature pipeline: painting the eight feature
+        stages as a bug run's road ahead would claim a ui-ux stage it never reaches."""
+        run = run_row(id="bug-20260908-help-crash", status="running", current_stage="02-repro")
+        execs = [exec_row(1, "bug-20260908-help-crash", "01-triage", 1, "succeeded", T0, 170)]
+        model = lanes.build_lanes(run, execs, [], NOW)
+        self.assertFalse(model["feature_run"])
+        self.assertEqual([ln["stage"] for ln in model["lanes"]], ["01-triage"])
+        self.assertEqual(model["lanes"][0]["role"], "debug")
+        html = lanes.render_lanes(model, "bug-20260908-help-crash", mc.GATE_SHORT, mc.GATE_META, mc.STAGE_META)
+        self.assertIn("debug lifecycle", html)
+        self.assertNotIn("01-ui-ux", html)
+        # a feature run keeps its road ahead
+        feature = lanes.build_lanes(run_row(id=RUN, status="running", current_stage="02-pre-coding"), [], [], NOW)
+        self.assertTrue(feature["feature_run"])
+        self.assertEqual(len(feature["lanes"]), 11)
+
     def test_builders_and_review_rounds_become_lanes_after_the_coding_stage(self):
         run = run_row(id=RUN, status="waiting_gate", current_stage="03-coding", coding_mode="auto")
         t = T0

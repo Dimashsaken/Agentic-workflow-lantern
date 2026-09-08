@@ -1,0 +1,64 @@
+{
+  "kind": "story",
+  "run_id": "feat-20260909-trace-proof",
+  "title": "Delete reports post-delete note state",
+  "user_story": "As a caller of NoteStore, I want a delete call to report both whether it deleted a note and whether any notes remain, so that a UI can decide whether to show its empty state without making a second call.",
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "text": "When the only stored note is deleted by its id, the delete call reports that deletion succeeded and that no notes remain; listing afterward is empty.",
+      "edge_cases": [
+        "A freshly created store with exactly one note",
+        "Deleting that note after earlier notes have already been removed"
+      ]
+    },
+    {
+      "id": "AC-2",
+      "text": "When a stored note is deleted while at least one other note remains, the delete call reports that deletion succeeded and that notes remain; only the targeted note is absent afterward.",
+      "edge_cases": [
+        "Delete the first, middle, and last id from stores with multiple notes",
+        "Duplicate note text under different ids remains independent"
+      ]
+    },
+    {
+      "id": "AC-3",
+      "text": "When the requested id is absent, the delete call reports failure in a way distinguishable from either successful-delete outcome and leaves the store unchanged.",
+      "edge_cases": [
+        "Empty store",
+        "Unknown id in a non-empty store",
+        "Deleting the same id twice, where the second call reports failure"
+      ]
+    },
+    {
+      "id": "AC-4",
+      "text": "Existing callers that use a delete result as a boolean success signal continue to observe a truthy result for a successful deletion and a falsy result for a missing id.",
+      "edge_cases": [
+        "Successful deletion when the store becomes empty and when notes remain",
+        "Repeated deletion becomes falsy only on the second call"
+      ]
+    },
+    {
+      "id": "AC-5",
+      "text": "Existing add and list behaviour remains unchanged: adding returns increasing integer ids, and listing returns all current (id, text) pairs sorted by id.",
+      "edge_cases": [
+        "Add after deleting all notes does not reuse an old id",
+        "Duplicate and empty note text remain listable as separate notes"
+      ]
+    },
+    {
+      "id": "AC-6",
+      "text": "After the stage-0 research execution completes, it has a redacted trace artifact that Mission Control's execution drawer can load without exposing configured secret values.",
+      "edge_cases": [
+        "Trace contains a completed model turn and tool activity",
+        "Configured secret values and sensitive path segments are absent or redacted while the artifact remains readable"
+      ]
+    }
+  ],
+  "non_goals": [
+    "Persistence, concurrency, or any storage change",
+    "A new module, a new dependency, or a CLI",
+    "Building or changing a UI; the product checkout contains only the note-store API and its tests",
+    "Analytics, events, or changes to note text validation"
+  ],
+  "open_questions": []
+}

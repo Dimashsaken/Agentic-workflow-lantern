@@ -1,73 +1,172 @@
-# Mission Control — the frontend for the agent fleet
+# Mission Control — the software factory's face
 
-Where developers *see* the pipeline. Design principle (from
+Where developers *see* the factory. Design principle (from
 `docs/research/karpathy-agentic-loops.md`): the human's job in an agentic loop is
 **verification**, so the UI is a verification surface first and a dashboard second —
 "make the generation-verification loop go as fast as possible."
 
+v3 (D22) adds the two bars the reference designs set
+(`docs/plans/software-factory-alignment.md` §1 rule 5, §2 row 10):
+
+- **IndyDevDan's dashboard** — sessions as swim lanes, the compiled prompt, per-phase
+  cost, restart from here. That is the run page, the execution drawer, and `/cost`.
+- **HumanLayer's workspace** — one glance = what runs, what needs me, what it cost;
+  one click = act. That is Home: the Inbox above the Board, every gate card leading
+  with the artifact being decided, Approve/Reject on the card.
+
 ## Where it runs
 
 `tools/mission-control/app.py` — FastAPI + server-rendered HTML (no build step, no
-JS framework), served from the **same EC2 box** as the orchestrator (port 8080,
-its own systemd unit `lantern-mission-control.service`). It reads the same Postgres
-the pipeline writes, so there is no second source of truth. Expose it to the team
-via Tailscale (recommended) or a security-group-allowlisted IP + the built-in HTTP
-Basic auth — never open to the internet. Upgrade path if it ever needs public
-access or SSO: put CloudFront/ALB + OIDC in front; the app doesn't change.
+JS framework), served from the same host as the orchestrator (port 8080, its own
+systemd unit `lantern-mission-control.service`). It reads the same Postgres the
+pipeline writes and the same run folders the agents write, so there is no second
+source of truth. Expose it via Tailscale (recommended) or a security-group-allowlisted
+IP plus the built-in login — never open to the internet.
 
-## The five screens (and why these visuals)
+Modules: `ui.py` (tokens, CSS, the page shell, the vanilla-JS layer), `lanes.py`
+(the swim-lane model), `drawer.py` (one execution, end to end), `traceability.py`
+(the matrix), `catalog.py` (the factory catalog), `cost.py` (aggregation and
+tripwires), `chat.py` (the chat surface, docs/CHAT.md), `workspace.py` (the repo
+picker's boundary).
 
-1. **The Inbox — "what needs a human right now."** Pending gates, oldest first,
-   each with its payload (video link, plan, findings) and Approve/Reject inline.
-   This is the top of the page because the research's #5 failure mode is the silent
-   stall: *waiting must be visible, never assumed*. A developer who opens Mission
-   Control sees their blocking decisions before anything else.
-2. **The Board — runs as cards in stage columns** (kanban: `01-ui-ux` →
-   `07-qa-staging`). Color = status (running/waiting/failed/done). One glance
-   answers "where is my feature?" — the mental model matches the fixed pipeline, so
-   no legend is needed. Above the columns sits the **gate-latency ledger**
-   (feat-20260831-gate-latency): per gate type, the median time-to-decision over
-   the last 30 days of decided approvals with its sample count — the
-   symphony-alignment §6 staffing signal. Human review latency is the #1 failure
-   mode of ticket-to-PR systems, so the wait is on the board, not in a report:
-   every pending Review card shows its age, and past 24h it gets an explicit
-   `STALE` warning treatment. Read-only over `approvals`; a failed aggregate
-   degrades to a sentence without hiding the cards or their decision controls.
-3. **The Run page — a verification timeline.** Per stage: status, attempts, the
-   stage report rendered as HTML, artifacts (QA videos linked with their shot
-   lists, plans, diff/PR links), and the append-only event log underneath. This is
-   where Justin watches a video instead of attending a demo, and where a developer
-   audits an agent's claim in seconds — small artifacts, visually reviewable, per
-   Karpathy's leash rule. Every stage card links to a run-scoped consult of its
-   owning role ("consult ui-ux about this run"), and the run header to Lantern.
-4. **Chat — talking to the fleet** (`/chat`, design: `docs/CHAT.md`). The web
-   face of consult mode (D11): any fleet role, any custom agent, or the Lantern
-   orchestrator (which reads the pipeline database and hands questions to
-   specialists), with session history, live tool-call streaming over SSE, and
-   every turn in the token ledger. Advisory and read-only — the composer footer
-   says so on every conversation.
-5. **Agents — the roster** (`/agents`). Fleet roles beside user-created custom
-   agents, with per-agent usage and memory counts; new agents are a two-field
-   form (name + purpose; instructions composed when left empty).
+## What each page answers
+
+| Page | The question it answers |
+|------|-------------------------|
+| **Home** `/` | *What needs me, and what is the factory doing?* The **Inbox** lists every pending gate oldest first, each card opening with the artifact under decision and carrying Approve/Reject. Below it the gate-latency ledger, then the **Board** — runs as tickets in five workflow columns (Queued · Running · Blocked · Review · Done) with the 8-stage pipeline as a rail on each card. |
+| **Run** `/run/<id>` | *What ran, in what order, for how much?* **Swim lanes**: one lane per stage execution key in the order they started, each attempt a bar sized by duration, gate diamonds between lanes, per-lane tier / tokens / estimated cost. Below: the stage folders (reports, artifacts, videos, consults) and the audit log. |
+| **Execution drawer** `/run/<id>/exec/<n>` | *What did this execution actually do?* The compiled system prompt and kickoff, the tool-call timeline, the report, the typed envelope with its validation result, the quality gate, the memory rows it appended, its ledger — and the loop actions, retry and rework-to. |
+| **Traceability** `/run/<id>/trace` | *Is the contract kept?* Story criteria × plan tasks × coding commits × QA charter sections × validation verdicts, as a matrix of status chips. |
+| **Factory** `/factory` | *What is this factory made of?* Roles with their missions and tiers, the fixed pipeline and its gates, the model stack with its fallback chain resolved, each product's `lantern.toml` quality commands, eval numbers, and the builders a plan declares. Read-only, from files and the environment. |
+| **Cost** `/cost` | *What did it cost, and are we near a limit?* Per run, per day, per model, plus both tripwires with what has already fired. |
+| **Gates** `/gates` | The same gate cards as the Inbox, plus the decided history. |
+| **Runs** `/runs` | Every run as a flight strip, open above closed. |
+| **Chat** `/chat` · **Agents** `/agents` | Consult mode on the web (docs/CHAT.md, D13). |
+
+`/spend` redirects to `/cost`.
+
+## The keyboard map
+
+Every action also has a link or a button — the keys only shorten the path, and nothing
+client-side can decide a gate.
+
+| Key | Does |
+|-----|------|
+| `j` / `k` (or ↓ / ↑) | move between gate cards, run rows, execution bars |
+| `Enter` | open what is focused (the run, or the execution drawer) |
+| `a` | approve the focused gate — asks first, and says so when the report is BLOCKED |
+| `r` | reject the focused gate; prompts for the note, which is required |
+| `o` | open the focused row as a full page |
+| `t` | the traceability matrix of the run you are on |
+| `h` | home |
+| `d` | dark / light |
+| `Esc` | close the drawer, drop focus |
+| `?` | show this map in the corner |
+
+Typing in a field disables the single-key shortcuts; `Esc` leaves the field.
+
+## Light and dark
+
+Dark is the design system's canonical palette; light is the same ladder mirrored, with
+the gold ramp deepened so accent text keeps its contrast. The page follows the
+operating system unless a reader chooses with `d` (or the top-bar button), which is
+remembered per browser in `localStorage`. The choice is applied in a tiny inline script
+before first paint, so a light-mode reader never sees a dark flash.
+
+## On a phone
+
+One column below 820px: the board's five columns stack, the swim lanes fold each lane
+into a block (stage, tier, bar, cost), the drawer becomes a full-width sheet, the top
+bar wraps its nav onto a second line. Wide content — tables, prompts, tool output —
+scrolls inside its own container; the page itself never scrolls sideways.
+
+## The trace file — what the drawer reads
+
+`tools/azure-runner/factory.py` writes `<run>/<stage-dir>/trace/<execution-key>.json`
+after the agent's last turn, from both executors (`orchestrator.main` and
+`pipeline.run_agent_stage` call it with one two-line hook each, right after
+`result = results[-1]`).
+
+```json
+{
+  "kind": "trace", "run_id": "…", "stage": "00-story.scout",
+  "execution_key": "…:00-story.scout:2", "written_at": "…",
+  "instructions": "the compiled system prompt, redacted",
+  "instructions_chars": 25917,
+  "kickoff": "the first user turn",
+  "turns":      [{"turn": 1, "usage": {…}, "final_output": "…", "items": 71}],
+  "tool_calls": [{"order": 1, "turn": 1, "name": "read_file",
+                  "args": "…", "args_chars": 41,
+                  "output": "…", "output_chars": 2629, "seconds": null}],
+  "usage": {"requests": 9, "input_tokens": 126694, "…": 0},
+  "redaction": {"qa_target_dropped": false, "secret_values_known": 5}
+}
+```
+
+Rules it obeys:
+
+- **It never fails a stage.** A trace is observability, not a postcondition: every
+  error inside `write_trace` becomes one line on stderr.
+- **It never carries a secret.** Redaction happens *before* the file exists: the whole
+  `# QA target` section (the environment's test login) is dropped, credential-shaped
+  text is masked (`password: …`, `Bearer …`, `SOME_TOKEN=…`, `scheme://user:pass@host`,
+  known key shapes), and the values of secret-looking environment variables are
+  scrubbed wherever they appear. A value that is an ordinary short lowercase word is
+  deliberately *not* scrubbed wherever it appears — the local database password is
+  literally `lantern`, and blanket-masking it rewrote every `lantern.toml` path in a
+  trace as `[redacted].toml`; such a value is still masked where it reads as a
+  credential. Proof: `tools/azure-runner/test_trace.py`.
+- **It is truncated, and says so.** Arguments keep 600 characters, tool output 1500,
+  each turn's final output 4000; the drawer prints how much was cut.
+- **Filenames are Windows-safe.** Execution keys carry colons, so the filename
+  replaces every character outside `[A-Za-z0-9._-]`.
+
+Executions from before D22 have no trace, and the drawer says so plainly rather than
+showing an empty panel.
+
+## Honesty rules (carried over, not new)
+
+- **Presence AND validity.** A gate card renders the artifact it is deciding, and says
+  when a named artifact is missing — a PNG the handoff names but the run folder no
+  longer holds is stated in words, not served as a broken image.
+- **A report's own verdict outranks the database.** A stage execution can be
+  `succeeded` while its report's last `Status:` line says `BLOCKED`; that disagreement
+  is shown on the card, and approving asks again.
+- **Unmetered is never $0.00.** An execution that crashed before its usage line has no
+  token counts; every ledger view counts it separately and says real spend is higher.
+- **Bars are ordered, not scaled to a clock.** A lane's bars sit in the order the
+  executions started, and their fill is the duration against the run's longest
+  execution. Two builders that truly ran in parallel therefore appear in adjacent
+  columns, not stacked — the exact start and finish times are in the bar's tooltip and
+  in the drawer.
+- **The matrix traces by identifier only.** A commit or charter section counts for a
+  criterion when it names the `AC-n` id or a plan task mapped to it. Prose similarity
+  would be a guess dressed as evidence; untraced commits and orphan charter sections
+  are listed under the matrix instead.
 
 ## Gate integrity in the UI
 
 **Nothing is served unauthenticated** — every page redirects to a login screen;
 sessions are HMAC-signed cookies (7-day TTL, key from `LANTERN_WEB_SECRET`, falling
 back to a hash of `LANTERN_WEB_USERS`). Decisions write the `approvals` row with
-actor + timestamp + note (`channel='web'`) — the same fail-closed contract as the
-CLI (D8). No users configured → nobody can log in at all. Agents have no route here.
+actor + timestamp + note (`channel='web'`) — the same fail-closed contract as the CLI
+(D8), and the same event names, so one audit stream covers both surfaces. No users
+configured → nobody can log in at all. Agents have no route here.
 
-The UI explains itself: stage columns carry human names and one-line descriptions
-(`STAGE_META`), each gate states what is being decided and how (`GATE_META`), and a
-status legend defines every color — a developer's first visit needs no walkthrough.
+The drawer's **retry** and **rework-to** are the only other writes, and they call the
+pipeline's own primitives with the web user as the actor: retry re-queues a *failed*
+run at its current stage, rework sends a failed or waiting run back to an earlier
+`REWORK_TARGETS` stage through `pipeline.cmd_rework`. Approvals are never decided
+there.
 
 ## Roadmap
 
-- v1: the first three screens, polling refresh. **Done.**
-- v2 (now): Chat + Agents (SSE streaming landed there first); chat spend in the
-  ledger views.
-- v3: SSE on the run page; inline `<video>` playback via presigned S3 URLs;
-  Slack notification links deep-linking to the gate; brief-composer form
-  ("start a run" from the browser); PostHog error inbox feeding the debug
-  lifecycle; browser-MCP consults for browser roles (docs/CHAT.md roadmap).
+- v1: Inbox, Board, Run timeline, polling refresh. **Done.**
+- v2: Chat + Agents, SSE streaming, chat spend in the ledger. **Done.**
+- v3 (now): Inbox-first home with artifact-led gate cards, swim lanes, the execution
+  drawer over the trace file, the traceability matrix, the factory catalog, the cost
+  page, light mode, the keyboard map, phone layout. **Done.**
+- v4: per-tool-call timings (needs a streamed run, not the final result); SSE on the
+  run page so a live execution's lane grows without a reload; inline `<video>` playback
+  via presigned S3 URLs; a brief-composer form; the debug lifecycle's own lane table
+  once `pipeline.py bug` lands (D20).

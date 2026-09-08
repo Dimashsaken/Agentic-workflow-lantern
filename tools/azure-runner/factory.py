@@ -609,6 +609,13 @@ TRACE_PROMPT_MAX = 250_000    # the compiled prompt is large but finite
 REDACTED = "[redacted]"
 SECRET_ENV_SUFFIXES = ("PASS", "PASSWORD", "PASSWD", "SECRET", "TOKEN", "KEY", "CREDENTIALS")
 SECRET_VALUE_MIN_LEN = 4      # shorter values would scrub innocent substrings everywhere
+# A blanket search-and-replace of a value that is an ordinary word does more damage than
+# good: the local dev database password is literally "lantern", and scrubbing it turned
+# every `lantern.toml` in a trace into `[redacted].toml`. So a bare dictionary-shaped
+# word is left to the keyword and URL patterns, which still catch it where it actually
+# appears AS a credential (`://user:lantern@host`, `PGPASSWORD=lantern`); anything with
+# a digit, a symbol, mixed case, or real length is scrubbed wherever it appears.
+SECRET_WORD_MIN_LEN = 12      # an all-lowercase a-z word must be at least this long
 
 _QA_TARGET_RE = re.compile(r"\n\n# QA target\b.*?(?=\n\n# |\Z)", re.S)
 _QA_TARGET_NOTE = ("\n\n# QA target\n[redacted — the QA target and its test login never "
@@ -661,7 +668,18 @@ def secret_values(env: dict | None = None) -> list[str]:
             m = re.search(r"://[^/\s:@]+:([^@\s/]+)@", value)
             if m:
                 found.add(m.group(1))
-    return sorted((v for v in found if len(v) >= SECRET_VALUE_MIN_LEN), key=len, reverse=True)
+    return sorted((v for v in found if _worth_scrubbing(v)), key=len, reverse=True)
+
+
+def _worth_scrubbing(value: str) -> bool:
+    """Should this value be masked wherever it appears, or only where it reads as a
+    credential? A short all-lowercase word is a dictionary word first and a password
+    second — see SECRET_WORD_MIN_LEN."""
+    if len(value) < SECRET_VALUE_MIN_LEN:
+        return False
+    if value.isalpha() and value.islower() and len(value) < SECRET_WORD_MIN_LEN:
+        return False
+    return True
 
 
 def redact(text: str, env: dict | None = None) -> str:

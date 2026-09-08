@@ -1,13 +1,28 @@
 # Mission Control
 
-The web UI for the fleet — design and rationale in `docs/MISSION-CONTROL.md`.
-Five screens: the **Board** (runs as tickets in obligation columns), **Gates**
-(pending approvals with inline Approve/Reject), the **Run page** (verification
-timeline: reports, artifacts, videos, events), **Chat** (consult any fleet role,
-a custom agent, or the Lantern orchestrator — live tool streaming, history, and
-a per-turn token ledger; design in `docs/CHAT.md`, engine in
-`tools/azure-runner/chat_service.py`), and **Agents** (the roster + two-field
-custom-agent creation). **Spend** folds chat turns into the same ledger.
+The web UI for the software factory — design and rationale in
+`docs/MISSION-CONTROL.md`. v3 (D22):
+
+| Page | Module | What it answers |
+|------|--------|-----------------|
+| **Home** `/` | `app.py` | The **Inbox** (every pending gate, each card opening with the artifact being decided, Approve/Reject on the card) above the gate-latency ledger and the **Board** (runs as tickets in five workflow columns). |
+| **Run** `/run/<id>` | `lanes.py` | **Swim lanes**: one lane per stage execution key in start order, attempts as bars, gate diamonds between lanes, per-lane tier / tokens / est. cost. |
+| **Drawer** `/run/<id>/exec/<n>` | `drawer.py` | One execution end to end: compiled prompt, kickoff, tool-call timeline, report, envelope + validation, quality gate, memory rows, ledger, and the retry / rework-to actions. |
+| **Traceability** `/run/<id>/trace` | `traceability.py` | Story criteria × plan tasks × commits × QA charter × validation verdicts. |
+| **Factory** `/factory` | `catalog.py` | Roles, stages and gates, the model stack, each product's quality commands, evals, builders. |
+| **Cost** `/cost` | `cost.py` | Per run, per day, per model, and both spend tripwires. (`/spend` redirects here.) |
+| **Gates** · **Runs** · **Chat** · **Agents** | `app.py`, `chat.py` | Gate history, the flight-strip run list, and consult mode (`docs/CHAT.md`). |
+
+`ui.py` holds the tokens, CSS, page shell and the small vanilla-JS layer (theme,
+keyboard map, the drawer over fetch). No build step. Light and dark: the page follows
+the OS unless a reader presses `d`, remembered per browser. One column below 820px.
+Keyboard: `j`/`k` move, `Enter` opens, `a` approves, `r` rejects with a note, `t` the
+matrix, `?` the map — every one of them also a link or a button.
+
+The drawer reads `<run>/<stage-dir>/trace/<execution-key>.json`, written by
+`factory.write_trace` from both executors and redacted before it exists (the QA target
+section dropped, credential-shaped text masked). Executions from before D22 have no
+trace and the drawer says so.
 
 Chat needs the Azure model env vars (`AZURE_OPENAI_*`, `LANTERN_MODEL_*`) on the
 box; without them every page still works and the composer explains what is

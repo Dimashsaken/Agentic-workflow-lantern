@@ -155,6 +155,27 @@ class TraceTests(unittest.TestCase):
         self.assertNotIn(PASSWORD, text)
         self.assertIn("the form accepted [redacted] and logged in", text)
 
+    def test_a_dictionary_word_password_does_not_scrub_the_whole_trace(self):
+        """The local dev database password is literally "lantern". Masking it wherever it
+        appeared turned every `lantern.toml` path in a trace into `[redacted].toml` — a
+        fail-safe that destroyed the artifact the drawer exists to show. A bare lowercase
+        word is left to the keyword and URL patterns, which still catch it as a credential."""
+        os.environ["LANTERN_DATABASE_URL"] = "postgresql+asyncpg://lantern:lantern@localhost:5432/lantern"
+        self.assertNotIn("lantern", factory.secret_values())
+        out = factory.redact('read_file {"path":"product/lantern.toml"}')
+        self.assertIn("product/lantern.toml", out)                 # the path survives
+        # …but the same word AS a credential is still masked
+        self.assertEqual(factory.redact("psql postgresql://lantern:lantern@db:5432/lantern"),
+                         "psql postgresql://lantern:[redacted]@db:5432/lantern")
+        self.assertIn("[redacted]", factory.redact("PGPASSWORD=lantern"))
+        self.assertIn("[redacted]", factory.redact("password: lantern"))
+        # a long or mixed value is still scrubbed everywhere it appears
+        os.environ["QA_PASS"] = "correct-horse-42"
+        self.assertIn("correct-horse-42", factory.secret_values())
+        self.assertNotIn("correct-horse-42", factory.redact("the log said correct-horse-42 once"))
+        os.environ["QA_PASS"] = "extraordinarily"          # 15 lowercase letters — long enough
+        self.assertIn("extraordinarily", factory.secret_values())
+
     def test_url_credentials_and_short_values(self):
         self.assertEqual(factory.redact("git fetch https://bot:s3cretpw@github.com/x"),
                          "git fetch https://bot:[redacted]@github.com/x")

@@ -89,6 +89,38 @@ class EmptyDatabase(unittest.TestCase):
         self.assertEqual(status_of(cm.exception), 401)
 
 
+class BugRunOnEveryPage(unittest.TestCase):
+    """A bug run walks the debug lifecycle, whose stage keys are not in the feature
+    pipeline's display map. /runs crashed with IndexError the first time one appeared."""
+
+    BUG = "bug-20260908-help-crash"
+
+    def bug_run(self, status="running", **over):
+        return run_row(id=self.BUG, status=status, current_stage="02-repro", **over)
+
+    def test_runs_page_survives_a_debug_lifecycle_run(self):
+        pool = FakePool(runs=[self.bug_run()])
+        resp = get(mc.runs_index, signed(), pool=pool)
+        self.assertEqual(resp.status_code, 200)
+        html = body_of(resp)
+        self.assertIn(self.BUG, html)
+        self.assertIn("02-repro", html)
+
+    def test_board_and_run_page_too(self):
+        pool = FakePool(runs=[self.bug_run()],
+                        execs=[exec_row(1, self.BUG, "01-triage", 1, "succeeded", NOW - timedelta(hours=2), 170)])
+        self.assertEqual(get(mc.board, signed(), pool=pool).status_code, 200)
+        html = body_of(get(mc.run_page, self.BUG, signed(), pool=pool))
+        self.assertIn("01-triage", html)
+        self.assertIn("debug lifecycle", html)          # and no feature stages assumed
+        self.assertNotIn("01-ui-ux.diverge", html)
+
+    def test_every_status_of_an_unmapped_stage_renders(self):
+        for status in ("running", "executing", "failed", "waiting_gate", "done", "cancelled"):
+            pool = FakePool(runs=[self.bug_run(status=status)])
+            self.assertEqual(get(mc.runs_index, signed(), pool=pool).status_code, 200, status)
+
+
 class Shell(unittest.TestCase):
     def test_theme_keyboard_and_drawer_on_every_page(self):
         html = body_of(get(mc.board, signed(), pool=FakePool()))
@@ -148,6 +180,25 @@ class HomeInboxAndBoard(unittest.TestCase):
         # the board column still shows the ticket with its controls
         self.assertIn("kcard hot stale", html)
         self.assertIn("href='/gates#gate-7'", html)
+
+    def test_a_named_png_that_is_gone_is_said_not_shown_broken(self):
+        """Presence AND validity for the artifact under decision: a handoff naming a
+        PNG the run folder no longer holds must say so, not emit a broken <img>."""
+        root = self.tmp / "workflow" / "runs" / RUN / "01-ui-ux"
+        root.mkdir(parents=True)
+        (root / "kept@2x.png").write_bytes(b"fake png bytes")
+        handoff = {"recommended": "kept", "options": [
+            {"name": "kept", "axis": "a", "pngs": [f"workflow/runs/{RUN}/01-ui-ux/kept@2x.png"]},
+            {"name": "gone", "axis": "b", "pngs": [f"workflow/runs/{RUN}/01-ui-ux/gone@2x.png"]}]}
+        run = run_row(id=RUN, status="waiting_gate", current_stage="01-ui-ux.design")
+        html = mc.gate_card(approval_row(id=13, run_id=RUN, gate="ux_signoff",
+                                         payload=json.dumps({"stage": "01-ui-ux.design", "handoff": handoff})),
+                            run, NOW)
+        self.assertIn("kept@2x.png' alt='kept'", html)
+        self.assertNotIn("gone@2x.png' alt=", html)              # no broken image
+        self.assertIn("gone@2x.png — named by the handoff, not in the run folder", html)
+        self.assertFalse(mc.png_exists("../../etc/passwd"))      # confined like /file/
+        self.assertFalse(mc.png_exists(""))
 
     def test_blocked_report_marks_the_form(self):
         (self.tmp / "workflow" / "runs" / RUN / "00-story" / "report.md").write_text(

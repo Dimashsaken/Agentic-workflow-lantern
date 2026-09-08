@@ -313,6 +313,15 @@ def art_href(uri: str) -> str:
     return uri if uri.startswith(("http://", "https://", "s3://")) else f"/file/{uri}"
 
 
+def png_exists(rel) -> bool:
+    """Is this repo-relative artifact actually on disk? Same confinement as /file/."""
+    try:
+        p = (REPO / str(rel)).resolve()
+        return p.is_relative_to((REPO / "workflow" / "runs").resolve()) and p.is_file()
+    except (OSError, ValueError):
+        return False
+
+
 async def snapshot(p) -> dict:
     """Everything the board and runs pages need, in one batch of queries."""
     runs = await p.fetch("SELECT * FROM runs ORDER BY updated_at DESC")
@@ -450,7 +459,10 @@ def build_strip(run, snap: dict, now: datetime) -> tuple[str, dict]:
         else:
             d_chip = ("Queued", "")
             why = f"waiting for a {runner} daemon slot"
-        wait_main = ("Agent", f" — {meta[0].split('·', 1)[1].strip()}")
+        # "0 · Research & story" → "Research & story"; a stage dir with no STAGE_META
+        # entry (a bug run's 02-repro) keeps its own key. Taking [1] crashed the whole
+        # page the first time a debug-lifecycle run appeared on it.
+        wait_main = ("Agent", f" — {meta[0].split('·', 1)[-1].strip()}")
         started = e["started_at"] if e and e["status"] in ("running",) else run["updated_at"]
         elapsed, cold = ago((now - started).total_seconds()), False
     elif run["status"] in ("done", "cancelled"):
@@ -691,9 +703,15 @@ def gate_artifacts(a, run, payload: dict, dir_: str, text: str | None, inline: b
         cards = []
         for o in h.get("options", []):
             rec = o.get("name") == h.get("recommended")
+            # Presence AND validity, applied to the artifact under decision: a PNG the
+            # handoff names but the run folder no longer holds is said out loud, not
+            # served as a broken image the approver has to interpret.
             imgs = "".join(
-                f"<a href='/file/{H(png)}' target='_blank'><img src='/file/{H(png)}' "
-                f"alt='{H(o.get('name', '?'))}' loading='lazy'></a>"
+                (f"<a href='/file/{H(png)}' target='_blank'><img src='/file/{H(png)}' "
+                 f"alt='{H(o.get('name', '?'))}' loading='lazy'></a>")
+                if png_exists(png) else
+                (f"<div class='missingpng'>{H(Path(str(png)).name)} — named by the handoff, "
+                 f"not in the run folder</div>")
                 for png in o.get("pngs", []))
             star = "<span class='chip gate'>Recommended</span>" if rec else ""
             cards.append(
@@ -892,8 +910,8 @@ async def login_page(request: Request, error: str = ""):
       <p>The control room for the software factory. Sign in to see runs and decide gates.</p>
       {warn}{err}
       <form method='post' action='/login'>
-        <input name='username' type='text' placeholder='username' autofocus>
-        <input name='password' type='password' placeholder='password'>
+        <input name='username' type='text' placeholder='username' autocomplete='username' autofocus>
+        <input name='password' type='password' placeholder='password' autocomplete='current-password'>
         <button class='btn primary'>Sign in</button>
       </form></div>"""))
 

@@ -475,3 +475,89 @@ deployment (Terra) lands later. What shipped, and the shape chosen:
   108 s with a four-criterion story mapped 1:1 to the brief's must-haves, and
   `story_signoff` opened. A parser bug surfaced on the way (a blank `Working branch:`
   line swallowed the next line) and is fixed with `test_brief_parsing.py`.
+
+## D22 — 2026-09-09 — Mission Control v3: the factory's face, and a trace to look at
+
+The factory could run a feature end to end but could not be *watched*. The board
+answered "where is my feature"; nothing answered "what did that execution actually
+do", "what is this criterion's fate", "what is the factory made of", or "what did
+today cost". The two reference bars (`docs/plans/software-factory-alignment.md` §1
+rule 5, §2 row 10) are IndyDevDan's dashboard — sessions as swim lanes, compiled
+prompts, per-phase cost, restart from here — and HumanLayer's workspace — one glance
+= what runs, what needs me, what it cost; one click = act.
+
+- **The artifact leads the gate card, not the report.** Every pending gate opens with
+  the thing being decided: `story.md` for `story_signoff`, the option PNGs for
+  `ux_signoff`, the plan summary plus `task-plan.md` for `plan_signoff`, the pull
+  request plus `gate.md` plus review rounds plus builders for `code_complete`, the
+  validation table before `staging_deploy`, the staging videos before `prod_signoff`.
+  Before this a reviewer got a stage report and had to know which file to go read. The
+  Inbox now sits *above* the board on Home, because "what needs me" outranks "what is
+  running". Approve and Reject are one form, so the keyboard can submit it and nothing
+  client-side can decide a gate.
+- **A run is its executions, not its stages.** The run page is swim lanes keyed by
+  *execution key* — `00-story.scout`, `03-coding.api`, `03-coding.review` — so the
+  parallel builders of D18 and the review rounds of D19 appear as their own lanes the
+  day those sessions land, with no change here. Each attempt is a bar carrying its
+  duration, model tier, tokens and estimated cost from the ledger; gate diamonds sit
+  between the lanes they gate. Bars are ordered, not scaled to a clock: two builders
+  that truly overlapped appear in adjacent columns, and the exact times live in the
+  tooltip and the drawer. A run whose current stage is outside the feature pipeline (a
+  bug run on the debug lifecycle) shows only what it executed — painting the eight
+  feature stages as its road ahead would have been a claim about work it will never do.
+- **The execution drawer is the answer to "prove it".** Compiled system prompt,
+  kickoff, the tool-call timeline (name, arguments, result size), the report, the typed
+  envelope *with its validation result recomputed live*, `gate.md`, the memory rows
+  keyed to that execution, the ledger — and the loop actions. Retry and rework-to are
+  server-side POSTs onto `pipeline`'s own primitives with the web user as the actor;
+  **approvals are never decided there**, which keeps D6's gate integrity in one place.
+- **Traces are captured at the source, and redacted before they exist.**
+  `factory.write_trace()` writes `<stage-dir>/trace/<execution-key>.json` from both
+  executors (one two-line hook each, right after `result = results[-1]`). Two rules:
+  it never raises — observability is not a postcondition — and it never carries a
+  secret. The `# QA target` section (the environment's test login) is dropped whole,
+  credential-shaped text is masked, and the values of secret-looking environment
+  variables are scrubbed wherever they appear. **The over-redaction lesson:** the local
+  database password is literally `lantern`, and blanket-masking it rewrote every
+  `lantern.toml` path in a trace as `[redacted].toml` — fail-safe, and useless. A value
+  that is a short all-lowercase word is now left to the keyword and URL patterns, which
+  still catch it where it reads as a credential.
+- **Traceability is matched by identifier, never by prose.** The matrix rows are the
+  story's criteria; a plan task, a commit or a QA charter section counts for a
+  criterion when it *names* the `AC-n` id or a task mapped to it. Text similarity would
+  be a guess dressed as evidence — the same rule that makes a report a claim and a file
+  the evidence. Commits and charter sections that trace to nothing are listed under the
+  matrix rather than quietly dropped, and each row's verdict is computed from the
+  stages that ran, never chosen.
+- **The catalog reads files and environment, not a hand-written page.** Roles come from
+  `agents/<role>/charter.md` and `tier_for()`, stages and gates from `FEATURE_STAGES`,
+  the model stack from `LANTERN_MODEL_*`/`LANTERN_EFFORT_*` with the fallback chain
+  resolved and the *intended* deployment named beside the resolved one, product gates
+  from each `lantern.toml`, evals from `tools/evals/REPORT.md` when D20 writes one. It
+  cannot drift from the factory because it is derived from it.
+- **Light mode, a keyboard map, and a phone layout — because a gate is decided
+  wherever the human is.** The light palette mirrors the design system's dark ladder
+  with the gold ramp deepened for contrast; the choice follows the OS unless made
+  explicitly, applied before first paint. `j/k` move, `a` approves, `r` rejects with a
+  required note, `t` opens the matrix, `?` shows the map — every one of them also a
+  link or a button, so the keyboard is a shortcut and never the only path.
+- **Three defects the real data found, fixed here:** `/runs` crashed with `IndexError`
+  the first time a bug run appeared (a stage name with no ` · ` in the display map);
+  a gate rejection logged `gate_rejectd`, splitting web rejections from the CLI's
+  `gate_rejected` in the audit log; and a handoff naming a PNG the run folder no longer
+  holds rendered a broken image instead of saying so.
+- **Not done, on purpose:** per-tool-call timings (the SDK's final result carries order
+  and payloads, not per-call clocks — that needs a streamed run); SSE on the run page,
+  so a live lane still needs the 30-second reload; inline video playback; and the debug
+  lifecycle's own lane table, which waits for `pipeline.py bug` (D20) to define it.
+- **Proof:** `tools/mission-control/test_lanes.py` (16), `test_drawer.py` (8, over a
+  trace written by the real `write_trace`), `test_traceability.py` (8),
+  `test_catalog.py` (8), `test_cost.py` (8), `test_routes_v3.py` (18, every route on an
+  empty database and every write fail-closed), shared fixtures in `fakes.py`, and
+  `tools/azure-runner/test_trace.py` (15, including "a QA password never reaches the
+  trace"). Live proof on `gpt-5.6-sol`: run `feat-20260909-trace-proof` executed
+  `00-story.scout` (33 tool calls) and `00-story.write` (25) in-process against a
+  throwaway product repo; both wrote traces the drawer renders, neither contains any
+  configured secret, and the run opened a real `story_signoff` gate. Screenshots of
+  every page at 1440 and 390 px, light and dark, in
+  `tools/mission-control/screenshots/v3-*.png`.

@@ -139,19 +139,27 @@ def build_lanes(run, execs, approvals, now: datetime, traces: set[str] | None = 
 
     # Stages the run passed without an execution here (human coding, imports) and
     # stages still ahead: ghost lanes so the whole road is visible.
+    #
+    # ONLY for a run on the feature pipeline. A bug run walks the debug lifecycle
+    # (workflow/DEBUG-LIFECYCLE.md: triage → repro → root-cause → fix → regression →
+    # postmortem), so painting the eight feature stages as its road ahead would claim
+    # it is going to run a ui-ux stage it will never reach. Its lanes are what it
+    # actually executed, and render_lanes says which lifecycle it is on.
     cur = run["current_stage"]
+    feature_run = cur in STAGE_INDEX
     cur_i = STAGE_INDEX.get(cur, -1)
-    for stage, _sdir, stype, _gate, _runner in FEATURE_STAGES:
-        if stage in lanes:
-            continue
-        lane = lanes[stage] = _new_lane(stage, run_id)
-        i = STAGE_INDEX[stage]
-        if i < cur_i or (i == cur_i and run["status"] in ("waiting_gate", "done")):
-            lane["passed_without_execution"] = True
-        elif i == cur_i:
-            lane["current"] = True          # queued / executing with no row yet
-        else:
-            lane["future"] = True
+    if feature_run:
+        for stage, _sdir, stype, _gate, _runner in FEATURE_STAGES:
+            if stage in lanes:
+                continue
+            lane = lanes[stage] = _new_lane(stage, run_id)
+            i = STAGE_INDEX[stage]
+            if i < cur_i or (i == cur_i and run["status"] in ("waiting_gate", "done")):
+                lane["passed_without_execution"] = True
+            elif i == cur_i:
+                lane["current"] = True          # queued / executing with no row yet
+            else:
+                lane["future"] = True
     if cur in lanes and run["status"] not in ("done", "cancelled"):
         lanes[cur]["current"] = True
 
@@ -182,7 +190,8 @@ def build_lanes(run, execs, approvals, now: datetime, traces: set[str] | None = 
 
     ordered = sorted(lanes.values(), key=sort_key)
     return {
-        "lanes": ordered, "columns": max(len(rows), 1), "executions": len(rows),
+        "lanes": ordered, "feature_run": feature_run,
+        "columns": max(len(rows), 1), "executions": len(rows),
         "retries": sum(max(0, ln["attempt_count"] - 1) for ln in ordered),
         "seconds": sum(ln["seconds"] for ln in ordered),
         "cost": sum(ln["cost"] for ln in ordered),
@@ -271,11 +280,16 @@ def render_lanes(model: dict, run_id: str, gate_short: dict, gate_meta: dict,
         rows.append(f"<div class='{cls}' data-stage='{H(lane['stage'])}'>{left}{mid}{right}</div>")
         if lane["gate"]:
             rows.append(gate_row(lane, gate_short, gate_meta))
+    lifecycle = ""
+    if not model.get("feature_run", True):
+        lifecycle = ("<span>this run is on the <b>debug lifecycle</b> "
+                     "(workflow/DEBUG-LIFECYCLE.md), not the feature pipeline — the lanes "
+                     "are what it has executed, with no stages ahead assumed</span>")
     legend = ("<div class='lanefoot'>"
               "<span class='sw'><i style='background:var(--success)'></i>succeeded</span>"
               "<span class='sw'><i style='background:var(--danger)'></i>failed</span>"
               "<span class='sw'><i style='background:var(--dawn-3)'></i>running</span>"
               "<span class='sw'><i style='background:var(--accent)'></i>◆ gate</span>"
               "<span>bar fill = duration vs the longest execution · click a bar for the "
-              "compiled prompt, tool calls, report and envelope</span></div>")
+              f"compiled prompt, tool calls, report and envelope</span>{lifecycle}</div>")
     return f"<section class='lanes'>{''.join(rows)}</section>{legend}"

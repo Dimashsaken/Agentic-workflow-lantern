@@ -401,6 +401,9 @@ kbd{font-family:var(--font-mono);font-size:var(--text-caps);border:1px solid var
   margin-bottom:10px}
 .gopt img{width:100%;border:1px solid var(--edge);border-radius:var(--r-sm);
   background:var(--surface-0);display:block}
+.missingpng{border:1px dashed var(--warning-edge);background:var(--warning-soft);
+  border-radius:var(--r-sm);padding:10px 12px;font-family:var(--font-mono);
+  font-size:var(--text-caps);color:var(--warning);line-height:1.5}
 .gmeta{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 0;
   font-family:var(--font-mono);font-size:var(--text-caps);color:var(--text-dim)}
 .gmeta b{color:var(--text-muted);font-weight:400}
@@ -435,7 +438,13 @@ kbd{font-family:var(--font-mono);font-size:var(--text-caps);border:1px solid var
 .round .rn{font-family:var(--font-mono);color:var(--text);white-space:nowrap}
 
 /* rendered markdown reports */
-.prose{font-size:var(--text-sm);line-height:1.65;color:var(--text);max-width:92ch}
+/* Reports carry long paths, branch names and URLs. On a phone an unbreakable token
+   would push the card past the viewport, so prose breaks anywhere; code blocks and
+   tables keep their shape and scroll inside themselves instead. */
+.prose{font-size:var(--text-sm);line-height:1.65;color:var(--text);max-width:92ch;
+  overflow-wrap:anywhere}
+.prose img{max-width:100%;height:auto}
+.prose pre,.prose table{overflow-wrap:normal}
 .prose h1{font-size:var(--text-md);margin:18px 0 6px}
 .prose h2{font-size:var(--text-sm);font-weight:700;margin:16px 0 4px}
 .prose h3{font-size:var(--text-sm);font-weight:600;margin:12px 0 3px;
@@ -678,9 +687,12 @@ details.dfold .prose{padding:0}
   flex-wrap:wrap}
 .ccard .cn .chip{margin-left:auto}
 .ccard .cm{font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;margin:7px 0 0}
+.ccard{overflow:hidden}
 .ccard .cr{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;font-family:var(--font-mono);
   font-size:var(--text-caps);color:var(--text-dim)}
-.ccard .cr span{white-space:nowrap}
+/* A long tool list wraps inside its card instead of running off the edge — the
+   roster is read at a glance, and clipped text reads as a rendering fault. */
+.ccard .cr span{min-width:0;overflow-wrap:anywhere;line-height:1.5}
 .cattbl{width:100%;border-collapse:collapse;margin-top:8px}
 .cattbl th{font-family:var(--font-label);text-transform:uppercase;letter-spacing:.11em;
   font-size:var(--text-caps);color:var(--text-dim);text-align:left;font-weight:400;
