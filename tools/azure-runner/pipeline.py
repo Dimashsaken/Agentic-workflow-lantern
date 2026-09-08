@@ -579,6 +579,8 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         else:
             results = [await run_turn(kickoff)]
         result = results[-1]
+        factory.write_trace(run_id, stage, execution_key,          # D22: compiled prompt +
+                            agent.instructions, kickoff, results)  # tool calls for the drawer
         final = str(result.final_output)
         # D14: bundle the committed branch into the run folder while the checkout exists.
         finalize_problems = finalize_coding(run_id, stage) if role == "coding" else []

@@ -588,3 +588,229 @@ def merge_usage(usages: list[dict]) -> dict:
             if isinstance(v, (int, float)):
                 out[k] = out.get(k, 0) + int(v)
     return out
+
+
+# ── execution traces (D22) ───────────────────────────────────────────────────
+# Mission Control's execution drawer reads <stage-dir>/trace/<execution-key>.json: the
+# compiled system prompt, the kickoff, every tool call in order (name, truncated args,
+# truncated output) and the token usage per turn. ONE call writes it, right after the
+# agent's last turn, on both executors (orchestrator.main and pipeline.run_agent_stage).
+# Two rules: it never raises — a trace is observability, not a postcondition — and it
+# never carries a secret: the "# QA target" section (the test login) is dropped and
+# anything that looks like a password or token is masked BEFORE the file exists. The
+# values of secret-looking environment variables are scrubbed too, so a credential the
+# regexes would not recognise still cannot reach disk through a prompt or a tool output.
+
+TRACE_DIR = "trace"
+TRACE_ARGS_MAX = 600          # chars of tool arguments kept per call
+TRACE_OUTPUT_MAX = 1500       # chars of tool output kept per call
+TRACE_FINAL_MAX = 4000        # chars of each turn's final output
+TRACE_PROMPT_MAX = 250_000    # the compiled prompt is large but finite
+REDACTED = "[redacted]"
+SECRET_ENV_SUFFIXES = ("PASS", "PASSWORD", "PASSWD", "SECRET", "TOKEN", "KEY", "CREDENTIALS")
+SECRET_VALUE_MIN_LEN = 4      # shorter values would scrub innocent substrings everywhere
+
+_QA_TARGET_RE = re.compile(r"\n\n# QA target\b.*?(?=\n\n# |\Z)", re.S)
+_QA_TARGET_NOTE = ("\n\n# QA target\n[redacted — the QA target and its test login never "
+                   "enter a trace; the running execution had them]")
+_SECRET_PATTERNS = [
+    # bearer tokens first, so "Authorization: Bearer x" loses the token, not just the word
+    re.compile(r"(?i)\b(bearer\s+)([A-Za-z0-9._~+/=-]{8,})"),
+    # key: value / key=value / key `value` — a separator is required, so prose such as
+    # "the token ledger" or "the bot token" stays readable
+    re.compile(r"(?i)\b(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|"
+               r"private[_-]?key|authorization|credentials?)\b(\s*(?:[:=]|`)\s*)([^\s`\"',;)]+)"),
+    # SOME_VAR_PASS=value / export X_TOKEN=value
+    re.compile(r"(?im)^(\s*(?:export\s+)?[A-Z][A-Z0-9_]*(?:PASS|PASSWORD|PASSWD|SECRET|TOKEN|KEY)"
+               r"\s*=\s*)(\S+)"),
+    # credentials inside URLs: scheme://user:pass@host
+    re.compile(r"(://[^/\s:@]+:)([^@\s/]+)(@)"),
+    # well-known token shapes
+    re.compile(r"\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|"
+               r"xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|"
+               r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b"),
+]
+
+
+def trace_filename(execution_key: str) -> str:
+    """Execution keys carry colons ('run:stage:attempt'); NTFS forbids them in names."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", execution_key) + ".json"
+
+
+def trace_path(run_id: str, stage: str, execution_key: str) -> Path:
+    return run_dir(run_id) / stage_dir(stage) / TRACE_DIR / trace_filename(execution_key)
+
+
+def secret_values(env: dict | None = None) -> list[str]:
+    """Values that must never appear in a trace: every secret-looking env var, the
+    passwords inside LANTERN_WEB_USERS and inside connection URLs. Longest first, so a
+    secret that contains a shorter one is scrubbed whole."""
+    env = os.environ if env is None else env
+    found: set[str] = set()
+    for name, value in env.items():
+        if not isinstance(value, str) or len(value) < SECRET_VALUE_MIN_LEN:
+            continue
+        upper = name.upper()
+        if upper == "LANTERN_WEB_USERS":
+            for pair in value.split(","):
+                if ":" in pair:
+                    found.add(pair.split(":", 1)[1].strip())
+        elif upper.endswith(SECRET_ENV_SUFFIXES):
+            found.add(value.strip())
+        if "://" in value and "@" in value:            # user:pass@host
+            m = re.search(r"://[^/\s:@]+:([^@\s/]+)@", value)
+            if m:
+                found.add(m.group(1))
+    return sorted((v for v in found if len(v) >= SECRET_VALUE_MIN_LEN), key=len, reverse=True)
+
+
+def redact(text: str, env: dict | None = None) -> str:
+    """Drop the QA-target section and mask anything that looks like a credential."""
+    if not text:
+        return ""
+    out = _QA_TARGET_RE.sub(_QA_TARGET_NOTE, text)
+    for value in secret_values(env):
+        out = out.replace(value, REDACTED)
+    for pat in _SECRET_PATTERNS:
+        if pat.groups == 3 and pat.pattern.startswith("(://"):
+            out = pat.sub(lambda m: m.group(1) + REDACTED + m.group(3), out)
+        elif pat.groups == 3:
+            out = pat.sub(lambda m: m.group(1) + m.group(2) + REDACTED, out)
+        elif pat.groups == 2:
+            out = pat.sub(lambda m: m.group(1) + REDACTED, out)
+        else:
+            out = pat.sub(REDACTED, out)
+    return out
+
+
+def _as_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        try:
+            return json.dumps(value, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            return str(value)
+    return str(value)
+
+
+def _raw_get(raw, key: str):
+    if isinstance(raw, dict):
+        return raw.get(key)
+    return getattr(raw, key, None)
+
+
+def _item_kind(item) -> str:
+    kind = getattr(item, "type", None)
+    return kind if isinstance(kind, str) else type(item).__name__
+
+
+def _usage_of(result) -> dict:
+    """Token usage of one Runner.run result as plain ints (the SDK's usage shape has
+    shifted between releases — every field is optional)."""
+    u = getattr(getattr(result, "context_wrapper", None), "usage", None)
+    if u is None:
+        return {}
+    d = {k: getattr(u, k, None) for k in ("requests", "input_tokens", "output_tokens", "total_tokens")}
+    details = getattr(u, "input_tokens_details", None)
+    if details is not None:
+        d["cached_input_tokens"] = getattr(details, "cached_tokens", None)
+    return {k: int(v) for k, v in d.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+
+
+_CALL_KINDS = {"tool_call_item", "ToolCallItem", "handoff_call_item", "HandoffCallItem",
+               "tool_search_call_item", "ToolSearchCallItem"}
+_OUTPUT_KINDS = {"tool_call_output_item", "ToolCallOutputItem", "handoff_output_item",
+                 "HandoffOutputItem", "tool_search_output_item", "ToolSearchOutputItem"}
+
+
+def extract_tool_calls(results, env: dict | None = None) -> list[dict]:
+    """Every tool call across the turns, in order, paired with its output by call id
+    (or by position when the SDK gives none). Args and outputs are redacted then
+    truncated; the full lengths are kept so the drawer can say how much was cut."""
+    calls: list[dict] = []
+    by_id: dict[str, dict] = {}
+    for turn, res in enumerate(results or [], 1):
+        items = getattr(res, "new_items", None) or []
+        for item in items:
+            kind = _item_kind(item)
+            raw = getattr(item, "raw_item", None)
+            if kind in _CALL_KINDS:
+                name = _raw_get(raw, "name") or _raw_get(raw, "server_label") or type(raw).__name__
+                arguments = _raw_get(raw, "arguments")
+                args = _as_text(arguments if arguments is not None else _raw_get(raw, "input"))
+                entry = {"order": len(calls) + 1, "turn": turn, "name": str(name),
+                         "args": redact(args, env)[:TRACE_ARGS_MAX], "args_chars": len(args),
+                         "output": None, "output_chars": 0, "seconds": None}
+                cid = _raw_get(raw, "call_id") or _raw_get(raw, "id")
+                if cid:
+                    by_id[str(cid)] = entry
+                calls.append(entry)
+            elif kind in _OUTPUT_KINDS:
+                out = getattr(item, "output", None)
+                if out is None:
+                    out = _raw_get(raw, "output")
+                text = _as_text(out)
+                cid = _raw_get(raw, "call_id")
+                entry = by_id.pop(str(cid), None) if cid else None
+                if entry is None:
+                    entry = next((c for c in calls if c["output"] is None), None)
+                if entry is not None:
+                    entry["output"] = redact(text, env)[:TRACE_OUTPUT_MAX]
+                    entry["output_chars"] = len(text)
+    return calls
+
+
+def write_trace(run_id: str, stage: str, execution_key: str, instructions, kickoff,
+                results) -> Path | None:
+    """Write <stage-dir>/trace/<execution-key>.json for Mission Control. Never raises."""
+    try:
+        turns = []
+        for i, res in enumerate(results or [], 1):
+            final = _as_text(getattr(res, "final_output", ""))
+            turns.append({"turn": i, "usage": _usage_of(res),
+                          "final_output": redact(final)[-TRACE_FINAL_MAX:],
+                          "items": len(getattr(res, "new_items", None) or [])})
+        calls = extract_tool_calls(results)
+        raw_prompt = _as_text(instructions)
+        data = {
+            "kind": "trace", "run_id": run_id, "stage": stage, "execution_key": execution_key,
+            "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "instructions": redact(raw_prompt)[:TRACE_PROMPT_MAX],
+            "instructions_chars": len(raw_prompt),
+            "kickoff": redact(_as_text(kickoff)),
+            "turns": turns,
+            "tool_calls": calls,
+            "usage": merge_usage([t["usage"] for t in turns]),
+            "redaction": {"qa_target_dropped": bool(_QA_TARGET_RE.search(raw_prompt)),
+                          "secret_values_known": len(secret_values())},
+        }
+        path = trace_path(run_id, stage, execution_key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+        print(f"[trace] {path.as_posix()} ({len(calls)} tool calls, {len(turns)} turn(s))",
+              file=sys.stderr)
+        return path
+    except Exception as e:  # noqa: BLE001 — observability must never fail a stage
+        print(f"[trace] not written for {execution_key}: {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
+def read_trace(run_id: str, stage: str, execution_key: str) -> dict | None:
+    """The trace of one execution, or None. Falls back to scanning the trace dir by the
+    key inside each file, so a change to the filename rule cannot orphan old traces."""
+    direct = trace_path(run_id, stage, execution_key)
+    if direct.is_file():
+        candidates = [direct]
+    elif direct.parent.is_dir():
+        candidates = sorted(direct.parent.glob("*.json"))
+    else:
+        candidates = []
+    for p in candidates:
+        data, _err = _load_json(p)
+        if data and data.get("kind") == "trace" and (
+                p == direct or data.get("execution_key") == execution_key):
+            return data
+    return None

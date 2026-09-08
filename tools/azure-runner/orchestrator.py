@@ -1629,6 +1629,8 @@ async def main() -> None:
         else:
             results = [await run_turn(kickoff)]
         result = results[-1]
+        factory.write_trace(args.run_id, args.stage, execution_key,   # D22: compiled prompt +
+                            agent.instructions, kickoff, results)     # tool calls for the drawer
         print(result.final_output)
         if role == "coding":
             # The checkout dies with this process; bundle the committed branch into
