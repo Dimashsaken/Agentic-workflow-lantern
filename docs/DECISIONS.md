@@ -389,3 +389,89 @@ a turn discovering the codebase's own conventions.
   and git refuses a fetch into a branch that repo has checked out; (c) the untrusted-doc
   fences are mitigation, not a guarantee; (d) discovery under a root on a network drive
   can be slow despite the time box.
+
+## D16 — 2026-09-08 — Model stack: three tiers with reasoning effort; the project is a software factory
+
+Dimash asked for the planner-strong / builder-cheap split the software-factory
+reference designs use (IndyDevDan's Super Simple Software Factory; the Boundary /
+HumanLayer "enterprise software factory" stack; Ray Fu's seven-agent setup — analysis
+in `docs/plans/software-factory-alignment.md`), with token budget explicitly not the
+constraint ("token-max").
+
+- **Three tiers, not two.** `reasoning` (research, scoping, planning, review, security,
+  debug, ui-ux design), `coding` (the stage-3 builder in auto mode), `fast` (QA charter
+  runs, ui-ux divergence). `tier_for(role, stage)` is the single routing point; each tier
+  is one env var with a fallback chain (`CODING → FAST → REASONING`) so a resource with
+  one deployment still routes every stage. Why a separate coding tier: the reference
+  designs put the cheapest capable model on building and the strongest on planning and
+  review; sharing the QA tier would tie two unrelated cost decisions together.
+- **Reasoning effort is configuration, per tier.** `LANTERN_EFFORT_<TIER>` becomes the
+  Agent's `ModelSettings(reasoning=Reasoning(effort=…))`; defaults high/high/medium.
+  Before this every stage ran at the deployment default. `LANTERN_EFFORT_CHAT` can lower
+  it for interactive consults, where latency matters more than depth.
+- **Fact that bounds this decision:** on 2026-09-08 `lantern-prod-agent` has exactly one
+  deployment, `gpt-5.6-sol`; `gpt-5.6-terra`, `gpt-5.6-luna` and any "flash" name return
+  `DeploymentNotFound`. The intended mapping (terra = reasoning, luna = coding/fast) is
+  documented in `tools/azure-runner/README.md` and takes effect the moment the
+  deployments exist. A cheap coding tier is only safe after the deterministic build gates
+  (plan Phase B) — until then the coding tier stays on the strong deployment.
+- **Positioning, not a rename of identifiers.** The repo, README and AGENTS.md now
+  present the system as a *software factory* with Lantern as the codename. Env vars,
+  tables, the bot identity and CLI names stay `lantern` — renaming ~100 identifiers buys
+  nothing and would break the box, SSM parameters and every run folder in flight.
+  Renaming the GitHub repository is a human, one-click action recorded here if taken.
+- **Not changed:** the fixed pipeline shape, the gates, D7 (Azure OpenAI only). The new
+  roles and phases the reference designs suggest are proposed in the plan, not adopted
+  by this decision.
+
+## D17 — 2026-09-08 — Software-factory logic: story stage, typed envelopes, quality gate as code, validation, rework
+
+Dimash's ask after the three software-factory sources (`docs/plans/software-factory-
+alignment.md`): build the architecture the reference designs share, assuming the strong
+deployment (Terra) lands later. What shipped, and the shape chosen:
+
+- **A stage 0 with two executions, not a new role bolted onto planning.** `00-story.scout`
+  (`researcher`, read-only: patterns, similar features, risks, likely files — every cited
+  path verified to exist) then `00-story.write` (`story`: user story + numbered acceptance
+  criteria + edge cases + non-goals) behind a new human gate, `story_signoff`. Ray Fu's
+  agents 1 and 2. Why a gate here: the criteria are what every later stage is checked
+  against; approving them is the cheapest correction point in the whole run.
+- **Typed envelopes beside the markdown, validated by code.** `research.json`,
+  `story.json`, `plan.json`, `validation.json` (`tools/azure-runner/factory.py`,
+  `ENVELOPES`). Presence AND validity, cross-checked: every plan task maps to criteria
+  and every criterion is planned or deferred with a reason; every validation verdict
+  names evidence and appears exactly once; the verdict is computed from the statuses,
+  never chosen. Same lesson as the 2026-08-26 fabrication saga, applied to requirements.
+- **The coding gate runs as code (IndyDevDan's "agents plus code").** After the coding
+  agent's turn the product's `lantern.toml [quality]` commands and a write-scope check
+  (the plan's `write_scope` globs — Ray Fu's folder-confined engineers) run in the
+  checkout; only failures go back to the agent, at most `LANTERN_FIX_ROUNDS` (3) times;
+  a red gate fails the stage and the handoff refuses out-of-scope commits. `gate.json`
+  carries the execution key so a stale green gate cannot pass a later attempt. The same
+  helper (`factory.coding_turns`) serves the container and the in-process path. This is
+  the prerequisite the D16 note named before a cheap coding tier is safe.
+- **Validation as a second execution of stage 5.** `05-post-coding.validate`
+  (`validator`) gives every criterion a verdict with evidence after the review and before
+  security; `fail` stops the run with a `fix_now` list. Chosen over a new stage so no
+  existing run's `current_stage` key changes and the run-folder layout stays intact.
+- **Loops as a primitive.** `pipeline.py rework <run> --to 02-pre-coding|03-coding|04-qa-dev`
+  sends a failed or waiting run backwards (pending approvals expire, the decision lands
+  in `gate-decisions.md`). Before this the only loop was "fail, fix by hand, retry the
+  same stage". Boundary's "max iterations then a human" is the fix loop + rework.
+- **Second executions append to a shared `report.md`** and the LAST `Status:` line
+  counts (`report_blocker`). The alternative — per-execution report files — would have
+  changed the postcondition, Mission Control and every template for one convention.
+- **Not done, on purpose:** parallel back-end/front-end builders (plan Phase D — write
+  scope is the mechanism they will reuse), the review-bot loop and merge babysitter
+  (Phase E), the feedback trust pipeline and factory evals (Phase F), agentic access to
+  start runs from chat (Phase G). `PIPELINE_VERSION` is now `3`.
+- **Proof (live, 2026-09-08, in-process on `gpt-5.6-sol`, product = this repo by local
+  path):** run `feat-20260908-status-facts`. `00-story.scout` passed in 280 s (1.09 M
+  input tokens, 88 % cached; every cited path verified). `00-story.write` attempt 1 ended
+  `BLOCKED` with one question — the brief promised a v2/v3 distinction the inspected
+  checkout could not deliver — and the harness failed the stage from the LAST status
+  line of the appended report section, opened no gate, and still recorded both roles'
+  memory. The answer was written into the run's brief; `retry` → attempt 2 passed in
+  108 s with a four-criterion story mapped 1:1 to the brief's must-haves, and
+  `story_signoff` opened. A parser bug surfaced on the way (a blank `Working branch:`
+  line swallowed the next line) and is fixed with `test_brief_parsing.py`.

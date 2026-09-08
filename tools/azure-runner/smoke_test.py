@@ -26,6 +26,7 @@ async def main() -> None:
         # configured routing by default; pass names as args to probe others.
         import os
         names = sorted({os.environ.get("LANTERN_MODEL_REASONING", ""),
+                        os.environ.get("LANTERN_MODEL_CODING", ""),
                         os.environ.get("LANTERN_MODEL_FAST", "")} - {""})
         if not names:
             print("No LANTERN_MODEL_* set and no names given; nothing to probe.")

@@ -19,6 +19,11 @@ What user problem does this solve? Who has it, how often, how painful?
 What does success look like for the user? For the business? (If measurable, name the
 PostHog event/metric that should move.)
 
+## Must-haves (optional — seeds the story's acceptance criteria)
+
+Bullet the outcomes that must be true for this to count as done. The story agent turns
+them into numbered, testable criteria you approve at the first gate.
+
 ## Scope
 
 What is definitely in.

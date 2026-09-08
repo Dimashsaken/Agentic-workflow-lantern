@@ -1,0 +1,55 @@
+{
+  "kind": "story",
+  "run_id": "feat-20260908-status-facts",
+  "title": "Status JSON carries branch and version facts",
+  "user_story": "As an integration consuming pipeline status, I want run and pending-gate JSON to include branch, pipeline-version, and age facts, so that Slack and chat can link work to its branch and distinguish pipeline generations without changing the human-readable status command.",
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "text": "Every run returned by pipeline.py status --json contains product_branch and product_working_branch as their stored string values or JSON null, and pipeline_version as its stored string value, while retaining every previously reported run field.",
+      "edge_cases": [
+        "the two branch fields independently support null and non-null values",
+        "a null stored working branch remains JSON null rather than being replaced by a derived branch",
+        "runs created by different pipeline generations report their respective stored version strings",
+        "no runs produces a valid JSON response with an empty runs array"
+      ]
+    },
+    {
+      "id": "AC-2",
+      "text": "Every pending gate returned by pipeline.py status --json contains age_seconds, an integer equal to the non-negative whole seconds elapsed from requested_at to the time the status output is produced, while retaining every previously reported gate field.",
+      "edge_cases": [
+        "an age below one second is 0",
+        "a future requested_at is clamped to 0",
+        "multiple pending gates each receive an integer age",
+        "no pending gates produces a valid JSON response with an empty pending_gates array"
+      ]
+    },
+    {
+      "id": "AC-3",
+      "text": "Invoking pipeline.py status without --json produces byte-for-byte the same human-readable output as before this feature.",
+      "edge_cases": [
+        "representative populated output",
+        "no active runs",
+        "no pending gates"
+      ]
+    },
+    {
+      "id": "AC-4",
+      "text": "One status invocation obtains the run list and pending-gate list with exactly the existing two database reads and introduces no additional query.",
+      "edge_cases": [
+        "populated and empty result sets",
+        "JSON and human-readable modes"
+      ]
+    }
+  ],
+  "non_goals": [
+    "changing the value stamped into pipeline_version, including version-3 or stage-0 stamping work",
+    "filtering or pagination",
+    "a stability promise for the JSON schema",
+    "changes to Slack, chat, or Mission Control consumers",
+    "resolving a null stored product_working_branch into an effective branch in this payload",
+    "database schema changes",
+    "third-party dependencies or non-ASCII console output"
+  ],
+  "open_questions": []
+}

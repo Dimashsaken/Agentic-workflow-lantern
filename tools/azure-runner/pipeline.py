@@ -41,7 +41,8 @@ from orchestrator import (
     USAGE_MARKER, append_file, azure_v1_client, build_consult_instructions,
     build_instructions, check_postconditions, check_stage_inputs, collect_export,
     consult_roles, db_urls,
-    list_dir, list_exports, make_append_memory, make_collect_jsx, model_for, paper_mcp_server,
+    list_dir, list_exports, make_append_memory, make_collect_jsx, model_for,
+    model_settings_for, paper_mcp_server,
     product_git,
     paper_reachable, playwright_mcp_server, read_file, render_role_memory, usage_dict,
     write_file,
@@ -49,7 +50,9 @@ from orchestrator import (
 
 load_dotenv(Path(__file__).parent / ".env")
 
-PIPELINE_VERSION = "2"  # v2: stage 1 split into diverge/design executions (runner affinity)
+import factory  # noqa: E402  D17: quality gate + fix loop for the in-process coding path
+
+PIPELINE_VERSION = "3"  # v3 (D17): story stage + validation execution; v2: stage 1 diverge/design split
 POLL_SECONDS = 5
 
 # ── execution plane (D10/D12) ────────────────────────────────────────────────
@@ -68,7 +71,9 @@ MAX_CONCURRENCY = int(os.environ.get(
 # needs them first exists.
 SANDBOX_ENV_ALLOWLIST = (
     "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_API_VERSION",
-    "LANTERN_MODEL_REASONING", "LANTERN_MODEL_FAST", "LANTERN_OPENAI_API",
+    "LANTERN_MODEL_REASONING", "LANTERN_MODEL_CODING", "LANTERN_MODEL_FAST",
+    "LANTERN_EFFORT_REASONING", "LANTERN_EFFORT_CODING", "LANTERN_EFFORT_FAST",
+    "LANTERN_OPENAI_API",
 )
 
 # ── QA stages (P0.1): target credentials + video ─────────────────────────────
@@ -158,7 +163,8 @@ def work_branch(run_id: str, working_branch: str = "") -> str:
 
 def parse_brief_coding_mode(text: str) -> str:
     """`- **Coding mode:** auto|human` in a brief; anything else reads as unset ('')."""
-    m = re.search(r"^\s*-\s*\*\*Coding mode:\*\*\s*(.+?)\s*$", text, re.M | re.I)
+    # [ \t]* not \s*: an empty field must not swallow the next line (found 2026-09-08).
+    m = re.search(r"^\s*-\s*\*\*Coding mode:\*\*[ \t]*(.*?)[ \t]*$", text, re.M | re.I)
     if not m:
         return ""
     v = m.group(1).strip().strip("`").lower()
@@ -174,7 +180,9 @@ def parse_brief_product(text: str) -> tuple[str, str, str]:
     read as 'not set' — an unfilled template must not look like a configured target.
     """
     def field(label: str) -> str:
-        m = re.search(rf"^\s*-\s*\*\*{label}:\*\*\s*(.+?)\s*$", text, re.M | re.I)
+        # [ \t]* not \s*: `- **Working branch:**` left blank (the template says "leave
+        # blank for a fresh one") must read as '', not as the following line.
+        m = re.search(rf"^\s*-\s*\*\*{label}:\*\*[ \t]*(.*?)[ \t]*$", text, re.M | re.I)
         if not m:
             return ""
         v = m.group(1).strip().strip("`")
@@ -283,12 +291,15 @@ def product_mount_args(repo: str, branch: str, work: str = "") -> list[str]:
 # approval immediately and wait. Stage 1 is split by runner affinity: cheap divergence
 # on EC2, Paper convergence on the design workstation (docs/plans/ui-ux-agent-paper.md).
 FEATURE_STAGES = [
+    ("00-story.scout",   "00-story",       "agent", None,             "ec2"),   # D17: researcher
+    ("00-story.write",   "00-story",       "agent", "story_signoff",  "ec2"),   # D17: story + criteria
     ("01-ui-ux.diverge", "01-ui-ux",       "agent", None,             "ec2"),
     ("01-ui-ux.design",  "01-ui-ux",       "agent", "ux_signoff",     "workstation"),
     ("02-pre-coding",    "02-pre-coding",  "agent", "plan_signoff",   "ec2"),
     ("03-coding",        "03-coding",      "human", "code_complete",  "ec2"),
     ("04-qa-dev",        "04-qa-dev",      "agent", None,             "ec2"),
     ("05-post-coding",   "05-post-coding", "agent", None,             "ec2"),
+    ("05-post-coding.validate", "05-post-coding", "agent", None,      "ec2"),   # D17: validator
     ("06-security",      "06-security",    "agent", "staging_deploy", "ec2"),
     ("07-qa-staging",    "07-qa-staging",  "agent", "prod_signoff",   "ec2"),
 ]
@@ -543,18 +554,31 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         agent = Agent(
             name=role,
             model=model_for(role, stage),
+            model_settings=model_settings_for(role, stage),
             instructions=build_instructions(role, run_id, stage),
             tools=stage_tools(role, run_id, stage, execution_key, paper),
             mcp_servers=mcp_servers,
         )
-        result = await Runner.run(
-            agent,
-            input=f"Begin your {stage} session for run {run_id} (attempt {attempt}). Do not "
-                  "reply with a plan — start calling tools now and keep working until the "
-                  "report is on disk and append_memory has been called.",
-            session=session,
-            max_turns=max_turns_for(role),
-        )
+        kickoff = (f"Begin your {stage} session for run {run_id} (attempt {attempt}). Do not "
+                   "reply with a plan — start calling tools now and keep working until the "
+                   "report is on disk and append_memory has been called.")
+
+        async def run_turn(text: str):
+            return await Runner.run(agent, input=text, session=session,
+                                    max_turns=max_turns_for(role))
+
+        if role == "coding":
+            # D17: quality gate as code + bounded fix loop — the same helper the
+            # container path uses, so laptop and box runs cannot disagree.
+            results, gate = await factory.coding_turns(
+                run_turn, kickoff, run_id=run_id, stage=stage,
+                root=Path(os.environ["LANTERN_PRODUCT_DIR"]), execution_key=execution_key,
+                since_sha=os.environ.get("LANTERN_CODING_START_SHA") or None)
+            print(f"[{run_id}] quality gate {'green' if gate['passed'] else 'RED'} after "
+                  f"{gate['round']} fix round(s)")
+        else:
+            results = [await run_turn(kickoff)]
+        result = results[-1]
         final = str(result.final_output)
         # D14: bundle the committed branch into the run folder while the checkout exists.
         finalize_problems = finalize_coding(run_id, stage) if role == "coding" else []
@@ -568,7 +592,8 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     # Ledger before the postcondition verdict: tokens are spent either way (P0.4).
     # Known gap, both paths: a Runner.run exception (max_turns, API error) yields no
     # result/usage line, so that spend goes unmetered — `usage` reports the count.
-    await record_usage(conn, exec_id, usage_dict(result), model_for(role, stage))
+    await record_usage(conn, exec_id, factory.merge_usage([usage_dict(r) for r in results]),
+                       model_for(role, stage))
 
     if finalize_problems:
         raise RuntimeError("coding handoff failed: " + "; ".join(finalize_problems))
@@ -654,7 +679,8 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
         cmd += ["-e", f"LANTERN_CODING_BRANCH={work}",
                 "-e", f"LANTERN_GIT_AUTHOR_NAME={GIT_AUTHOR_NAME}",
                 "-e", f"LANTERN_GIT_AUTHOR_EMAIL={GIT_AUTHOR_EMAIL}"]
-        for var in ("LANTERN_CODING_MAX_TURNS", "LANTERN_PRODUCT_SHELL_TIMEOUT"):
+        for var in ("LANTERN_CODING_MAX_TURNS", "LANTERN_PRODUCT_SHELL_TIMEOUT",
+                    "LANTERN_FIX_ROUNDS"):
             if os.environ.get(var):
                 cmd += ["-e", f"{var}={os.environ[var]}"]
     cmd += [SANDBOX_IMAGE, run_id, stage]
@@ -1650,6 +1676,41 @@ async def cmd_qa_preflight(role: str) -> None:
         print("  sandbox   (skipped — LANTERN_EXECUTOR is not 'docker' here)")
 
 
+REWORK_TARGETS = ("02-pre-coding", "03-coding", "04-qa-dev")
+
+
+async def cmd_rework(run_id: str, to_stage: str, by: str, note: str) -> None:
+    """Send a run BACK to an earlier stage — the loop the software-factory designs run
+    as code (D17): a failed validation or a QA round returns to the builder without a
+    new run. Only backwards, only to a REWORK_TARGETS stage, only from failed or
+    waiting_gate; pending approvals expire; the decision lands in gate-decisions.md."""
+    if to_stage not in REWORK_TARGETS:
+        sys.exit(f"rework target must be one of {', '.join(REWORK_TARGETS)}")
+    conn = await connect()
+    row = await conn.fetchrow("SELECT status, current_stage FROM runs WHERE id = $1", run_id)
+    if not row:
+        sys.exit(f"unknown run {run_id}")
+    if row["status"] not in ("failed", "waiting_gate"):
+        sys.exit(f"{run_id} is {row['status']} — rework applies to failed or waiting_gate runs")
+    if STAGE_INDEX.get(to_stage, 99) >= STAGE_INDEX.get(row["current_stage"], -1):
+        sys.exit(f"{to_stage} is not earlier than the run's current stage {row['current_stage']}")
+    await conn.execute(
+        """UPDATE approvals SET status = 'expired', decided_at = now(), decided_by = $2,
+           decision_note = $3 WHERE run_id = $1 AND status = 'pending'""",
+        run_id, by, f"expired by rework to {to_stage}")
+    await conn.execute(
+        "UPDATE runs SET current_stage = $1, status = 'running', updated_at = now() WHERE id = $2",
+        to_stage, run_id)
+    await log_event(conn, run_id, f"human:{by}", "run_reworked",
+                    {"from": row["current_stage"], "to": to_stage, "note": note})
+    record_gate_decision(run_id, f"rework -> {to_stage}", "reworked", by,
+                         note or f"sent back from {row['current_stage']}")
+    await render_runboard(conn)
+    print(f"[{run_id}] sent back to {to_stage} (from {row['current_stage']}) — the daemon "
+          "picks it up: same branch, same session memory, fresh attempt.")
+    await conn.close()
+
+
 async def cmd_retry(run_id: str) -> None:
     conn = await connect()
     await conn.execute("UPDATE runs SET status = 'running', updated_at = now() WHERE id = $1", run_id)
@@ -1694,6 +1755,7 @@ async def cmd_ask(role: str, prompt: str, session_name: str, by: str,
         agent = Agent(
             name=role,
             model=model_for(role),
+            model_settings=model_settings_for(role, purpose="chat"),
             instructions=build_consult_instructions(role),
             tools=[read_file, list_dir,
                    make_append_memory(role, None, None, session_id)],
@@ -1980,6 +2042,11 @@ def main() -> None:
         p = sub.add_parser(name); p.add_argument("run_id"); p.add_argument("gate")
         p.add_argument("--by", required=True); p.add_argument("--note", default="")
     p = sub.add_parser("retry"); p.add_argument("run_id")
+    p = sub.add_parser("rework", help="send a failed/waiting run back to an earlier stage "
+                                      "(D17 loop: validation or QA findings → the builder)")
+    p.add_argument("run_id"); p.add_argument("--to", required=True, choices=REWORK_TARGETS)
+    p.add_argument("--by", default=os.environ.get("USERNAME") or os.environ.get("USER", "unknown"))
+    p.add_argument("--note", default="")
     p = sub.add_parser("qa-preflight", help="can a QA stage reach its target, from the sandbox?")
     p.add_argument("--stage", choices=sorted(QA_TARGET_PREFIX), default="qa-dev")
     p = sub.add_parser("status"); p.add_argument("--json", action="store_true")
@@ -2014,6 +2081,7 @@ def main() -> None:
         case "approve": asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, True))
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))
         case "retry":   asyncio.run(cmd_retry(a.run_id))
+        case "rework":  asyncio.run(cmd_rework(a.run_id, a.to, a.by, a.note))
         case "status":  asyncio.run(cmd_status(a.json))
         case "qa-preflight":  asyncio.run(cmd_qa_preflight(a.stage))
         case "agents":  asyncio.run(cmd_agents())

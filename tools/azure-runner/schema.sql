@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS approvals (
     id                 bigserial PRIMARY KEY,
     run_id             text NOT NULL REFERENCES runs(id),
     stage_execution_id bigint REFERENCES stage_executions(id),
-    gate               text NOT NULL,   -- ux_signoff|plan_signoff|code_complete|staging_deploy|prod_signoff
+    gate               text NOT NULL,   -- story_signoff|ux_signoff|plan_signoff|code_complete|staging_deploy|prod_signoff
     status             text NOT NULL DEFAULT 'pending', -- pending|approved|rejected|expired
     payload            jsonb,                            -- what the human is approving (links, videos)
     channel            text,                             -- cli|slack|github
