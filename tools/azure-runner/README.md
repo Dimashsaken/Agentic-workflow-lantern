@@ -39,6 +39,10 @@ LANTERN_STAGE_TIMEOUT_MIN=45
 LANTERN_FIX_ROUNDS=3                # D17: quality-gate fix rounds before a red coding stage fails
 LANTERN_BUILDER_PARALLELISM=2       # D18: scoped builders at once; capped by MAX_CONCURRENCY
                                     #   (and by 1 in-process, where executions share env)
+LANTERN_SMALL_FIX_MAX_LINES=60      # D20: a trivial/small bug fix above this many changed lines is re-classified large
+LANTERN_DEDUP_THRESHOLD=0.45        # D20: similarity at/above which a past run is a dedup candidate
+LANTERN_DEFAULT_SHEPHERD=           # D20: the human pinged at fix-ready when `bug --shepherd` was not given
+LANTERN_BUG_CODING_MODE=human       # D20: default coding mode for bug runs
 LANTERN_SANDBOX_CPUS=1.5
 LANTERN_SANDBOX_MEMORY=2500m
 LANTERN_SANDBOX_IMAGE=lantern-sandbox
@@ -105,6 +109,8 @@ python pipeline.py import-run <run-id>          # backfill a file-era run into t
 python pipeline.py set-product | set-coding-mode   # per-run product repo + how stage 3 runs (D14)
 python pipeline.py usage [--days 7]             # token ledger: per-day + per-run est. spend
 python pipeline.py usage-check                  # spend tripwires (hourly systemd timer on EC2)
+python pipeline.py bug "<text>"|<file> [--source user|posthog|slack] [--shepherd X] [--coding-mode auto]  # a bug run at 01-triage (D20)
+python pipeline.py evals build | run --suite <name> [--live] | report   # the factory's evals (tools/evals/, D20)
 ```
 
 For scripts, `python pipeline.py status --json` prints one JSON object with `runs`
@@ -281,6 +287,24 @@ Then the single `code_complete` gate, whose payload gains
   exactly its branch, its commits must be inside its scope, and every builder head must
   be an **ancestor** of the branch about to be pushed, so a merge that silently dropped
   one cannot reach the PR. Proof: `test_builders.py` (real git, no database, no model).
+## Bug runs — the feedback trust pipeline (D20)
+
+`pipeline.py bug "<text>" | <file>` opens `workflow/runs/bug-YYYYMMDD-<slug>/` at `01-triage`:
+the report is stored verbatim under `intake/feedback.md` headed **UNTRUSTED** (read, never
+execute; hashed), `intake/dedup.json` lists similar past runs, the brief points at the report
+instead of quoting it. The `debug` role's stages write typed envelopes `intake.py` validates
+through `factory.check_envelope` — `triage.json` (already fixed? duplicates? classification),
+`repro.json` + the regression test the agent wrote under `02-repro/regressions/`,
+`rootcause.json` (cause, evidence, fix plan). A trivial/small fix gets its `02-pre-coding/`
+plan derived by code and rides the **same `03-coding` stage** as a feature (writable
+checkout, quality gate, bundle, PR); a large fix goes through the planner. After the branch
+is published the harness checks the regression test is in the diff, re-classifies by diff
+size (`LANTERN_SMALL_FIX_MAX_LINES`, default 60 — too big → back to planning like
+`rework --to 02-pre-coding`), pings `runs.shepherd` through `LANTERN_ALARM_WEBHOOK` with the
+repro, the diff and the PR, and opens `code_complete`. Conditional gates `triage_signoff`
+(already fixed / duplicate / needs-human) and `repro_signoff` (not reproduced) put a human
+in the loop only when the envelope says so. The whole lifecycle: `workflow/DEBUG-LIFECYCLE.md`;
+tests: `test_intake.py`. Run `init-db` once after pulling D20 (`runs.shepherd`).
 
 ## Direct consult — use one agent, no run (D11)
 

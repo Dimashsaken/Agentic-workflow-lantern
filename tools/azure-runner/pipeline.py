@@ -54,6 +54,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import factory  # noqa: E402  D17: quality gate + fix loop for the in-process coding path
 import builders  # noqa: E402  D18: stage 3 fans out into scoped parallel builders
+import intake  # noqa: E402  D20: the debug lifecycle — bug runs, their envelopes, the shepherd
 
 PIPELINE_VERSION = "3"  # v3 (D17): story stage + validation execution; v2: stage 1 diverge/design split
 POLL_SECONDS = 5
@@ -309,6 +310,7 @@ FEATURE_STAGES = [
 STAGE_INDEX = {s[0]: i for i, s in enumerate(FEATURE_STAGES)}
 STAGE_DIR = {s[0]: s[1] for s in FEATURE_STAGES}
 STAGE_RUNNER = {s[0]: s[4] for s in FEATURE_STAGES}
+intake.register_stages(STAGE_DIR, STAGE_RUNNER)   # D20: debug-lifecycle stages join the executor/claim maps
 
 
 async def connect() -> asyncpg.Connection:
@@ -1060,6 +1062,8 @@ async def open_gate(conn, run_id: str, stage: str, gate: str,
 
 
 async def advance(conn, run_id: str, stage: str) -> None:
+    if intake.is_bug_run(run_id):   # D20: the debug lifecycle has its own table and skip rule
+        return await intake.advance_bug(conn, run_id, stage)
     nxt = STAGE_INDEX[stage] + 1
     if nxt >= len(FEATURE_STAGES):
         await conn.execute(
@@ -1077,7 +1081,7 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
     row = await conn.fetchrow("SELECT current_stage, coding_mode FROM runs WHERE id = $1", run_id)
     stage = row["current_stage"]
     mode = row["coding_mode"] or "human"
-    _, _, stype, gate, _ = FEATURE_STAGES[STAGE_INDEX[stage]]
+    _, _, stype, gate, _ = intake.stage_row(run_id, stage, FEATURE_STAGES)   # D20: bug runs read their own table
     extra: dict | None = None
     external_ref: str | None = None
     try:
@@ -1097,7 +1101,9 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
             external_ref = extra.get("pr_url")
         else:  # human stage: nothing to execute — the gate IS the stage
             print(f"[{run_id}] {stage} is a human stage (the developer's own session).")
-        if gate:
+        if intake.is_bug_run(run_id):   # D20: the debug lifecycle gates/advances from its envelopes
+            await intake.after_stage(conn, run_id, stage, gate, extra, external_ref)
+        elif gate:
             await open_gate(conn, run_id, stage, gate, extra, external_ref)
         else:
             await advance(conn, run_id, stage)
@@ -1718,7 +1724,7 @@ async def cmd_qa_preflight(role: str) -> None:
         print("  sandbox   (skipped — LANTERN_EXECUTOR is not 'docker' here)")
 
 
-REWORK_TARGETS = ("02-pre-coding", "03-coding", "04-qa-dev")
+REWORK_TARGETS = ("02-pre-coding", "03-coding", "04-qa-dev") + intake.BUG_REWORK_TARGETS   # D20
 
 
 async def cmd_rework(run_id: str, to_stage: str, by: str, note: str) -> None:
@@ -1734,7 +1740,8 @@ async def cmd_rework(run_id: str, to_stage: str, by: str, note: str) -> None:
         sys.exit(f"unknown run {run_id}")
     if row["status"] not in ("failed", "waiting_gate"):
         sys.exit(f"{run_id} is {row['status']} — rework applies to failed or waiting_gate runs")
-    if STAGE_INDEX.get(to_stage, 99) >= STAGE_INDEX.get(row["current_stage"], -1):
+    index = intake.stage_index(run_id, STAGE_INDEX)   # D20: bug runs order by the debug lifecycle table
+    if index.get(to_stage, 99) >= index.get(row["current_stage"], -1):
         sys.exit(f"{to_stage} is not earlier than the run's current stage {row['current_stage']}")
     await conn.execute(
         """UPDATE approvals SET status = 'expired', decided_at = now(), decided_by = $2,
@@ -2036,14 +2043,26 @@ async def cmd_usage_check() -> None:
 # target" — often the first thing an operator runs on a box, before the fleet is wired.
 # Commands that need neither a database nor an Azure client. `main()` dispatches them
 # before any client setup so they work on a bare laptop (`repos` reads the filesystem;
-# `init-product` writes two files into another repo).
-LOCAL_ONLY_CMDS = {"repos", "init-product"}
+# `init-product` writes two files into another repo; `evals` reads run folders and scores).
+LOCAL_ONLY_CMDS = {"repos", "init-product", "evals"}
+
+
+def cmd_evals(argv: list[str]) -> None:
+    """`pipeline.py evals build | run --suite <name> [--live] | report` (D20, tools/evals/).
+    Local-only: reading run folders and scoring needs no Azure; `run --live` configures
+    the client itself."""
+    sys.path.insert(0, str(REPO / "tools" / "evals"))
+    import evals_cli  # noqa: PLC0415 — deliberately lazy; the daemon never imports the evals
+    evals_cli.main(argv)
 
 
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in LOCAL_ONLY_CMDS:
         if sys.argv[1] == "repos":
             cmd_repos()
+            return
+        if sys.argv[1] == "evals":      # D20: the factory's evals, no Azure client needed
+            cmd_evals(sys.argv[2:])
             return
         import init_product      # D21: `pipeline.py init-product <path> [--force] [--dry-run]`
         sys.exit(init_product.main(sys.argv[2:]))
@@ -2119,6 +2138,20 @@ def main() -> None:
                                             "lantern.toml and note the factory in its AGENTS.md")
     p.add_argument("path"); p.add_argument("--force", action="store_true")
     p.add_argument("--dry-run", action="store_true")
+    # D20: the debug lifecycle's front door + the factory's evals (intake.py, tools/evals/)
+    p = sub.add_parser("bug", help="open a bug run from UNTRUSTED feedback (text or a file) at 01-triage")
+    p.add_argument("feedback", help="the report text, or a path to a file holding it")
+    p.add_argument("--source", choices=intake.SOURCES, default="user")
+    p.add_argument("--by", default=os.environ.get("USERNAME") or os.environ.get("USER", "unknown"))
+    p.add_argument("--product-repo", default=""); p.add_argument("--product-branch", default="")
+    p.add_argument("--working-branch", default="")
+    p.add_argument("--coding-mode", choices=CODING_MODES, default="",
+                   help="who writes the fix: human (default) or the coding agent (auto)")
+    p.add_argument("--shepherd", default="", help="human pinged at fix-ready (default LANTERN_DEFAULT_SHEPHERD)")
+    p.add_argument("--run-id", default=""); p.add_argument("--slug", default="")
+    p.add_argument("--follow", action="store_true")
+    p = sub.add_parser("evals", help="the factory measures itself: build | run --suite <name> [--live] | report")
+    p.add_argument("evals_args", nargs=argparse.REMAINDER)
     a = ap.parse_args()
 
     match a.cmd:
@@ -2146,6 +2179,10 @@ def main() -> None:
         case "usage-check":   asyncio.run(cmd_usage_check())
         case "render-memory": asyncio.run(cmd_render_memory(a.role))
         case "import-run":    asyncio.run(cmd_import_run(a.run_id, a.by, a.stage, a.status, a.gate))
+        case "bug":           asyncio.run(intake.cmd_bug(a.feedback, a.source, a.by, a.product_repo,   # D20
+                                                         a.product_branch, a.working_branch, a.coding_mode,
+                                                         a.shepherd, a.run_id, a.slug, a.follow))
+        case "evals":         cmd_evals(a.evals_args)   # D20
 
 
 if __name__ == "__main__":

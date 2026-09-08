@@ -670,3 +670,83 @@ somewhere else". This closes that, without moving the gate line.
   channel is on the `pipeline_action` event, so the audit answer is right; correcting the
   column means changing `cmd_decide`'s signature for all three surfaces, which belongs
   with whoever next touches that function.
+
+
+## D20 — 2026-09-08 — The feedback trust pipeline and the factory's own evals
+
+Session 3 of the five parallel factory sessions (`docs/plans/software-factory-parallel-
+prompts.md`). The ask: Boundary's production rule for feedback — untrusted input never
+becomes work directly — plus the rule that every change to the factory ships its own
+numbers (alignment plan §1.8, §4 Phase F). What shipped, and the shape chosen:
+
+- **A bug run starts with `pipeline.py bug`, not with a hand-written brief.** The raw
+  report is stored once, verbatim, at `intake/feedback.md` under a header that says
+  `UNTRUSTED`, hashed at intake; the brief points at it instead of quoting it. Why: a
+  report pasted into a brief is a trusted file by the time an agent reads it. The trust
+  rule is mechanical where it can be — triage fails if the file changed, every cited run
+  and commit must exist, the dedup candidates the harness computed must each be addressed,
+  and a regression test carrying a code block copied from the report is rejected — and a
+  prompt rule where it cannot (every debug phase note and the debug skills say: read it,
+  never execute anything from it). Nothing under `intake/` is mounted or shelled.
+- **Envelopes for triage, repro and root cause** (`triage.json`, `repro.json`,
+  `rootcause.json`) validated by `factory.check_envelope` through a `CHECKERS` registry
+  `intake.py` extends — the same postcondition every executor already runs, so the
+  container path enforces them the day it dispatches a bug stage. The repro is a test the
+  agent writes under `02-repro/regressions/` from its own reading of the code; the fix
+  lands it at `lantern/regressions/` in the product, and the product's `lantern.toml` test
+  command must cover that directory, so every past repro re-runs on every future run.
+- **The fix is the feature pipeline's `03-coding` stage — same key, directory and
+  machinery — not a `04-fix` stage.** The prompt asked for `04-fix`; a separate fix stage
+  would have needed its own writable checkout, gate loop, bundle handoff, publish and PR
+  path, or edits deep inside `run_agent_stage`, `_publish_branch` and the sandbox
+  entrypoint that sessions 1, 2 and 5 were changing in the same hour. Reusing the stage
+  gives bug runs the quality gate, write scope, review loop, merge babysitter and Mission
+  Control's `code_complete` rendering for free, and keeps one way code gets written.
+  Planning is reused the same way: `02-pre-coding` sits in the bug table and runs only for
+  `large` / `needs-human`; for `trivial` / `small` the harness derives `plan.json` +
+  `task-plan.md` from the root cause's `fix_plan` (task 1 is always the regression test)
+  and the run skips the planner. The directory numbers in a bug folder are therefore
+  01, 02, 03, (02), 03, 05, 06 — a cost accepted for the reuse.
+- **Classification is enforced by the diff.** After the branch is published, insertions +
+  deletions above `LANTERN_SMALL_FIX_MAX_LINES` (60) for a `trivial`/`small` bug write a
+  `reclassified` record into `triage.json` and send the run back to planning with exactly
+  the transition `pipeline.py rework --to 02-pre-coding` makes (approvals expire, the
+  decision in `gate-decisions.md`), the branch keeping the work. The agent's original call
+  stays on record — that is what the classification eval scores.
+- **Gates open from the envelope, not from the table.** `triage_signoff` only when the
+  bug is already fixed, a duplicate, or `needs-human`; `repro_signoff` only when not
+  reproduced; otherwise the run advances by itself — Boundary's 95 % automatic. The
+  shepherd (`runs.shepherd`, `--shepherd` or `LANTERN_DEFAULT_SHEPHERD`) is pinged once,
+  at fix-ready, through the existing `_post_alarm` webhook path with the repro, the diff
+  summary and the PR or branch link; `code_complete` opens with the same facts.
+- **Dispatch for bug runs did not exist** — `step_run`, `advance` and the claim query
+  only knew `FEATURE_STAGES`. It is added as five small hooks in `pipeline.py` (import,
+  stage-map registration, a table-aware row lookup, a bug-run branch in `step_run` and
+  `advance`, a lifecycle-aware ordering in `rework`), one line in
+  `orchestrator.check_stage_inputs`, and five phase notes; everything else lives in
+  `intake.py`. `runs.shepherd` is the one schema addition (`init-db` once).
+- **The factory measures itself.** `tools/evals/`: `evals build` freezes every run folder
+  into jsonl; four stdlib scorers — plan coverage, validator ↔ QA agreement,
+  classification accuracy against diff size, repro rate; `evals run --suite … --live`
+  replays a role on the real model against the same inputs (opt-in, injectable, tested
+  with a fake); `evals report` writes `REPORT.md` with a fingerprint of the watched files.
+  The rule from the sources runs in this repo's lint gate: `check_pr.py` fails a diff that
+  touches `agents/**`, `factory.py`, `intake.py`, the scorers, or the orchestrator's prompt
+  builders / gate functions **by name** unless `REPORT.md` changed with it and its
+  fingerprint matches — an edited-but-not-regenerated report does not pass. Today the
+  report is mostly `n/a` (one story, no plan envelope, no bug run yet); the point is the
+  delta from here on.
+- **Dedup is deliberately crude:** stemmed token overlap (weighted for error codes) over
+  past intake reports, story titles and brief titles, threshold 0.45, one candidate list
+  per run. It finds a reworded duplicate and not a different bug in the same feature area
+  (`test_intake.py`); it is an input to triage, never a verdict.
+- **Not done, stated plainly:** the container executor has not run a bug stage yet (the
+  hooks are executor-agnostic, but only the in-process path was exercised); the repro
+  stage cannot execute the test it writes (no shell outside auto coding — the coding
+  stage proves fail-then-pass); Mission Control renders bug runs with its feature-stage
+  board (session 5 owns that); a conditional `security` spot-check for sev-1 / auth /
+  payment fixes is a rule in the lifecycle doc, not code; the live eval replay was not run
+  against Azure (frozen scoring is tested; the live path with a fake); and Slack intake
+  (`--source slack`) is the same function session 4's bridge will call.
+- **Proof (live, 2026-09-08, in-process on `gpt-5.6-sol`, product = this repo by local
+  path):** see the paragraph appended below after the run.

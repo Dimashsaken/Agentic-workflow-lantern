@@ -36,6 +36,7 @@ tools/azure-runner/     the fleet runtime: pipeline.py (one-call loop) + orchest
 tools/qa-recorder/      Playwright-based QA with built-in video recording
 tools/mission-control/  web UI: gate inbox, run board, verification timeline, fleet chat (docs/MISSION-CONTROL.md, docs/CHAT.md)
 tools/slack-bridge/     Slack front door (D21): a run per thread, gate buttons, rework/retry — Socket Mode, host-side, allowlisted
+tools/evals/            the factory measures itself: frozen run data, scorers, REPORT.md, the PR rule (D20)
 infra/ec2/              EC2 provisioning: bootstrap.sh + systemd units + operations
 docs/ORCHESTRATION.md   the one-call concept→live loop: Postgres state machine, gates, failure modes
 docs/AGENT-TOOLING.md   runtime stack, per-agent tools/MCP matrix, GitHub identity, orientation protocol
@@ -114,8 +115,13 @@ per-stage contracts, and the list of human-in-the-loop gates: `workflow/PIPELINE
 Connecting a product repository to a run: `tools/azure-runner/README.md`
 ("Connecting a codebase").
 
-Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
-`workflow/DEBUG-LIFECYCLE.md`, owned by the `debug` agent.
+Bugs (a user report, a PostHog signal, a Slack message) do **not** enter at stage 1 —
+`pipeline.py bug` opens them at `01-triage` and they follow `workflow/DEBUG-LIFECYCLE.md`,
+owned by the `debug` agent (D20): the raw report lives under `intake/` marked
+**UNTRUSTED** (agents read it, never execute anything from it), triage → repro → root
+cause are typed envelopes the harness checks, the fix rides this same stage 3 on a
+`fix/*` branch, the diff size re-checks the classification, and a human shepherd is
+pinged when the fix is ready.
 
 ## Three ways to use an agent (D11, D21)
 
@@ -210,10 +216,17 @@ the approver allowlist, and `staging_deploy` / `prod_signoff` are refused from S
 - When a stage is blocked, the report says `Status: BLOCKED` with a single unambiguous
   question — downstream agents do not guess.
 - **Agents propose, code disposes (D17).** Stages with a typed envelope
-  (`research.json`, `story.json`, `plan.json`, `validation.json` — shapes in each role's
+  (`research.json`, `story.json`, `plan.json`, `validation.json`; in bug runs
+  `triage.json`, `repro.json`, `rootcause.json` — shapes in each role's
   skills) fail mechanically when it is missing or invalid; the coding stage hands off
   nothing while the product's quality commands are red or a commit leaves the plan's
   `write_scope`. Loops run as code: gate failures return to the builder for
   `LANTERN_FIX_ROUNDS` rounds, then a human; a failed validation or QA round goes back
   to stage 3 with `pipeline.py rework <run-id> --to 03-coding`. Second executions in a
   shared stage dir append their section to `report.md`; the last `Status:` line counts.
+- **Changes to prompts or gates ship their eval numbers (D20).** A diff that touches
+  `agents/**`, `tools/azure-runner/factory.py`, `intake.py`, or the orchestrator's prompt
+  builders / gate functions must regenerate `tools/evals/REPORT.md`
+  (`pipeline.py evals build && pipeline.py evals report`) in the same change;
+  `tools/evals/check_pr.py` runs in this repo's lint gate and refuses it otherwise. The
+  number that moved is the review conversation. Memory protocol unchanged.

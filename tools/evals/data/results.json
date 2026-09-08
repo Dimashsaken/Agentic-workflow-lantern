@@ -1,0 +1,55 @@
+{
+  "plan": {
+    "generated_at": "2026-09-08T14:44:26+00:00",
+    "mode": "frozen",
+    "n_inputs": 0,
+    "role": "pre-coding",
+    "suite": "plan",
+    "summary": {
+      "full_coverage": 0,
+      "mean_coverage": null,
+      "n": 0,
+      "runs": []
+    }
+  },
+  "repro": {
+    "generated_at": "2026-09-08T14:44:26+00:00",
+    "mode": "frozen",
+    "n_inputs": 0,
+    "role": null,
+    "suite": "repro",
+    "summary": {
+      "n": 0,
+      "not_reproduced": [],
+      "rate": null,
+      "reproduced": 0
+    }
+  },
+  "triage": {
+    "generated_at": "2026-09-08T14:44:26+00:00",
+    "mode": "frozen",
+    "n_inputs": 0,
+    "role": "debug",
+    "suite": "triage",
+    "summary": {
+      "accuracy": null,
+      "confusion": {},
+      "correct": 0,
+      "misses": [],
+      "n": 0,
+      "unscored": 0
+    }
+  },
+  "validate": {
+    "generated_at": "2026-09-08T14:44:26+00:00",
+    "mode": "frozen",
+    "n_inputs": 0,
+    "role": "validator",
+    "suite": "validate",
+    "summary": {
+      "agreement": null,
+      "n": 0,
+      "runs": []
+    }
+  }
+}

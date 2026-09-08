@@ -136,6 +136,9 @@ ALTER TABLE runs ADD COLUMN IF NOT EXISTS coding_mode text NOT NULL DEFAULT 'hum
 -- (nothing about a run depends on these; the bridge is a front-end, not the truth).
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS slack_channel text;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS slack_thread_ts text;
+-- D20: the human a bug run pings when its fix is ready (repro + diff + PR link). NULL = the
+-- LANTERN_DEFAULT_SHEPHERD value at ping time. Feature runs leave it NULL.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS shepherd text;
 
 -- ── Chat surface (docs/CHAT.md, D13): web consults with history and a ledger ──
 -- chat_sessions.id doubles as the Agents SDK session key ('consult:{user}:{agent}:{name}'),
