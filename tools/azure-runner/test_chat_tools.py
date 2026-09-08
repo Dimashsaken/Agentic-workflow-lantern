@@ -254,15 +254,15 @@ class StartRunComposition(unittest.TestCase):
     def test_an_idea_without_a_repo_asks_instead_of_guessing(self):
         tools, ex, published = build("start something")
         out = call(tools["start_run"], idea="Let editors bulk-export candidates",
-                   brief_path="", product_repo="", base_branch="", coding_mode="auto",
-                   must_haves="")
+                   title="bulk export", brief_path="", product_repo="", base_branch="",
+                   coding_mode="auto", must_haves="")
         self.assertEqual(ex.calls, [])
         self.assertEqual(published, [])
         self.assertIn("repo", out.lower())
 
     def test_an_idea_without_a_coding_mode_asks_for_one(self):
         tools, ex, _ = build("start something")
-        out = call(tools["start_run"], idea="Bulk export", brief_path="",
+        out = call(tools["start_run"], idea="Bulk export", title="bulk export", brief_path="",
                    product_repo="/srv/app", base_branch="", coding_mode="", must_haves="")
         self.assertEqual(ex.calls, [])
         self.assertIn("coding mode", out.lower())
@@ -270,26 +270,26 @@ class StartRunComposition(unittest.TestCase):
     def test_a_complete_idea_cards_first_then_creates_the_run(self):
         tools, ex, published = build("start it")
         out = call(tools["start_run"], idea="Let editors bulk-export candidates",
-                   brief_path="", product_repo="/srv/app", base_branch="main",
-                   coding_mode="auto", must_haves="CSV download\nEmail on completion")
+                   title="bulk export", brief_path="", product_repo="/srv/app",
+                   base_branch="main", coding_mode="auto",
+                   must_haves="CSV download\nEmail on completion")
         self.assertEqual(ex.calls, [], "a run was created without confirmation")
         self.assertIn("NOT DONE", out)
         self.assertEqual(published[-1]["kind"], "card")
-        slug = published[-1]["subject"]
-        self.assertIn("bulk-export", slug)
+        self.assertEqual(published[-1]["subject"], "bulk-export")
 
     def test_exactly_one_of_idea_or_brief_path(self):
         tools, _, _ = build("go")
-        self.assertIn("exactly one", call(tools["start_run"], idea="a", brief_path="b",
+        self.assertIn("exactly one", call(tools["start_run"], idea="a", title="", brief_path="b",
                                           product_repo="", base_branch="", coding_mode="",
                                           must_haves=""))
-        self.assertIn("exactly one", call(tools["start_run"], idea="", brief_path="",
+        self.assertIn("exactly one", call(tools["start_run"], idea="", title="", brief_path="",
                                           product_repo="", base_branch="", coding_mode="",
                                           must_haves=""))
 
     def test_a_brief_path_that_does_not_exist_is_named(self):
         tools, ex, _ = build("go")
-        out = call(tools["start_run"], idea="", brief_path="workflow/briefs/nope.md",
+        out = call(tools["start_run"], idea="", title="", brief_path="workflow/briefs/nope.md",
                    product_repo="/srv/app", base_branch="", coding_mode="human", must_haves="")
         self.assertIn("no brief", out)
         self.assertEqual(ex.calls, [])
@@ -347,6 +347,16 @@ class BriefComposer(unittest.TestCase):
             brief_composer.write_brief("auto", f"# x\n{brief_composer.MARKER} -->\n", briefs_dir=briefs)
             brief_composer.write_brief("auto", f"# y\n{brief_composer.MARKER} -->\n", briefs_dir=briefs)
             self.assertIn("# y", (briefs / "auto.md").read_text(encoding="utf-8"))
+
+    def test_a_long_title_is_cut_at_a_word_not_mid_word(self):
+        # The slug becomes the run id, the brief filename and the branch name. Seen live
+        # 2026-09-08: "...-shows-when-eac" reads as a bug, so truncate on a boundary.
+        long = "Update the runboard so it shows when each stage last changed for readers"
+        slug = brief_composer.slugify(long)
+        self.assertLessEqual(len(slug), brief_composer.SLUG_MAX)
+        self.assertTrue(long.lower().replace(" ", "-").startswith(slug), slug)
+        self.assertFalse(slug.endswith("-"))
+        self.assertTrue(brief_composer.SLUG_RE.match(slug))
 
     def test_a_slug_cannot_escape_the_briefs_directory(self):
         for bad in ("../../etc/passwd", "a/b", "", "UPPER"):

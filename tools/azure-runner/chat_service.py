@@ -648,18 +648,21 @@ def make_write_tools(publish, by: str, user_text: str, run_scope: str | None = N
                 f"{(res.get('output') or '').strip()}").strip()
 
     @function_tool
-    async def start_run(idea: str, brief_path: str, product_repo: str, base_branch: str,
-                        coding_mode: str, must_haves: str) -> str:
+    async def start_run(idea: str, title: str, brief_path: str, product_repo: str,
+                        base_branch: str, coding_mode: str, must_haves: str) -> str:
         """Start a pipeline run — TWO STEPS, the developer confirms the second.
 
         Give EITHER `idea` (a rough description in the developer's words; a brief is
         composed from workflow/briefs/_TEMPLATE.md and written for them) OR `brief_path`
-        (an existing brief in the repo). `product_repo` is the repository the run
-        implements (URL or on-box path) and is required for coding mode `auto`;
-        `base_branch` defaults to main; `coding_mode` is `human` (the developer codes
-        stage 3 themselves) or `auto` (the coding agent implements the approved plan and
-        the host opens the pull request). `must_haves` is optional — one per line, they
-        seed the story's acceptance criteria.
+        (an existing brief in the repo). `title` is the SHORT name for the work — two to
+        five words, what you would call it in a stand-up ("runboard stage timestamps") —
+        because it becomes the run id, the brief filename and the branch name, and
+        outlives the sentence it came from; leave it "" only if the idea is already that
+        short. `product_repo` is the repository the run implements (URL or on-box path)
+        and is required for coding mode `auto`; `base_branch` defaults to main;
+        `coding_mode` is `human` (the developer codes stage 3 themselves) or `auto` (the
+        coding agent implements the approved plan and the host opens the pull request).
+        `must_haves` is optional — one per line, they seed the story's acceptance criteria.
 
         Missing required fields come back as a question, not a guess. Pass "" for
         anything you were not told.
@@ -684,7 +687,7 @@ def make_write_tools(publish, by: str, user_text: str, run_scope: str | None = N
             rel = brief_path.replace("\\", "/")
             preview: list[str] = []
         else:
-            title = " ".join(idea.split())[:80]
+            title = " ".join((title or "").split())[:80] or " ".join(idea.split())[:80]
             composed = brief_composer.compose(
                 {"title": title, "problem": idea, "must_haves": must_haves,
                  "product_repo": repo, "base_branch": base, "coding_mode": mode or "human",

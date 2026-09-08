@@ -42,9 +42,19 @@ SECTIONS = {
 EMPTY = "(not specified)"
 
 
+SLUG_MAX = 40
+
+
 def slugify(text: str) -> str:
+    """A slug becomes the run id, the brief filename and the branch name — it outlives
+    the sentence it came from, so truncate at a WORD boundary. `…-shows-when-eac` reads
+    as a bug; `…-shows-when` reads as a name."""
     s = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
-    return s[:40].rstrip("-") or "idea"
+    if len(s) <= SLUG_MAX:
+        return s or "idea"
+    cut = s[:SLUG_MAX + 1]
+    cut = cut[:cut.rindex("-")] if "-" in cut[1:] else cut[:SLUG_MAX]
+    return cut.strip("-") or "idea"
 
 
 def run_id_for(slug: str, when: datetime | None = None) -> str:

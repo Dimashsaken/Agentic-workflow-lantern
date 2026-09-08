@@ -542,8 +542,23 @@ somewhere else". This closes that, without moving the gate line.
   consults belong. No gate is decidable by an agent under any flag. The Slack bridge is
   dormant until a workspace app exists (a human, one-time action; the manifest is in
   `tools/slack-bridge/README.md`), and nothing else depends on it.
-- **Proof:** `test_chat_tools.py` (30 checks — the confirmation matrix, identity on every
-  event, the composer's briefs parsing back), `tools/slack-bridge/test_bridge.py` (36 —
-  allowlists, ack-before-pipeline timing, gate cards, relay), `test_init_product.py`
+- **Proof (unit):** `test_chat_tools.py` (31 checks — the confirmation matrix, identity on
+  every event, the composer's briefs parsing back), `tools/slack-bridge/test_bridge.py`
+  (36 — allowlists, ack-before-pipeline timing, gate cards, relay), `test_init_product.py`
   (19 — a fixture repo per stack, both refusals, the written `lantern.toml` read back by
   `factory.quality_config`), and the decision-card rendering in `test_chat_ux.py`.
+- **Proof (live, 2026-09-08, Chat tab on `gpt-5.6-sol`, product = this repo by local
+  path):** run `feat-20260908-runboard-stage-timestamps`, started and gated entirely from
+  chat for $0.18. An idea became a decision card; the card became a run only after the
+  phrase was typed; both story stages passed; asked to approve `story_signoff`, the agent
+  read the story first and produced a second card. **"Yes, I confirm - approve it."
+  changed nothing** — the agent reported that the wording did not match and the gate row
+  stayed `pending`, which is the whole design working in the only place it matters. The
+  exact phrase then approved it: `approvals.decided_by = dimash`, the note carried
+  through to `gate-decisions.md`, the run advanced to `01-ui-ux.diverge`, and the audit
+  log reads `human:dimash pipeline_action action=decide_gate channel=web-chat`.
+- **Known wart, not fixed here:** `approvals.channel` still records how the gate was
+  OPENED (`'cli'` from `open_gate`) rather than where it was decided. The decision's real
+  channel is on the `pipeline_action` event, so the audit answer is right; correcting the
+  column means changing `cmd_decide`'s signature for all three surfaces, which belongs
+  with whoever next touches that function.

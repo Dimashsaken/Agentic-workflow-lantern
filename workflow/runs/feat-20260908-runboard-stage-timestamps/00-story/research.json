@@ -1,0 +1,78 @@
+{
+  "kind": "research",
+  "run_id": "feat-20260908-runboard-stage-timestamps",
+  "patterns": [
+    {
+      "path": "tools/azure-runner/pipeline.py",
+      "note": "Canonical runboard renderer and lifecycle mutation flow; render_runboard owns the query, Markdown table, and derived-file write."
+    },
+    {
+      "path": "tools/mission-control/app.py",
+      "note": "Existing bulk aggregation of latest execution records into visible stage directories, with state-specific age sources."
+    },
+    {
+      "path": "tools/mission-control/ui.py",
+      "note": "Existing human-readable elapsed-time formatter with future-time clamping."
+    },
+    {
+      "path": "tools/azure-runner/test_status_json.py",
+      "note": "Runner timestamp-test pattern using fixed timezone-aware datetimes, fake connections, and exact output assertions."
+    },
+    {
+      "path": "tools/mission-control/test_gate_latency.py",
+      "note": "Operational-age test pattern covering exact stale boundaries, future values, and constant query count."
+    }
+  ],
+  "similar_features": [
+    {
+      "name": "Mission Control stage rail and elapsed ages",
+      "paths": [
+        "tools/mission-control/app.py",
+        "tools/mission-control/ui.py"
+      ]
+    },
+    {
+      "name": "Gate latency and stale review cards",
+      "paths": [
+        "tools/mission-control/app.py",
+        "tools/mission-control/test_gate_latency.py"
+      ]
+    },
+    {
+      "name": "Machine-readable status timestamps",
+      "paths": [
+        "tools/azure-runner/pipeline.py",
+        "tools/azure-runner/test_status_json.py"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "There is no single persisted stage-last-changed field: execution, approval, event, and run timestamps represent different mutations, while runs.updated_at also changes for non-stage metadata.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Visible stages do not map one-to-one to stage_executions: split UI/UX phases share a directory and human-mode coding creates no execution row.",
+      "severity": "medium"
+    },
+    {
+      "risk": "The runboard renderer has no focused behavior test, despite being a shared human and agent orientation artifact.",
+      "severity": "medium"
+    },
+    {
+      "risk": "The existing 24-hour stale rule covers pending Mission Control review cards only; the runboard has no general stalled-versus-slow classification.",
+      "severity": "low"
+    }
+  ],
+  "likely_files": [
+    "tools/azure-runner/pipeline.py",
+    "tools/azure-runner/schema.sql",
+    "tools/azure-runner/test_status_json.py"
+  ],
+  "conventions": [
+    "workflow/RUNBOARD.md is a generated view; refresh it with python pipeline.py runboard and never hand-edit it.",
+    "Persist timestamps as timestamptz and test timestamp output with timezone-aware UTC datetimes.",
+    "Runner behavior tests use stdlib unittest and fake connections where live Postgres is unnecessary.",
+    "Operational list views use bulk queries and map rows in memory rather than issuing one query per run."
+  ]
+}
