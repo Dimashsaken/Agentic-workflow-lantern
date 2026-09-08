@@ -475,3 +475,112 @@ deployment (Terra) lands later. What shipped, and the shape chosen:
   108 s with a four-criterion story mapped 1:1 to the brief's must-haves, and
   `story_signoff` opened. A parser bug surfaced on the way (a blank `Working branch:`
   line swallowed the next line) and is fixed with `test_brief_parsing.py`.
+
+## D18 — 2026-09-08 — Parallel scoped builders: stage 3 fans out, the host merges, one gate
+
+Gap 1 of the software-factory alignment plan (Ray Fu's folder-confined back-end and
+front-end engineers, plan Phase D) was the last structural difference between Lantern
+and the reference designs: D17 built the *mechanism* — a write scope enforced on every
+commit — but stage 3 still ran one agent with the whole checkout. This adds the second
+sandbox, and nothing else.
+
+- **The plan declares the split, and code checks it is a partition.** `plan.json` gains
+  an optional `builders: [{name, write_scope, tasks, criteria}]`. `factory._check_plan`
+  refuses names that are not branch-safe, a duplicate name, `integrate` (reserved for
+  the host's own execution), a task assigned twice, a task assigned to nobody, a task id
+  the plan does not define, and a glob claimed by two builders. Why validate this hard:
+  a bad split does not fail at planning time, it fails forty minutes later as a merge
+  conflict, and the human sees a coding failure for a planning defect.
+- **Optional, and provably inert when absent.** No `builders` key → `builders.run_coding`
+  is `await execute(conn, run_id, stage, runner)` and every other function short-circuits
+  on the same emptiness. `test_builders.py` asserts the pass-through and the existing
+  `test_coding_stage.py` / `test_factory.py` run unchanged, because "byte-for-byte
+  today's single builder" is a claim that has to be checked, not asserted.
+- **One start point, N branches, `--no-ff` in plan order.** The host creates every
+  builder's branch at one commit (the run's branch if it exists — a continued branch,
+  D15 — else the base), so each builder's `base..HEAD` is exactly its own work and the
+  merge is a clean fan-in. Branches are `<run branch>--<name>`, which stays inside D6's
+  pushable namespace because the run's branch already does. `--no-ff` keeps each
+  builder's work one readable arc for the reviewer.
+- **The host merges; agents never see each other's branches.** A builder cannot fetch,
+  read or wait for a sibling — its checkout does not contain them and never will. The
+  only thing that crosses is the bundle it writes into the run folder, verified by the
+  host before it lands in the mirror, exactly as D14 designed for one builder. That is
+  also why the plan must carry the contract between them: with no shared branch, an
+  interface not written down is an interface that does not exist.
+- **A merge conflict is a planning failure, and is reported as one.** The stage fails
+  with the conflicting file list and points at `pipeline.py rework <run-id> --to
+  02-pre-coding`. We deliberately did NOT hand conflicts to a model to resolve: two
+  builders editing one file means the split was wrong, and a resolved conflict hides
+  that. Note the plan check compares glob *strings* — `src/**` and `src/api/**` pass it
+  and collide here — so the merge is the second line of defence, not a redundant one.
+- **An integrator, because "green apart" is not "green together".** One final execution
+  (`03-coding.integrate`, role `coding`) runs on the merged branch with the union of the
+  builders' scopes and one task: make it green, through the normal `factory.coding_turns`
+  gate loop. Its handoff is the stage's handoff, so `03-coding/` still carries exactly
+  one branch and `_publish_branch`, the PR, and the single `code_complete` gate are
+  untouched. Its "did this execution do work?" check measures from the PRE-merge start
+  point recorded by the merge: an integrator that finds nothing to fix is a success, not
+  an idle stage, but a merge that produced nothing still fails.
+- **Per-builder run-folder subtrees, for a race, not for tidiness.** `03-coding/builders/
+  <name>/` holds each builder's report, gate, handoff and bundle. Sharing one `report.md`
+  would race on the last `Status:` line (`report_blocker`) and sharing one `gate.json`
+  would race on `execution_key` — the loser failing on the winner's evidence. The
+  invariant that second executions append to a shared report still holds for the stage
+  dir, where only the integrator writes.
+- **The stage key is the identity; the env var is only for the turn.** `LANTERN_BUILDER`
+  tells the agent's own execution which builder it is (the write scope and the prompt
+  read it), but every *check* derives the builder from the stage key `03-coding.<name>`
+  via `factory.builder_of`. The first live run proved why: the in-process executor clears
+  the writability env in its `finally`, and the docker host never sets it at all, so
+  postconditions that read the environment looked in the stage directory and failed a
+  builder that had done everything right — green gate, clean handoff, wrong place to
+  look. `test_builders.py` pins the env-free path.
+- **Parallelism is capped by the executor, and is 1 in-process on purpose.**
+  `LANTERN_BUILDER_PARALLELISM` (default 2) never exceeds `LANTERN_MAX_CONCURRENCY`, and
+  is forced to 1 unless `LANTERN_EXECUTOR=docker`: the in-process path configures each
+  execution through `os.environ` (product dir, branch, `LANTERN_BUILDER`), which two
+  concurrent executions in one process would overwrite for each other. Real parallelism
+  is a property of the container executor; a laptop runs the same builders sequentially
+  and gets the same branch.
+- **One more thing the host verifies before pushing:** every builder head must be an
+  ancestor of the handed-off head. A merge that silently dropped a builder would
+  otherwise arrive at the PR looking like a complete feature with a third missing.
+- **Shared-file surface, kept small:** a new `role_for_stage()` in `orchestrator.py` maps
+  any `03-coding.<x>` to the `coding` role (the builder names come from `plan.json` at run
+  time, so they cannot be listed in `ROLE_FOR_STAGE`), and the three role lookups route
+  through it; the two executors key the coding-stage setup on that role instead of the
+  literal stage string and resolve the builder's branch and `LANTERN_BUILDER` through
+  `builders.branch_for`/`name_for`; `step_run`'s single `execute` call becomes
+  `builders.run_coding(...)`. Everything else is in `builders.py` and `factory.py`.
+- **Not done, on purpose:** no automatic splitting — a human-approved plan decides, and
+  `agents/pre-coding/skills.md` §5a says when not to (one surface, sequential tasks, a
+  shared file, a small feature); no cross-builder communication; no per-builder PRs (one
+  branch, one PR, one gate — D14 unchanged); no rebase or conflict resolution; builders
+  are not offered to `human` coding mode.
+- **Proof (live, 2026-09-08, in-process on `gpt-5.6-sol`):** run `feat-20260908-note-delete`
+  against a small product repo, plan split into `api` (`src/**`, `tests/**`, tasks 1–2)
+  and `docs` (`docs/**`, task 3). Stage 3 fanned out one at a time (in-process cap),
+  both builders' gates went green, the host merged both branches `--no-ff` in plan
+  order, the integrator ran on the merged branch and added one cleanup commit, the
+  branch published and `code_complete` opened with both builders in its payload. The
+  merged branch's own tests pass (2 → 4). Neither builder touched the other's files, and
+  the run folder carries `03-coding/builders/{api,docs}/` with a report, gate, handoff
+  and bundle each, `builders.json` + `builders.md` for the merge, and the integrator's
+  single handoff at `03-coding/`. Three defects surfaced on the way and are fixed with
+  tests: the env-vs-stage-key one above; an ancestry check that asked the mirror about a
+  commit the mirror does not receive until `_publish_branch` lands the bundle a moment
+  later (it now checks only where both commits exist — "I cannot see that commit" is not
+  "that commit is wrong"); and a pre-existing `product_checkout` bug where
+  `shutil.rmtree(..., ignore_errors=True)` silently failed on read-only git objects, so
+  the SECOND execution of a run in one process died with "destination path already
+  exists". That last one was latent for any two stages of one run under a single daemon
+  tick on Windows; builders just reach it first.
+- **Proof (unit):** `test_builders.py` — 36 tests on real git with no database and no model:
+  the partition rules, branch naming inside the D6 namespace, two builders' bundles
+  merged into one run branch with both heads as ancestors, an add/add conflict failing
+  with the file list, `LANTERN_BUILDER` scope resolution (including the integrator's
+  union and the fallback), per-builder handoff directories, the host holding a builder to
+  ITS scope with no env of its own, batches never exceeding the cap, and the
+  no-builders pass-through.
+

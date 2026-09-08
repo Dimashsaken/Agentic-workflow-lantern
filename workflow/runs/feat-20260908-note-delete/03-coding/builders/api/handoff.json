@@ -1,0 +1,33 @@
+{
+  "kind": "coding_branch",
+  "run_id": "feat-20260908-note-delete",
+  "branch": "feat/20260908-note-delete--api",
+  "base": "main",
+  "base_sha": "f3c47e499516bc8008b68b541517e702dca198f7",
+  "start_sha": "f3c47e499516bc8008b68b541517e702dca198f7",
+  "head_sha": "5a26becefc744cf90d0a10bfb77a928aa11b935a",
+  "commits": [
+    {
+      "sha": "dc82e732b66a772d8e041449569006d4faae3351",
+      "subject": "feat-20260908-note-delete: task 1 \u00e2\u20ac\u201d add note deletion API"
+    },
+    {
+      "sha": "04bb2a3c6abf08257b184f279b148d2a15ac91aa",
+      "subject": "feat-20260908-note-delete: task 2 \u00e2\u20ac\u201d cover deletion outcomes"
+    },
+    {
+      "sha": "5a26becefc744cf90d0a10bfb77a928aa11b935a",
+      "subject": "feat-20260908-note-delete: uncommitted changes at handoff (auto-committed by the harness)"
+    }
+  ],
+  "bundle": "workflow/runs/feat-20260908-note-delete/03-coding/builders/api/branch.bundle",
+  "builder": "api",
+  "auto_committed": true,
+  "diffstat": "src/api/__pycache__/notes.cpython-312.pyc    | Bin 0 -> 1395 bytes\n src/api/notes.py                             |   9 +++++++++\n tests/__pycache__/test_notes.cpython-312.pyc | Bin 0 -> 2784 bytes\n tests/test_notes.py                          |  12 ++++++++++++\n 4 files changed, 21 insertions(+)",
+  "files_changed": [
+    "src/api/__pycache__/notes.cpython-312.pyc",
+    "src/api/notes.py",
+    "tests/__pycache__/test_notes.cpython-312.pyc",
+    "tests/test_notes.py"
+  ]
+}

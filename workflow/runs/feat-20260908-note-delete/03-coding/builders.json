@@ -1,0 +1,32 @@
+{
+  "kind": "builder_merge",
+  "run_id": "feat-20260908-note-delete",
+  "branch": "feat/20260908-note-delete",
+  "base": "main",
+  "start_sha": "f3c47e499516bc8008b68b541517e702dca198f7",
+  "head_sha": "6880b07a7471a532af59333419ee977d5e4d26fd",
+  "merged_at": "2026-09-08T22:07:59+00:00",
+  "builders": [
+    {
+      "name": "api",
+      "branch": "feat/20260908-note-delete--api",
+      "head_sha": "5a26becefc744cf90d0a10bfb77a928aa11b935a",
+      "commits": 3,
+      "files_changed": [
+        "src/api/__pycache__/notes.cpython-312.pyc",
+        "src/api/notes.py",
+        "tests/__pycache__/test_notes.cpython-312.pyc",
+        "tests/test_notes.py"
+      ]
+    },
+    {
+      "name": "docs",
+      "branch": "feat/20260908-note-delete--docs",
+      "head_sha": "d06b565770dc6d500c79c1e2889da3ef215f7f58",
+      "commits": 1,
+      "files_changed": [
+        "docs/api.md"
+      ]
+    }
+  ]
+}

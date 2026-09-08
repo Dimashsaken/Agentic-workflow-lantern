@@ -37,6 +37,8 @@ LANTERN_EXECUTOR=inprocess          # 'docker' = one sandbox container per stage
 LANTERN_MAX_CONCURRENCY=            # default 3 under docker, 1 inprocess
 LANTERN_STAGE_TIMEOUT_MIN=45
 LANTERN_FIX_ROUNDS=3                # D17: quality-gate fix rounds before a red coding stage fails
+LANTERN_BUILDER_PARALLELISM=2       # D18: scoped builders at once; capped by MAX_CONCURRENCY
+                                    #   (and by 1 in-process, where executions share env)
 LANTERN_SANDBOX_CPUS=1.5
 LANTERN_SANDBOX_MEMORY=2500m
 LANTERN_SANDBOX_IMAGE=lantern-sandbox
@@ -235,6 +237,50 @@ run auto mode on repos you trust until they land.
 - **Rework.** `pipeline.py rework <run-id> --to 02-pre-coding|03-coding|04-qa-dev` sends a
   failed or waiting run backwards: pending approvals expire, the decision is recorded in
   `gate-decisions.md`, the daemon re-runs from there with the same session memory.
+
+## Parallel builders (D18)
+
+`builders.py` turns stage 3 into several confined agents when — and only when — the
+approved `02-pre-coding/plan.json` says so:
+
+```json
+"builders": [
+  {"name": "api",  "write_scope": ["src/api/**", "tests/api/**"], "tasks": [1, 2], "criteria": ["AC-1"]},
+  {"name": "docs", "write_scope": ["docs/**"],                    "tasks": [3],    "criteria": ["AC-4"]}
+]
+```
+
+With no `builders` key, `run_coding` is one `execute` call and stage 3 is byte-for-byte
+what D14/D17 built. With one, per run:
+
+| step | what runs | where |
+|------|-----------|-------|
+| fan out | `03-coding.<name>` per builder, `LANTERN_BUILDER_PARALLELISM` at a time | branch `<run branch>--<name>`, scope = that builder's globs, `03-coding/builders/<name>/` |
+| merge | the **host** verifies each bundle, lands it in the mirror, resets the run branch to the shared start point and `git merge --no-ff`s each builder in plan order | `03-coding/builders.json` + `builders.md` |
+| integrate | `03-coding.integrate`, scope = the union, task = "make the merged branch green", normal gate + fix loop | the run branch; its handoff is the stage's handoff |
+
+Then the single `code_complete` gate, whose payload gains
+`builders: [{name, branch, commits, files_changed}]`.
+
+- `LANTERN_BUILDER_PARALLELISM` (default 2) is capped by the executor's own concurrency
+  and is **1 in-process on purpose**: the in-process path configures each execution
+  through `os.environ`, which two concurrent executions in one process would overwrite
+  for each other. Real parallelism needs `LANTERN_EXECUTOR=docker`.
+- `LANTERN_BUILDER=<name>` is what makes an execution a builder: `factory.write_scope`
+  narrows to that builder's globs, and its report, gate, handoff and bundle move under
+  `03-coding/builders/<name>/` — parallel builders cannot share one `report.md` without
+  racing on its last `Status:` line.
+- Branches stay inside `CODING_BRANCH_PREFIXES` (D6) because the suffix is appended to a
+  branch that already does.
+- **A merge conflict fails the stage** with the conflicting files and points at
+  `pipeline.py rework <run-id> --to 02-pre-coding`. Two builders touching one file means
+  the split was wrong; resolving it with a model would hide a planning defect. Note the
+  plan check compares glob *strings*, so `src/**` and `src/api/**` pass it and conflict
+  here — write scopes that are genuinely disjoint.
+- The host's own checks stay presence-AND-validity: every builder's bundle must carry
+  exactly its branch, its commits must be inside its scope, and every builder head must
+  be an **ancestor** of the branch about to be pushed, so a merge that silently dropped
+  one cannot reach the PR. Proof: `test_builders.py` (real git, no database, no model).
 
 ## Direct consult — use one agent, no run (D11)
 

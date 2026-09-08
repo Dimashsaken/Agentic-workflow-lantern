@@ -5,6 +5,6 @@
 # laptop (tools/azure-runner/.venv). Only failures go back to the coding agent.
 
 [quality]
-test = "$LANTERN_PYTHON tools/azure-runner/test_model_stack.py && $LANTERN_PYTHON tools/azure-runner/test_factory.py && $LANTERN_PYTHON tools/azure-runner/test_coding_stage.py && $LANTERN_PYTHON -m unittest discover -q -s tools/azure-runner -p test_status_json.py && $LANTERN_PYTHON -m unittest discover -q -s tools/mission-control -p test_gate_latency.py"
+test = "$LANTERN_PYTHON tools/azure-runner/test_model_stack.py && $LANTERN_PYTHON tools/azure-runner/test_factory.py && $LANTERN_PYTHON tools/azure-runner/test_builders.py && $LANTERN_PYTHON tools/azure-runner/test_coding_stage.py && $LANTERN_PYTHON -m unittest discover -q -s tools/azure-runner -p test_status_json.py && $LANTERN_PYTHON -m unittest discover -q -s tools/mission-control -p test_gate_latency.py"
 lint = "$LANTERN_PYTHON -m compileall -q tools/azure-runner tools/mission-control"
 timeout_s = 900

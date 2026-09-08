@@ -25,6 +25,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -44,13 +45,14 @@ from orchestrator import (
     list_dir, list_exports, make_append_memory, make_collect_jsx, model_for,
     model_settings_for, paper_mcp_server,
     product_git,
-    paper_reachable, playwright_mcp_server, read_file, render_role_memory, usage_dict,
-    write_file,
+    paper_reachable, playwright_mcp_server, read_file, render_role_memory, role_for_stage,
+    usage_dict, write_file,
 )
 
 load_dotenv(Path(__file__).parent / ".env")
 
 import factory  # noqa: E402  D17: quality gate + fix loop for the in-process coding path
+import builders  # noqa: E402  D18: stage 3 fans out into scoped parallel builders
 
 PIPELINE_VERSION = "3"  # v3 (D17): story stage + validation execution; v2: stage 1 diverge/design split
 POLL_SECONDS = 5
@@ -493,8 +495,8 @@ async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str) -
 # ── stage execution ──────────────────────────────────────────────────────────
 
 async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
-    role = ROLE_FOR_STAGE[stage]
-    sdir = STAGE_DIR[stage]
+    role = role_for_stage(stage)                      # D18: '03-coding.<x>' is coding
+    sdir = STAGE_DIR.get(stage) or factory.stage_dir(stage)   # D18: builder keys are dynamic
     attempt = await conn.fetchval(
         "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
         run_id, stage,
@@ -514,10 +516,11 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     # LANTERN_PRODUCT_DIR at call time).
     repo, branch = await product_target(conn, run_id)
     work = await product_work_branch(conn, run_id) if repo else ""
+    work = builders.branch_for(work, stage)      # D18: a builder works on its own branch
     for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
-                "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_CODING_START_SHA"):
+                "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
         os.environ.pop(var, None)
-    if stage == "03-coding" and not repo:
+    if role == "coding" and not repo:
         raise RuntimeError("auto-coding needs a product repo — set one with "
                            f"`pipeline.py set-product {run_id} --repo … --branch …"
                            " [--working-branch …]` or in Mission Control at "
@@ -529,11 +532,13 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         # D15: EVERY stage learns the working branch, not just coding — that is what
         # lets stages 1-2 and 4-7 orient on the code the run is actually working on.
         os.environ["LANTERN_PRODUCT_WORK_BRANCH"] = work
-        if stage == "03-coding":   # D14: writable, on the run's branch, bot identity
+        if role == "coding":       # D14: writable, on the run's branch, bot identity
             start = await asyncio.to_thread(prepare_coding_checkout, checkout, work)
             os.environ["LANTERN_CODING_BRANCH"] = work
             os.environ["LANTERN_CODING_START_SHA"] = start
             os.environ["LANTERN_PRODUCT_WRITABLE"] = "1"
+            if builders.name_for(stage):   # D18: which builder this execution is
+                os.environ["LANTERN_BUILDER"] = builders.name_for(stage)
     session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
 
     problem = check_stage_inputs(run_id, stage)
@@ -586,7 +591,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         for s in mcp_servers:
             await s.cleanup()
         for var in ("LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
-                    "LANTERN_CODING_START_SHA"):
+                    "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
             os.environ.pop(var, None)   # never leak writability into the next stage
 
     # Ledger before the postcondition verdict: tokens are spent either way (P0.4).
@@ -602,7 +607,9 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         raise RuntimeError("postconditions failed: " + "; ".join(missing))
     await upload_stage_media(conn, run_id, sdir, execution_key)
 
-    report = f"workflow/runs/{run_id}/{sdir}/report.md"
+    # D18: a builder's report is in its own subdir — point the artifact row at the file
+    # that exists, not at the stage report the integrator will write later.
+    report = f"workflow/runs/{run_id}/{factory.exec_dir(sdir, factory.builder_of(stage))}/report.md"
     await insert_artifact(conn, run_id, sdir, "report", report)
     if stage == "01-ui-ux.design":
         await register_design_artifacts(conn, run_id, sdir)
@@ -621,8 +628,8 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     postconditions too (defense in depth — a compromised container exiting 0 still
     cannot pass without the report on the mounted run dir and its memory row).
     """
-    role = ROLE_FOR_STAGE[stage]
-    sdir = STAGE_DIR[stage]
+    role = role_for_stage(stage)                      # D18: '03-coding.<x>' is coding
+    sdir = STAGE_DIR.get(stage) or factory.stage_dir(stage)   # D18: builder keys are dynamic
     attempt = await conn.fetchval(
         "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
         run_id, stage,
@@ -664,14 +671,15 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     # bind-mounts it; the entrypoint clones /product-src.git into /work/product.
     repo, branch = await product_target(conn, run_id)
     work = await product_work_branch(conn, run_id) if repo else ""
-    if stage == "03-coding" and not repo:
+    work = builders.branch_for(work, stage)      # D18: a builder works on its own branch
+    if role == "coding" and not repo:
         raise RuntimeError("auto-coding needs a product repo — set one with "
                            f"`pipeline.py set-product {run_id} --repo … --branch …"
                            " [--working-branch …]` or in Mission Control at "
                            f"/run/{run_id}/repo")
     cmd += await asyncio.to_thread(product_mount_args, repo, branch, work)
     timeout_min = STAGE_TIMEOUT_MIN
-    if stage == "03-coding":
+    if role == "coding":
         # D14: the entrypoint puts the checkout on the run's branch and marks it
         # writable; commits carry the bot identity. Still no PAT in the container —
         # the bundle it writes into the run folder is the only way code leaves.
@@ -679,6 +687,8 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
         cmd += ["-e", f"LANTERN_CODING_BRANCH={work}",
                 "-e", f"LANTERN_GIT_AUTHOR_NAME={GIT_AUTHOR_NAME}",
                 "-e", f"LANTERN_GIT_AUTHOR_EMAIL={GIT_AUTHOR_EMAIL}"]
+        if builders.name_for(stage):      # D18: which builder this container is
+            cmd += ["-e", f"LANTERN_BUILDER={builders.name_for(stage)}"]
         for var in ("LANTERN_CODING_MAX_TURNS", "LANTERN_PRODUCT_SHELL_TIMEOUT",
                     "LANTERN_FIX_ROUNDS"):
             if os.environ.get(var):
@@ -1076,8 +1086,13 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
         elif stage == "03-coding" and mode == "auto":
             # D14: the coding agent implements the plan in a sandbox; the host then
             # verifies + pushes its branch and opens the PR — the gate's payload.
-            await execute(conn, run_id, stage, runner)
+            # D18: with a `builders` list in the plan this fans out into N scoped
+            # builders, merges them on the host and integrates once; with no builders
+            # it is the single `execute` call it has always been.
+            built = await builders.run_coding(conn, run_id, stage, runner, execute)
             extra = await publish_coding_branch(conn, run_id)
+            if built:                                    # D18
+                extra["builders"] = built
             external_ref = extra.get("pr_url")
         else:  # human stage: nothing to execute — the gate IS the stage
             print(f"[{run_id}] {stage} is a human stage (the developer's own session).")
@@ -1332,6 +1347,29 @@ async def cmd_decide(run_id: str, gate: str, by: str, note: str, approved: bool)
     await conn.close()
 
 
+def _chmod_retry(func, path, _exc) -> None:
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def force_rmtree(path: Path) -> None:
+    """Remove a git checkout on any platform, and say so when it cannot be removed.
+
+    Git marks objects and packs read-only, which on Windows makes `shutil.rmtree` raise
+    PermissionError. With `ignore_errors=True` that failure was silent and the directory
+    survived, so the NEXT clone into it died with 'destination path already exists' —
+    an error that names neither the cause nor the fix. It bites whenever one process
+    checks out the same run twice: two stages under one daemon tick, and (D18) the
+    scoped builders, which is where it was found.
+    """
+    if not path.exists():
+        return
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_chmod_retry)
+    else:                                    # pragma: no cover - 3.11 and older
+        shutil.rmtree(path, onerror=_chmod_retry)
+
+
 def product_checkout(repo: str, branch: str, run_id: str, work: str = "") -> Path:
     """Host-side working checkout of the product for the in-process executor.
 
@@ -1346,8 +1384,11 @@ def product_checkout(repo: str, branch: str, run_id: str, work: str = "") -> Pat
     """
     mirror = sync_product_mirror(repo)
     dest = PRODUCT_MIRROR_DIR / "checkouts" / run_id
+    force_rmtree(dest)               # D18: loud, and copes with read-only git objects
     if dest.exists():
-        shutil.rmtree(dest, ignore_errors=True)
+        raise RuntimeError(
+            f"could not clear the previous checkout at {dest} — remove it and retry "
+            "(a file in it is locked by another process)")
     dest.parent.mkdir(parents=True, exist_ok=True)
     r = _git("clone", "--no-hardlinks", "--branch", branch, str(mirror), str(dest))
     if r.returncode != 0:

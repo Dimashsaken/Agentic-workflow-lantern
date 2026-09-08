@@ -92,7 +92,7 @@ everyone downstream — the checks are sound under concurrent runs by design
 | 0 | `00-story`       | `researcher` → `story` | `research.md/json` (read-only codebase map — every path verified), `story.md/json` (user story + numbered acceptance criteria) | Justin/developer approves the story (`story_signoff`) |
 | 1 | `01-ui-ux`       | `ui-ux`      | 2–3 flow options on Paper → PNGs + handoff package + video | Justin/developer picks an option   |
 | 2 | `02-pre-coding`  | `pre-coding` | Blast-radius report, schema plan, task plan  | Schema + plan approved             |
-| 3 | `03-coding`      | developer, or `coding` agent (auto mode, D14) | Implementation on a feature branch — a pull request in auto mode; the product's `lantern.toml` quality commands + the plan's write scope run as a code gate with a bounded fix loop (D17) | Code complete (in auto mode a human reviews the PR) |
+| 3 | `03-coding`      | developer, or `coding` agent (auto mode, D14) — N scoped builders in parallel + an integrator when the plan asks (D18) | Implementation on a feature branch — a pull request in auto mode; the product's `lantern.toml` quality commands + the plan's write scope run as a code gate with a bounded fix loop (D17) | Code complete (in auto mode a human reviews the PR) |
 | 4 | `04-qa-dev`      | `qa-dev`     | Test design + executed runs + **videos**     | No open sev-1/sev-2 bugs           |
 | 5 | `05-post-coding` | `post-coding` → `validator` | Cleanliness / tech-debt / backward-compat, then `validation.md/json` — a verdict per acceptance criterion with evidence (D17) | Findings resolved or waived; validation verdict `pass` |
 | 6 | `06-security`    | `security`   | Deploy-risk + vulnerability report           | No unmitigated high-risk findings  |
@@ -104,7 +104,10 @@ developer implements the plan in their own coding session on their laptop (Codex
 Azure OpenAI, or any coding harness) — the primary session, not a fleet agent.
 **`auto`**: the fleet's `coding` agent implements the approved plan in a sandbox on a
 writable clone of the product repo, and the host pushes the branch and opens the pull
-request a human reviews at `code_complete`. All other stages run through the
+request a human reviews at `code_complete`. When the approved plan declares a `builders`
+list, that one agent becomes N path-scoped builders running in parallel on their own
+branches, merged by the host and integrated by one final execution (D18) — one gate
+either way. All other stages run through the
 orchestrator on EC2 (or a workstation for Paper-dependent ui-ux work). Details,
 per-stage contracts, and the list of human-in-the-loop gates: `workflow/PIPELINE.md`.
 Connecting a product repository to a run: `tools/azure-runner/README.md`

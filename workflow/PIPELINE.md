@@ -94,9 +94,34 @@ sequence of reviewable commits mapped to the task plan.
   failures — go back to the agent for at most `LANTERN_FIX_ROUNDS` rounds (default 3);
   still red = the stage fails and nothing is handed off. `gate.json` + `gate.md` in the
   stage dir are the record; the handoff itself is refused if a commit leaves the scope.
+
+  **Parallel scoped builders (D18) — only when the plan asks for them.** If the approved
+  `plan.json` carries a `builders` list (`[{name, write_scope, tasks, criteria}]`, see
+  `agents/pre-coding/skills.md` §5a), stage 3 fans out:
+
+  1. one execution per builder, `03-coding.<name>`, `LANTERN_BUILDER_PARALLELISM` at a
+     time (default 2, never above the executor's own concurrency — 1 in-process, where
+     executions share one process env). Each runs on its own branch
+     `<run branch>--<name>` from a single shared start point, confined to its own
+     `write_scope`, with its own quality gate and fix loop, writing
+     `03-coding/builders/<name>/` (report, gate, handoff, bundle). Builders cannot see
+     each other's branches: they build against the contract the plan wrote down.
+  2. the **host** merges: it verifies each builder's bundle, lands it in the mirror,
+     resets the run's branch to the start point and `git merge --no-ff`s each builder in
+     plan order. A conflict fails the stage with the conflicting file list and sends the
+     run back to planning — two builders sharing a file means the split was wrong.
+     `03-coding/builders.json` + `builders.md` are the record.
+  3. one **integrator** execution, `03-coding.integrate`, on the merged branch with the
+     union of the scopes and one task: make it green. It runs the normal gate + fix loop
+     and its handoff is the stage's handoff, so `03-coding/` still carries exactly one
+     branch for the host to push. Then the single `code_complete` gate as always, with
+     the builder list in its payload.
+
+  Without a `builders` list none of this happens and stage 3 is one builder, unchanged.
 **Out:** the branch; `report.md` listing commits, deviations from the plan, and known
 gaps for QA to probe; in auto mode also `handoff.json` + `branch.bundle` (the evidence)
-and `pr.md` (where it went).
+and `pr.md` (where it went); with builders, additionally `builders/<name>/` per builder
+and `builders.json` + `builders.md` for the merge.
 **Gate:** code-complete declared — by the developer, or by a human reviewing the agent's
 PR; all tasks in the plan checked off or explicitly deferred.
 
