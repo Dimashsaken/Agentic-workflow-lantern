@@ -11,6 +11,7 @@ The written `lantern.toml` is parsed back with the SAME loader the coding gate u
 read it".
 """
 
+import re
 import sys
 import tempfile
 import tomllib
@@ -171,7 +172,12 @@ class CommandLine(unittest.TestCase):
 
     def test_pipeline_dispatches_it_without_a_database(self):
         src = (HERE / "pipeline.py").read_text(encoding="utf-8")
-        self.assertIn('LOCAL_ONLY_CMDS = {"repos", "init-product"}', src)
+        # Membership, not the exact set literal: other sessions add their own local-only
+        # commands to it (D20 added `evals`), and this test is about init-product being
+        # dispatched before the Azure client is built, not about who else is in the set.
+        members = re.search(r"^LOCAL_ONLY_CMDS = \{([^}]*)\}", src, re.M)
+        self.assertIsNotNone(members, "LOCAL_ONLY_CMDS must stay a literal set main() dispatches from")
+        self.assertIn('"init-product"', members.group(1))
         self.assertIn('sub.add_parser("init-product"', src)
 
 

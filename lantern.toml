@@ -5,7 +5,7 @@
 # laptop (tools/azure-runner/.venv). Only failures go back to the coding agent.
 
 [quality]
-test = "$LANTERN_PYTHON tools/azure-runner/test_model_stack.py && $LANTERN_PYTHON tools/azure-runner/test_factory.py && $LANTERN_PYTHON tools/azure-runner/test_builders.py && $LANTERN_PYTHON tools/azure-runner/test_coding_stage.py && $LANTERN_PYTHON tools/azure-runner/test_intake.py && $LANTERN_PYTHON tools/evals/test_evals.py && $LANTERN_PYTHON -m unittest discover -q -s tools/azure-runner -p test_status_json.py && $LANTERN_PYTHON -m unittest discover -q -s tools/mission-control -p test_gate_latency.py && $LANTERN_PYTHON -m unittest discover -q -s lantern/regressions -p 'test_*.py'"
+test = "$LANTERN_PYTHON tools/azure-runner/test_model_stack.py && $LANTERN_PYTHON tools/azure-runner/test_factory.py && $LANTERN_PYTHON tools/azure-runner/test_builders.py && $LANTERN_PYTHON tools/azure-runner/test_coding_stage.py && $LANTERN_PYTHON tools/azure-runner/test_chat_tools.py && $LANTERN_PYTHON tools/azure-runner/test_init_product.py && $LANTERN_PYTHON tools/slack-bridge/test_bridge.py && $LANTERN_PYTHON tools/azure-runner/test_intake.py && $LANTERN_PYTHON tools/evals/test_evals.py && $LANTERN_PYTHON -m unittest discover -q -s tools/azure-runner -p test_status_json.py && $LANTERN_PYTHON -m unittest discover -q -s tools/mission-control -p test_gate_latency.py && $LANTERN_PYTHON -m unittest discover -q -s lantern/regressions -p 'test_*.py'"
 # D20: lint also runs the eval rule — a diff touching agents/**, factory.py, intake.py or the
 # orchestrator's prompt builders/gate functions must ship a regenerated tools/evals/REPORT.md.
 lint = "$LANTERN_PYTHON -m compileall -q tools/azure-runner tools/mission-control tools/evals && $LANTERN_PYTHON tools/evals/check_pr.py"
