@@ -26,7 +26,37 @@ FONTS = (
 )
 
 CSS = """
+/* ONE style for every page: white, always, whatever the operating system prefers.
+   The reader can still ask for dark with `d` (stored per browser); nothing else
+   switches the palette, so two people looking at the same gate see the same screen.
+   Surfaces are white and the hairline does the separating — raised tones are for
+   hover, controls and the "needs you" tint only. */
 :root{
+  color-scheme:light;
+  --surface-0:#FFFFFF; --surface-1:#FFFFFF; --surface-2:#F5F5F3; --surface-3:#ECECE8;
+  --edge:#E3E3DE; --edge-top:rgb(0 0 0 / 3%);
+  --text:#1A1A1F; --text-muted:#5B5B66; --text-dim:#8A8A93;
+  --accent:#A8721A; --accent-soft:#FAF0DC; --on-accent:#FFFFFF;
+  --success:#1B7F4B; --success-soft:#E4F4EA;
+  --warning:#A85715; --warning-soft:#FBEDDF;
+  --danger:#B93A31; --danger-soft:#FBE7E4;
+  --gold-deep:#8C6A2F; --gold-light:#7A5F2E;
+  --night-1:#9AA6AC; --night-2:#7F8E96; --night-3:#65737B;
+  --dawn-1:#B8683C; --dawn-2:#B97E3B; --dawn-3:#9E6D24; --dawn-4:#916419;
+  --danger-edge:#EFC9C4; --accent-edge:#EBDBB4; --success-edge:#C6E6D2;
+  --warning-edge:#F2D6BC; --hot-edge:#E8D9B6; --hot-bg:#FDF8EC;
+  --field-bg:#FFFFFF; --field-edge:#D6D6D0;
+  --shadow:0 6px 18px rgb(0 0 0 / 10%);
+  --font-ui:'Figtree','Segoe UI',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Cascadia Mono',Consolas,monospace;
+  --font-label:'ADAM.CG PRO','Figtree','Segoe UI',system-ui,sans-serif;
+  --text-caps:11px; --text-xs:13px; --text-sm:14px; --text-base:15px;
+  --text-md:16px; --text-lg:20px; --text-xl:28px;
+  --r-sm:6px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+  --lane-cols:250px minmax(0,1fr) 236px;
+}
+/* Dark: the design system's original ladder (tokens contentHash 288d9538), opt-in. */
+:root[data-theme=dark]{
   color-scheme:dark;
   --surface-0:#0A0A0C; --surface-1:#121216; --surface-2:#191920; --surface-3:#22222A;
   --edge:#24242C; --edge-top:rgb(255 255 255 / 5.5%);
@@ -40,34 +70,8 @@ CSS = """
   --dawn-1:#C77A4E; --dawn-2:#D89A5E; --dawn-3:#E8B570; --dawn-4:#F2C77E;
   --danger-edge:#3A211E; --accent-edge:#3A2D18; --success-edge:#1B3D28;
   --warning-edge:#3A2A1E; --hot-edge:#2E2A22; --hot-bg:#191920;
+  --field-bg:#0A0A0C; --field-edge:#24242C;
   --shadow:0 6px 18px #00000059;
-  --font-ui:'Figtree','Segoe UI',system-ui,sans-serif;
-  --font-mono:'JetBrains Mono','Cascadia Mono',Consolas,monospace;
-  --font-label:'ADAM.CG PRO','Figtree','Segoe UI',system-ui,sans-serif;
-  --text-caps:11px; --text-xs:13px; --text-sm:14px; --text-base:15px;
-  --text-md:16px; --text-lg:20px; --text-xl:28px;
-  --r-sm:6px; --r-md:12px; --r-lg:16px; --r-pill:999px;
-  --lane-cols:250px minmax(0,1fr) 236px;
-}
-/* Light: the same ladder mirrored — canvas warm off-white, cards white, the gold
-   ramp deepened so accent text keeps contrast. Chosen explicitly (toggle) or by
-   the OS when nothing is stored; dark remains the design system's canonical. */
-:root[data-theme=light],
-:root:not([data-theme=dark]).sys-light{
-  color-scheme:light;
-  --surface-0:#F6F5F1; --surface-1:#FFFFFF; --surface-2:#F0EEE8; --surface-3:#E6E3DB;
-  --edge:#DCD9D0; --edge-top:rgb(0 0 0 / 3%);
-  --text:#1C1C21; --text-muted:#5B5B66; --text-dim:#85858F;
-  --accent:#B07A1C; --accent-soft:#F6E9CF; --on-accent:#FFFFFF;
-  --success:#1E8A52; --success-soft:#DCF2E5;
-  --warning:#B4601C; --warning-soft:#F8E6D5;
-  --danger:#C23F36; --danger-soft:#F8E0DD;
-  --gold-deep:#8C6A2F; --gold-light:#7A5F2E;
-  --night-1:#9AA6AC; --night-2:#7F8E96; --night-3:#65737B;
-  --dawn-1:#B8683C; --dawn-2:#B97E3B; --dawn-3:#A9762A; --dawn-4:#9C6E22;
-  --danger-edge:#EBC2BD; --accent-edge:#E8D3A6; --success-edge:#BFE3CC;
-  --warning-edge:#EFCDB3; --hot-edge:#E3D3B0; --hot-bg:#FBF6EA;
-  --shadow:0 6px 18px rgb(0 0 0 / 12%);
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--surface-0);color:var(--text);
@@ -159,13 +163,22 @@ a{color:inherit;text-decoration:none}
 .btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .btn.danger{background:transparent;border-color:var(--danger-edge);color:var(--danger)}
 .btn.sm{padding:6px 12px;font-size:var(--text-xs)}
-input[type=text],input[type=password]{background:var(--surface-0);color:var(--text);
-  border:1px solid var(--edge);border-radius:var(--r-sm);padding:8px 11px;
-  font-family:var(--font-ui);font-size:var(--text-sm)}
-input::placeholder{color:var(--text-dim)}
-select{background:var(--surface-0);color:var(--text);border:1px solid var(--edge);
+/* ONE field style, everywhere: the login form, a gate's decision note, the repo
+   picker, the drawer's rework select, the chat composer, the new-agent form. Before
+   this each surface set its own background and border and they drifted apart. */
+input[type=text],input[type=password],input[type=search],input[type=email],
+input[type=number],select,textarea{
+  background:var(--field-bg);color:var(--text);border:1px solid var(--field-edge);
   border-radius:var(--r-sm);padding:8px 11px;font-family:var(--font-ui);
-  font-size:var(--text-sm);min-width:240px}
+  font-size:var(--text-sm);line-height:1.5}
+input::placeholder,textarea::placeholder{color:var(--text-dim)}
+input[type=text]:hover,input[type=password]:hover,select:hover,textarea:hover{
+  border-color:var(--text-dim)}
+input[type=text]:focus,input[type=password]:focus,input[type=search]:focus,
+select:focus,textarea:focus{
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input:disabled,select:disabled,textarea:disabled{opacity:.55;cursor:not-allowed}
+select{min-width:240px}
 kbd{font-family:var(--font-mono);font-size:var(--text-caps);border:1px solid var(--edge);
   border-bottom-width:2px;border-radius:4px;padding:1px 6px;background:var(--surface-2);
   color:var(--text)}
@@ -585,7 +598,7 @@ details.report pre.raw{margin:0;padding:12px 16px;font-family:var(--font-mono);
   background:var(--surface-1);border-left:1px solid var(--edge);z-index:50;
   box-shadow:var(--shadow);outline:none}
 .drawer.open{transform:none}
-.dscrim{position:fixed;inset:0;background:#00000066;z-index:49;display:none}
+.dscrim{position:fixed;inset:0;background:rgb(0 0 0 / 34%);z-index:49;display:none}
 .dscrim.on{display:block}
 .dwrap{padding:0 22px 40px}
 .dhead{position:sticky;top:0;background:var(--surface-1);padding:16px 0 12px;
@@ -919,11 +932,8 @@ details.tlo pre{background:var(--surface-0);border:1px solid var(--edge);
   font-size:15px;line-height:1;padding:0 2px}
 .qchip .qx:hover{color:var(--danger)}
 .composer .cbox{max-width:920px;margin:0 auto}
-.composer textarea{width:100%;background:var(--surface-1);color:var(--text);
-  border:1px solid var(--edge);border-radius:var(--r-md);padding:12px 52px 12px 14px;
-  font-family:var(--font-ui);font-size:var(--text-base);line-height:1.5;
-  resize:none;min-height:48px;max-height:220px;display:block}
-.composer textarea:focus{outline:none;border-color:var(--gold-deep)}
+.composer textarea{width:100%;border-radius:var(--r-md);padding:12px 52px 12px 14px;
+  font-size:var(--text-base);resize:none;min-height:48px;max-height:220px;display:block}
 .composer textarea::placeholder{color:var(--text-dim)}
 .composer .crow{position:relative}
 .composer .send{position:absolute;right:9px;bottom:9px;width:32px;height:32px;
@@ -978,9 +988,7 @@ details.tlo pre{background:var(--surface-0);border:1px solid var(--edge);
   font-weight:400;margin:0 0 10px}
 .newagent .frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .newagent input[type=text]{flex:1;min-width:220px}
-.newagent textarea{width:100%;background:var(--surface-0);color:var(--text);
-  border:1px solid var(--edge);border-radius:var(--r-sm);padding:9px 11px;
-  font-family:var(--font-ui);font-size:var(--text-sm);min-height:70px;resize:vertical}
+.newagent textarea{width:100%;min-height:70px;resize:vertical}
 .newagent .hint{font-size:var(--text-caps);color:var(--text-dim);margin:4px 0 10px;
   line-height:1.6}
 .newagent label.radio{display:inline-flex;gap:6px;align-items:center;
@@ -1034,14 +1042,13 @@ details.tlo pre{background:var(--surface-0);border:1px solid var(--edge);
 }
 """
 
-# Boot before first paint: honour the stored theme, else the OS preference. Kept
-# tiny and inline in <head> so a light-mode reader never sees a dark flash.
+# Boot before first paint: white unless this browser asked for dark. The OS
+# preference is deliberately NOT consulted — one style for every page and every
+# reader, so a screenshot in a review looks like what the next person opens.
 THEME_BOOT = """
 <script>
-(function(){try{var t=localStorage.getItem('lantern-theme');var r=document.documentElement;
-if(t==='light'||t==='dark'){r.dataset.theme=t;}
-else if(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches){r.classList.add('sys-light');}
-}catch(e){}})();
+(function(){try{if(localStorage.getItem('lantern-theme')==='dark'){
+document.documentElement.dataset.theme='dark';}}catch(e){}})();
 </script>
 """
 
@@ -1078,8 +1085,9 @@ KEYS_JS = """
 <script>
 (function(){
   var root=document.documentElement;
-  function theme(){return root.dataset.theme||(root.classList.contains('sys-light')?'light':'dark');}
-  function setTheme(t){root.dataset.theme=t;root.classList.remove('sys-light');
+  function theme(){return root.dataset.theme==='dark'?'dark':'light';}
+  function setTheme(t){
+    if(t==='dark'){root.dataset.theme='dark';}else{delete root.dataset.theme;}
     try{localStorage.setItem('lantern-theme',t);}catch(e){}
     var b=document.getElementById('themebtn'); if(b) b.textContent=(t==='dark'?'light':'dark')+' mode';}
   var tb=document.getElementById('themebtn');

@@ -129,13 +129,51 @@ class Shell(unittest.TestCase):
         self.assertIn("id='khelp'", html)
         self.assertIn("id='drawer'", html)
         self.assertIn("data-page='home'", html)
-        self.assertIn("prefers-color-scheme: light", html)
-        self.assertIn("[data-theme=light]", html)
         self.assertIn("@media (max-width:820px)", html)
         for name, href in mc.ui.NAV:
             self.assertIn(f"href='{href}'", html)
         self.assertIn("href='/factory'", html)
         self.assertIn("href='/cost'", html)
+
+    def test_white_is_the_default_on_every_page_whatever_the_os_prefers(self):
+        """One style for every page and every reader: the bare :root is the white
+        palette, dark is opt-in only, and the OS preference is never consulted — so a
+        screenshot in a review looks like what the next person opens."""
+        css = mc.ui.CSS
+        root = css.split(":root{", 1)[1].split("}", 1)[0]
+        self.assertIn("color-scheme:light", root)
+        self.assertIn("--surface-0:#FFFFFF", root)
+        self.assertIn("--surface-1:#FFFFFF", root)
+        self.assertIn("--field-bg:#FFFFFF", root)
+        dark = css.split(":root[data-theme=dark]{", 1)[1].split("}", 1)[0]
+        self.assertIn("color-scheme:dark", dark)
+        self.assertIn("--surface-0:#0A0A0C", dark)
+        # no media query and no OS class may repaint the page
+        self.assertNotIn("prefers-color-scheme", css)
+        self.assertNotIn("sys-light", css)
+        self.assertNotIn("prefers-color-scheme", mc.ui.THEME_BOOT)
+        self.assertNotIn("matchMedia", mc.ui.THEME_BOOT)
+        self.assertIn("=== 'dark'", mc.ui.THEME_BOOT.replace("==='dark'", "=== 'dark'"))
+        for page in (mc.board, mc.gates, mc.runs_index, mc.cost_page, mc.factory_page):
+            html = body_of(get(page, signed(), pool=FakePool()))
+            self.assertNotIn("prefers-color-scheme", html, page.__name__)
+            self.assertIn("lantern-theme", html, page.__name__)   # the toggle still works
+
+    def test_one_field_style_covers_every_input_on_every_page(self):
+        """The login form, a gate's decision note, the repo picker, the drawer's rework
+        select, the chat composer and the new-agent form share one rule; before this
+        each surface set its own background and border and they drifted apart."""
+        css = mc.ui.CSS
+        rule = css.split("input[type=text],input[type=password],input[type=search]", 1)[1]
+        rule = rule.split("}", 1)[0]
+        self.assertIn("background:var(--field-bg)", rule)
+        self.assertIn("border:1px solid var(--field-edge)", rule)
+        self.assertIn("textarea", css.split("input[type=number],select,textarea{", 1)[0][-60:] + "textarea")
+        # no surface-level override may reintroduce a second field look
+        for block in (".composer textarea{", ".newagent textarea{"):
+            body = css.split(block, 1)[1].split("}", 1)[0]
+            self.assertNotIn("background:", body, block)
+            self.assertNotIn("border:", body, block)
 
 
 class HomeInboxAndBoard(unittest.TestCase):

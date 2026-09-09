@@ -14,8 +14,10 @@ The web UI for the software factory — design and rationale in
 | **Gates** · **Runs** · **Chat** · **Agents** | `app.py`, `chat.py` | Gate history, the flight-strip run list, and consult mode (`docs/CHAT.md`). |
 
 `ui.py` holds the tokens, CSS, page shell and the small vanilla-JS layer (theme,
-keyboard map, the drawer over fetch). No build step. Light and dark: the page follows
-the OS unless a reader presses `d`, remembered per browser. One column below 820px.
+keyboard map, the drawer over fetch). No build step. **One style: white**, on every
+page and every machine — the OS preference is never consulted, so the same page looks
+the same to everyone discussing it; dark is a per-browser opt-in (`d`). Every input,
+select and textarea shares one field rule. One column below 820px.
 Keyboard: `j`/`k` move, `Enter` opens, `a` approves, `r` rejects with a note, `t` the
 matrix, `?` the map — every one of them also a link or a button.
 

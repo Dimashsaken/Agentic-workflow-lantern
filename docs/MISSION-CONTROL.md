@@ -59,19 +59,28 @@ client-side can decide a gate.
 | `o` | open the focused row as a full page |
 | `t` | the traceability matrix of the run you are on |
 | `h` | home |
-| `d` | dark / light |
+| `d` | dark mode on / off (white is the default) |
 | `Esc` | close the drawer, drop focus |
 | `?` | show this map in the corner |
 
 Typing in a field disables the single-key shortcuts; `Esc` leaves the field.
 
-## Light and dark
+## One style: white
 
-Dark is the design system's canonical palette; light is the same ladder mirrored, with
-the gold ramp deepened so accent text keeps its contrast. The page follows the
-operating system unless a reader chooses with `d` (or the top-bar button), which is
-remembered per browser in `localStorage`. The choice is applied in a tiny inline script
-before first paint, so a light-mode reader never sees a dark flash.
+Every page is white, on every machine, whatever the operating system prefers. The
+palette lives once on the bare `:root`; surfaces are white and the hairline does the
+separating, with the raised tones kept for hover, controls and the "needs you" tint.
+Form fields — the login, a gate's decision note, the repo picker, the drawer's rework
+select, the chat composer, the new-agent form — share one rule, so a field looks the
+same wherever it appears.
+
+**The operating system is deliberately not consulted.** A gate gets discussed in a
+screenshot, a review and a call; if the palette followed each reader's OS, the same
+page would look different to each of them. Dark remains available as a per-browser
+opt-in (`d`, or the top-bar button) for anyone who wants it, stored in `localStorage`
+and applied by a tiny inline script before first paint. The dark ladder is the design
+system's original palette (tokens contentHash 288d9538), kept intact under
+`:root[data-theme=dark]`.
 
 ## On a phone
 
