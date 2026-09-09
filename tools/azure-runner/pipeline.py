@@ -12,6 +12,7 @@
     python pipeline.py runboard                    # re-render workflow/RUNBOARD.md from the DB
     python pipeline.py render-memory [--role X]    # re-render agents/<role>/memory.md from role_memory
     python pipeline.py import-run <run-id> [--stage S --status waiting_gate --gate G]  # backfill a file-era run
+    python pipeline.py init-product <path>         # install the factory's gate into a product repo (D21)
 
 Design: docs/ORCHESTRATION.md. Schema: schema.sql.
 """
@@ -2033,13 +2034,19 @@ async def cmd_usage_check() -> None:
 # Commands that touch neither a model nor the database, and so must not require Azure
 # credentials to be configured. `repos` answers "what can this host offer as a product
 # target" — often the first thing an operator runs on a box, before the fleet is wired.
-LOCAL_ONLY_CMDS = {"repos"}
+# Commands that need neither a database nor an Azure client. `main()` dispatches them
+# before any client setup so they work on a bare laptop (`repos` reads the filesystem;
+# `init-product` writes two files into another repo).
+LOCAL_ONLY_CMDS = {"repos", "init-product"}
 
 
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in LOCAL_ONLY_CMDS:
-        {"repos": cmd_repos}[sys.argv[1]]()
-        return
+        if sys.argv[1] == "repos":
+            cmd_repos()
+            return
+        import init_product      # D21: `pipeline.py init-product <path> [--force] [--dry-run]`
+        sys.exit(init_product.main(sys.argv[2:]))
     set_default_openai_client(azure_v1_client())
     # Responses API — chat_completions drops image tool outputs, blinding vision
     # critique loops (see orchestrator.py for the full note).
@@ -2106,6 +2113,12 @@ def main() -> None:
     p = sub.add_parser("import-run"); p.add_argument("run_id")
     p.add_argument("--by", default="justin"); p.add_argument("--stage", default="01-ui-ux.design")
     p.add_argument("--status", default="waiting_gate"); p.add_argument("--gate")
+    # D21: install the factory's quality gate into a product repo. Dispatched before this
+    # parser runs (LOCAL_ONLY_CMDS) — registered here so `--help` lists it.
+    p = sub.add_parser("init-product", help="detect a product repo's stack, write its "
+                                            "lantern.toml and note the factory in its AGENTS.md")
+    p.add_argument("path"); p.add_argument("--force", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
     match a.cmd:
