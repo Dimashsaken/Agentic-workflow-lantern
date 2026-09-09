@@ -1,0 +1,29 @@
+{
+  "kind": "coding_branch",
+  "run_id": "feat-20260908-status-version",
+  "branch": "feat/20260908-status-version",
+  "base": "claude/lantern-factory-review-agent-58430b",
+  "base_sha": "e4fdfaac02d5e5ee6d8c61b965a05faf3253e22d",
+  "start_sha": "e4fdfaac02d5e5ee6d8c61b965a05faf3253e22d",
+  "head_sha": "3e733c9c5bf4ee6727e294ba4888aef3ce0689e4",
+  "commits": [
+    {
+      "sha": "d8f94a0f742b836888f295f7c78ee7ee03ba0f03",
+      "subject": "feat-20260908-status-version: task 1 \u00e2\u20ac\u201d include pipeline version in status JSON"
+    },
+    {
+      "sha": "3e733c9c5bf4ee6727e294ba4888aef3ce0689e4",
+      "subject": "feat-20260908-status-version: task 2 \u00e2\u20ac\u201d assert status pipeline version"
+    }
+  ],
+  "bundle": "workflow/runs/feat-20260908-status-version/03-coding/branch.bundle",
+  "auto_committed": false,
+  "diffstat": "tools/azure-runner/pipeline.py         |  1 +\n tools/azure-runner/test_status_json.py | 11 ++++++++++-\n 2 files changed, 11 insertions(+), 1 deletion(-)",
+  "files_changed": [
+    "tools/azure-runner/pipeline.py",
+    "tools/azure-runner/test_status_json.py"
+  ],
+  "pushed": false,
+  "pr_url": null,
+  "pr_number": null
+}

@@ -53,6 +53,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import factory  # noqa: E402  D17: quality gate + fix loop for the in-process coding path
 import builders  # noqa: E402  D18: stage 3 fans out into scoped parallel builders
+import review   # noqa: E402  D19: review loop after publish + merge babysitter
 
 PIPELINE_VERSION = "3"  # v3 (D17): story stage + validation execution; v2: stage 1 diverge/design split
 POLL_SECONDS = 5
@@ -308,6 +309,7 @@ FEATURE_STAGES = [
 STAGE_INDEX = {s[0]: i for i, s in enumerate(FEATURE_STAGES)}
 STAGE_DIR = {s[0]: s[1] for s in FEATURE_STAGES}
 STAGE_RUNNER = {s[0]: s[4] for s in FEATURE_STAGES}
+STAGE_DIR.update(review.SUB_STAGE_DIRS)   # D19: review/fix/regate executions live in 03-coding/
 
 
 async def connect() -> asyncpg.Connection:
@@ -532,7 +534,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         # D15: EVERY stage learns the working branch, not just coding — that is what
         # lets stages 1-2 and 4-7 orient on the code the run is actually working on.
         os.environ["LANTERN_PRODUCT_WORK_BRANCH"] = work
-        if role == "coding":       # D14: writable, on the run's branch, bot identity
+        if role == "coding":       # D14: writable, on the run's branch, bot identity (D19: role_for_stage maps 03-coding.fix to coding, so a fix execution is writable here too; 03-coding.review is not)
             start = await asyncio.to_thread(prepare_coding_checkout, checkout, work)
             os.environ["LANTERN_CODING_BRANCH"] = work
             os.environ["LANTERN_CODING_START_SHA"] = start
@@ -1093,6 +1095,8 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
             extra = await publish_coding_branch(conn, run_id)
             if built:                                    # D18
                 extra["builders"] = built
+            extra = await review.after_publish(conn, run_id, extra, runner,   # D19: review rounds
+                                               review.default_deps(execute=execute))
             external_ref = extra.get("pr_url")
         else:  # human stage: nothing to execute — the gate IS the stage
             print(f"[{run_id}] {stage} is a human stage (the developer's own session).")
@@ -1277,6 +1281,8 @@ async def cmd_daemon(runner: str) -> None:
     try:
         while True:
             slots = {t for t in slots if not t.done()}
+            if runner == "ec2" and review.babysit_due():   # D19: merge babysitter, own slot + connection
+                slots.add(asyncio.create_task(review.babysit_slot(connect, runner)))
             if runner == "workstation":
                 ok = await paper_reachable()
                 if not ok and paper_ok:
@@ -2106,6 +2112,12 @@ def main() -> None:
     p = sub.add_parser("import-run"); p.add_argument("run_id")
     p.add_argument("--by", default="justin"); p.add_argument("--stage", default="01-ui-ux.design")
     p.add_argument("--status", default="waiting_gate"); p.add_argument("--gate")
+    # D19
+    p = sub.add_parser("babysit", help="keep an approved run's branch mergeable: merge the base in, "
+                                       "re-run the quality gate, push — never merges into the base")
+    p.add_argument("run_id", nargs="?", help="one run; omit for every eligible run")
+    p.add_argument("--force", action="store_true",
+                   help="retry even if the last attempt failed at this same base commit")
     a = ap.parse_args()
 
     match a.cmd:
@@ -2133,6 +2145,7 @@ def main() -> None:
         case "usage-check":   asyncio.run(cmd_usage_check())
         case "render-memory": asyncio.run(cmd_render_memory(a.role))
         case "import-run":    asyncio.run(cmd_import_run(a.run_id, a.by, a.stage, a.status, a.gate))
+        case "babysit":       asyncio.run(review.cmd_babysit(a.run_id, a.force))   # D19
 
 
 if __name__ == "__main__":
