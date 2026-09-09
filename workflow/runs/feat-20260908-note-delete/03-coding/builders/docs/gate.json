@@ -1,0 +1,32 @@
+{
+  "kind": "quality_gate",
+  "run_id": "feat-20260908-note-delete",
+  "stage": "03-coding.docs",
+  "builder": "docs",
+  "execution_key": "feat-20260908-note-delete:03-coding.docs:1",
+  "round": 0,
+  "source": "lantern.toml [quality]",
+  "configured": [
+    "test"
+  ],
+  "passed": true,
+  "results": [
+    {
+      "name": "test",
+      "command": "python -m unittest discover -q -s tests",
+      "exit": 0,
+      "passed": true,
+      "seconds": 0.1,
+      "output_tail": "\n[stderr]\n----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nOK\n"
+    },
+    {
+      "name": "write-scope",
+      "command": "changed paths \u2286 ['docs/**']",
+      "exit": 0,
+      "passed": true,
+      "seconds": 0.0,
+      "output_tail": "1 changed path(s), all in scope"
+    }
+  ],
+  "ran_at": "2026-09-08T22:07:58+00:00"
+}

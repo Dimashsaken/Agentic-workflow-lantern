@@ -476,6 +476,291 @@ deployment (Terra) lands later. What shipped, and the shape chosen:
   `story_signoff` opened. A parser bug surfaced on the way (a blank `Working branch:`
   line swallowed the next line) and is fixed with `test_brief_parsing.py`.
 
+## D18 — 2026-09-08 — Parallel scoped builders: stage 3 fans out, the host merges, one gate
+
+Gap 1 of the software-factory alignment plan (Ray Fu's folder-confined back-end and
+front-end engineers, plan Phase D) was the last structural difference between Lantern
+and the reference designs: D17 built the *mechanism* — a write scope enforced on every
+commit — but stage 3 still ran one agent with the whole checkout. This adds the second
+sandbox, and nothing else.
+
+- **The plan declares the split, and code checks it is a partition.** `plan.json` gains
+  an optional `builders: [{name, write_scope, tasks, criteria}]`. `factory._check_plan`
+  refuses names that are not branch-safe, a duplicate name, `integrate` (reserved for
+  the host's own execution), a task assigned twice, a task assigned to nobody, a task id
+  the plan does not define, and a glob claimed by two builders. Why validate this hard:
+  a bad split does not fail at planning time, it fails forty minutes later as a merge
+  conflict, and the human sees a coding failure for a planning defect.
+- **Optional, and provably inert when absent.** No `builders` key → `builders.run_coding`
+  is `await execute(conn, run_id, stage, runner)` and every other function short-circuits
+  on the same emptiness. `test_builders.py` asserts the pass-through and the existing
+  `test_coding_stage.py` / `test_factory.py` run unchanged, because "byte-for-byte
+  today's single builder" is a claim that has to be checked, not asserted.
+- **One start point, N branches, `--no-ff` in plan order.** The host creates every
+  builder's branch at one commit (the run's branch if it exists — a continued branch,
+  D15 — else the base), so each builder's `base..HEAD` is exactly its own work and the
+  merge is a clean fan-in. Branches are `<run branch>--<name>`, which stays inside D6's
+  pushable namespace because the run's branch already does. `--no-ff` keeps each
+  builder's work one readable arc for the reviewer.
+- **The host merges; agents never see each other's branches.** A builder cannot fetch,
+  read or wait for a sibling — its checkout does not contain them and never will. The
+  only thing that crosses is the bundle it writes into the run folder, verified by the
+  host before it lands in the mirror, exactly as D14 designed for one builder. That is
+  also why the plan must carry the contract between them: with no shared branch, an
+  interface not written down is an interface that does not exist.
+- **A merge conflict is a planning failure, and is reported as one.** The stage fails
+  with the conflicting file list and points at `pipeline.py rework <run-id> --to
+  02-pre-coding`. We deliberately did NOT hand conflicts to a model to resolve: two
+  builders editing one file means the split was wrong, and a resolved conflict hides
+  that. Note the plan check compares glob *strings* — `src/**` and `src/api/**` pass it
+  and collide here — so the merge is the second line of defence, not a redundant one.
+- **An integrator, because "green apart" is not "green together".** One final execution
+  (`03-coding.integrate`, role `coding`) runs on the merged branch with the union of the
+  builders' scopes and one task: make it green, through the normal `factory.coding_turns`
+  gate loop. Its handoff is the stage's handoff, so `03-coding/` still carries exactly
+  one branch and `_publish_branch`, the PR, and the single `code_complete` gate are
+  untouched. Its "did this execution do work?" check measures from the PRE-merge start
+  point recorded by the merge: an integrator that finds nothing to fix is a success, not
+  an idle stage, but a merge that produced nothing still fails.
+- **Per-builder run-folder subtrees, for a race, not for tidiness.** `03-coding/builders/
+  <name>/` holds each builder's report, gate, handoff and bundle. Sharing one `report.md`
+  would race on the last `Status:` line (`report_blocker`) and sharing one `gate.json`
+  would race on `execution_key` — the loser failing on the winner's evidence. The
+  invariant that second executions append to a shared report still holds for the stage
+  dir, where only the integrator writes.
+- **The stage key is the identity; the env var is only for the turn.** `LANTERN_BUILDER`
+  tells the agent's own execution which builder it is (the write scope and the prompt
+  read it), but every *check* derives the builder from the stage key `03-coding.<name>`
+  via `factory.builder_of`. The first live run proved why: the in-process executor clears
+  the writability env in its `finally`, and the docker host never sets it at all, so
+  postconditions that read the environment looked in the stage directory and failed a
+  builder that had done everything right — green gate, clean handoff, wrong place to
+  look. `test_builders.py` pins the env-free path.
+- **Parallelism is capped by the executor, and is 1 in-process on purpose.**
+  `LANTERN_BUILDER_PARALLELISM` (default 2) never exceeds `LANTERN_MAX_CONCURRENCY`, and
+  is forced to 1 unless `LANTERN_EXECUTOR=docker`: the in-process path configures each
+  execution through `os.environ` (product dir, branch, `LANTERN_BUILDER`), which two
+  concurrent executions in one process would overwrite for each other. Real parallelism
+  is a property of the container executor; a laptop runs the same builders sequentially
+  and gets the same branch.
+- **One more thing the host verifies before pushing:** every builder head must be an
+  ancestor of the handed-off head. A merge that silently dropped a builder would
+  otherwise arrive at the PR looking like a complete feature with a third missing.
+- **Shared-file surface, kept small:** a new `role_for_stage()` in `orchestrator.py` maps
+  any `03-coding.<x>` to the `coding` role (the builder names come from `plan.json` at run
+  time, so they cannot be listed in `ROLE_FOR_STAGE`), and the three role lookups route
+  through it; the two executors key the coding-stage setup on that role instead of the
+  literal stage string and resolve the builder's branch and `LANTERN_BUILDER` through
+  `builders.branch_for`/`name_for`; `step_run`'s single `execute` call becomes
+  `builders.run_coding(...)`. Everything else is in `builders.py` and `factory.py`.
+- **Not done, on purpose:** no automatic splitting — a human-approved plan decides, and
+  `agents/pre-coding/skills.md` §5a says when not to (one surface, sequential tasks, a
+  shared file, a small feature); no cross-builder communication; no per-builder PRs (one
+  branch, one PR, one gate — D14 unchanged); no rebase or conflict resolution; builders
+  are not offered to `human` coding mode.
+- **Proof (live, 2026-09-08, in-process on `gpt-5.6-sol`):** run `feat-20260908-note-delete`
+  against a small product repo, plan split into `api` (`src/**`, `tests/**`, tasks 1–2)
+  and `docs` (`docs/**`, task 3). Stage 3 fanned out one at a time (in-process cap),
+  both builders' gates went green, the host merged both branches `--no-ff` in plan
+  order, the integrator ran on the merged branch and added one cleanup commit, the
+  branch published and `code_complete` opened with both builders in its payload. The
+  merged branch's own tests pass (2 → 4). Neither builder touched the other's files, and
+  the run folder carries `03-coding/builders/{api,docs}/` with a report, gate, handoff
+  and bundle each, `builders.json` + `builders.md` for the merge, and the integrator's
+  single handoff at `03-coding/`. Three defects surfaced on the way and are fixed with
+  tests: the env-vs-stage-key one above; an ancestry check that asked the mirror about a
+  commit the mirror does not receive until `_publish_branch` lands the bundle a moment
+  later (it now checks only where both commits exist — "I cannot see that commit" is not
+  "that commit is wrong"); and a pre-existing `product_checkout` bug where
+  `shutil.rmtree(..., ignore_errors=True)` silently failed on read-only git objects, so
+  the SECOND execution of a run in one process died with "destination path already
+  exists". That last one was latent for any two stages of one run under a single daemon
+  tick on Windows; builders just reach it first.
+- **Proof (unit):** `test_builders.py` — 36 tests on real git with no database and no model:
+  the partition rules, branch naming inside the D6 namespace, two builders' bundles
+  merged into one run branch with both heads as ancestors, an add/add conflict failing
+  with the file list, `LANTERN_BUILDER` scope resolution (including the integrator's
+  union and the fallback), per-builder handoff directories, the host holding a builder to
+  ITS scope with no env of its own, batches never exceeding the cap, and the
+  no-builders pass-through.
+
+## D21 — 2026-09-08 — Agentic access: the factory is operated from chat and Slack, behind a typed confirmation
+
+The two reference designs agree on the surface Lantern lacked: IndyDevDan's factory is
+*operated by an agent* and installs itself into a codebase (B 6:41, 24:53), and
+Boundary's dispatcher listens in Slack so the human's part of the loop happens where the
+human already is (C). Lantern could see everything and do nothing: the `lantern` chat
+knew which gate had been waiting eleven hours and could only answer "run this command
+somewhere else". This closes that, without moving the gate line.
+
+- **The orchestrator gets five write tools; specialists get none.** `start_run`,
+  `set_product`, `rework`, `retry`, `decide_gate` on the `lantern` agent only. D11's
+  read-only rule was never about the *surface* — it was about work sneaking past
+  verification. A gate decided in chat still writes the same `approvals` row, still
+  renders `gate-decisions.md`, still advances the same state machine. What would break
+  the rule is an agent deciding something, and that is what the confirmation prevents.
+- **The server verifies the confirmation, in the human's own most recent message.** The
+  tool renders a decision card and returns without acting; the human types
+  `confirm approve story_signoff on feat-20260908-status-facts`; the next call is checked
+  against the text of the turn being served. The mechanism is a closure —
+  `run_chat_turn` builds the tools over that turn's `user_text` — so the model has no
+  path to the argument `confirmed()` reads. It cannot confirm itself by printing the
+  phrase, cannot claim the human said it, and cannot spend an old turn's confirmation:
+  the tools are rebuilt every turn. A missing confirmation returns guidance, never an
+  action. Why a typed phrase rather than a button: the phrase names the verb AND the
+  subject, so it authorises exactly one act on exactly one run, and it survives being
+  relayed through any surface that can carry text — which is what made the same
+  protocol work unchanged when the Slack bridge arrived.
+- **`retry` and `set_product` act on the first call.** They are stage-local and
+  reversible. Putting a confirmation on everything is how confirmations stop being read.
+- **Reuse, not reimplementation.** `PipelineExecutor` calls `pipeline.py`'s own `cmd_*`
+  coroutines and turns their CLI manners (print, `sys.exit("why")`) into a result dict.
+  A second copy of the gate logic in the chat layer is exactly how two surfaces start
+  disagreeing about what an approval is. It also means a refusal *reads* like the CLI's.
+- **Identity is the point of the audit log.** Every action is recorded as the signed-in
+  human — `human:dimash` from the web, `human:slack:U…` from Slack, `channel` on the
+  event — and never as the agent. The chat and the bridge are surfaces for a person's
+  decision; an event that named the agent would make the log useless for the only
+  question anyone asks of it.
+- **Slack is a bridge, not a gateway.** ~600 lines of Bolt in Socket Mode with its own
+  systemd unit, reading the same Postgres: `@lantern <idea>` opens a run and the thread
+  that follows it (`runs.slack_thread_ts`), gates post there with Approve/Reject, clicks
+  ack inside Slack's 3 s and then write through `cmd_decide`. Two fail-closed allowlists
+  (approvers decide gates, operators start and loop runs; unset means nobody), channel
+  scoping, and `staging_deploy` / `prod_signoff` refused server-side — a Slack session is
+  easier to take over than the Tailscale-only web app, and those two gates put code in
+  front of users. The alternative considered and rejected in the symphony plan §3 stays
+  rejected: routing approvals through OpenClaw or Hermes would share a blast radius with
+  tools holding our PAT.
+- **`pipeline.py init-product <path>`** installs the factory into a product repo: detect
+  the stack from the files that exist, write `lantern.toml` with real commands, append a
+  marked block to the repo's `AGENTS.md`, print how to point a run at it. Two refusals
+  are the design: an existing `lantern.toml` is kept unless `--force` (it is the team's
+  gate, possibly tuned), and existing `AGENTS.md` text is appended to, never rewritten.
+  A repo with no recognised stack gets a `lantern.toml` whose test command fails loudly
+  rather than a green gate that proves nothing.
+- **The brief composer** turns a rough idea into `workflow/briefs/<slug>.md` from the
+  template and validates it with `parse_brief_product` / `parse_brief_coding_mode` — the
+  same parsers `pipeline.py run` uses, so a brief that composes is a brief that runs.
+  Missing repo or coding mode is a question put to the human, never a default. A brief
+  written by hand is never overwritten.
+- **Not done, on purpose:** `@lantern ask <role>` (consult mode inside a Slack thread) —
+  a consult reads the whole repo including unreleased security findings, and reading a
+  long agent answer in a thread is worth little against that; the Chat tab is where
+  consults belong. No gate is decidable by an agent under any flag. The Slack bridge is
+  dormant until a workspace app exists (a human, one-time action; the manifest is in
+  `tools/slack-bridge/README.md`), and nothing else depends on it.
+- **Proof (unit):** `test_chat_tools.py` (31 checks — the confirmation matrix, identity on
+  every event, the composer's briefs parsing back), `tools/slack-bridge/test_bridge.py`
+  (36 — allowlists, ack-before-pipeline timing, gate cards, relay), `test_init_product.py`
+  (19 — a fixture repo per stack, both refusals, the written `lantern.toml` read back by
+  `factory.quality_config`), and the decision-card rendering in `test_chat_ux.py`.
+- **Proof (live, 2026-09-08, Chat tab on `gpt-5.6-sol`, product = this repo by local
+  path):** run `feat-20260908-runboard-stage-timestamps`, started and gated entirely from
+  chat for $0.18. An idea became a decision card; the card became a run only after the
+  phrase was typed; both story stages passed; asked to approve `story_signoff`, the agent
+  read the story first and produced a second card. **"Yes, I confirm - approve it."
+  changed nothing** — the agent reported that the wording did not match and the gate row
+  stayed `pending`, which is the whole design working in the only place it matters. The
+  exact phrase then approved it: `approvals.decided_by = dimash`, the note carried
+  through to `gate-decisions.md`, the run advanced to `01-ui-ux.diverge`, and the audit
+  log reads `human:dimash pipeline_action action=decide_gate channel=web-chat`.
+- **Known wart, not fixed here:** `approvals.channel` still records how the gate was
+  OPENED (`'cli'` from `open_gate`) rather than where it was decided. The decision's real
+  channel is on the `pipeline_action` event, so the audit answer is right; correcting the
+  column means changing `cmd_decide`'s signature for all three surfaces, which belongs
+  with whoever next touches that function.
+
+
+## D20 — 2026-09-08 — The feedback trust pipeline and the factory's own evals
+
+Session 3 of the five parallel factory sessions (`docs/plans/software-factory-parallel-
+prompts.md`). The ask: Boundary's production rule for feedback — untrusted input never
+becomes work directly — plus the rule that every change to the factory ships its own
+numbers (alignment plan §1.8, §4 Phase F). What shipped, and the shape chosen:
+
+- **A bug run starts with `pipeline.py bug`, not with a hand-written brief.** The raw
+  report is stored once, verbatim, at `intake/feedback.md` under a header that says
+  `UNTRUSTED`, hashed at intake; the brief points at it instead of quoting it. Why: a
+  report pasted into a brief is a trusted file by the time an agent reads it. The trust
+  rule is mechanical where it can be — triage fails if the file changed, every cited run
+  and commit must exist, the dedup candidates the harness computed must each be addressed,
+  and a regression test carrying a code block copied from the report is rejected — and a
+  prompt rule where it cannot (every debug phase note and the debug skills say: read it,
+  never execute anything from it). Nothing under `intake/` is mounted or shelled.
+- **Envelopes for triage, repro and root cause** (`triage.json`, `repro.json`,
+  `rootcause.json`) validated by `factory.check_envelope` through a `CHECKERS` registry
+  `intake.py` extends — the same postcondition every executor already runs, so the
+  container path enforces them the day it dispatches a bug stage. The repro is a test the
+  agent writes under `02-repro/regressions/` from its own reading of the code; the fix
+  lands it at `lantern/regressions/` in the product, and the product's `lantern.toml` test
+  command must cover that directory, so every past repro re-runs on every future run.
+- **The fix is the feature pipeline's `03-coding` stage — same key, directory and
+  machinery — not a `04-fix` stage.** The prompt asked for `04-fix`; a separate fix stage
+  would have needed its own writable checkout, gate loop, bundle handoff, publish and PR
+  path, or edits deep inside `run_agent_stage`, `_publish_branch` and the sandbox
+  entrypoint that sessions 1, 2 and 5 were changing in the same hour. Reusing the stage
+  gives bug runs the quality gate, write scope, review loop, merge babysitter and Mission
+  Control's `code_complete` rendering for free, and keeps one way code gets written.
+  Planning is reused the same way: `02-pre-coding` sits in the bug table and runs only for
+  `large` / `needs-human`; for `trivial` / `small` the harness derives `plan.json` +
+  `task-plan.md` from the root cause's `fix_plan` (task 1 is always the regression test)
+  and the run skips the planner. The directory numbers in a bug folder are therefore
+  01, 02, 03, (02), 03, 05, 06 — a cost accepted for the reuse.
+- **Classification is enforced by the diff.** After the branch is published, insertions +
+  deletions above `LANTERN_SMALL_FIX_MAX_LINES` (60) for a `trivial`/`small` bug write a
+  `reclassified` record into `triage.json` and send the run back to planning with exactly
+  the transition `pipeline.py rework --to 02-pre-coding` makes (approvals expire, the
+  decision in `gate-decisions.md`), the branch keeping the work. The agent's original call
+  stays on record — that is what the classification eval scores.
+- **Gates open from the envelope, not from the table.** `triage_signoff` only when the
+  bug is already fixed, a duplicate, or `needs-human`; `repro_signoff` only when not
+  reproduced; otherwise the run advances by itself — Boundary's 95 % automatic. The
+  shepherd (`runs.shepherd`, `--shepherd` or `LANTERN_DEFAULT_SHEPHERD`) is pinged once,
+  at fix-ready, through the existing `_post_alarm` webhook path with the repro, the diff
+  summary and the PR or branch link; `code_complete` opens with the same facts.
+- **Dispatch for bug runs did not exist** — `step_run`, `advance` and the claim query
+  only knew `FEATURE_STAGES`. It is added as five small hooks in `pipeline.py` (import,
+  stage-map registration, a table-aware row lookup, a bug-run branch in `step_run` and
+  `advance`, a lifecycle-aware ordering in `rework`), one line in
+  `orchestrator.check_stage_inputs`, and five phase notes; everything else lives in
+  `intake.py`. `runs.shepherd` is the one schema addition (`init-db` once).
+- **The factory measures itself.** `tools/evals/`: `evals build` freezes every run folder
+  into jsonl; four stdlib scorers — plan coverage, validator ↔ QA agreement,
+  classification accuracy against diff size, repro rate; `evals run --suite … --live`
+  replays a role on the real model against the same inputs (opt-in, injectable, tested
+  with a fake); `evals report` writes `REPORT.md` with a fingerprint of the watched files.
+  The rule from the sources runs in this repo's lint gate: `check_pr.py` fails a diff that
+  touches `agents/**`, `factory.py`, `intake.py`, the scorers, or the orchestrator's prompt
+  builders / gate functions **by name** unless `REPORT.md` changed with it and its
+  fingerprint matches — an edited-but-not-regenerated report does not pass. Today the
+  report is mostly `n/a` (one story, no plan envelope, no bug run yet); the point is the
+  delta from here on.
+- **Dedup is deliberately crude:** stemmed token overlap (weighted for error codes) over
+  past intake reports, story titles and brief titles, threshold 0.45, one candidate list
+  per run. It finds a reworded duplicate and not a different bug in the same feature area
+  (`test_intake.py`); it is an input to triage, never a verdict.
+- **Not done, stated plainly:** the container executor has not run a bug stage yet (the
+  hooks are executor-agnostic, but only the in-process path was exercised); the repro
+  stage cannot execute the test it writes (no shell outside auto coding — the coding
+  stage proves fail-then-pass); Mission Control renders bug runs with its feature-stage
+  board (session 5 owns that); a conditional `security` spot-check for sev-1 / auth /
+  payment fixes is a rule in the lifecycle doc, not code; the live eval replay was not run
+  against Azure (frozen scoring is tested; the live path with a fake); and Slack intake
+  (`--source slack`) is the same function session 4's bridge will call.
+- **Proof (live, 2026-09-08, in-process on `gpt-5.6-sol`, product = this repo by local
+  path at commit 0c21060):** `pipeline.py bug` on a real defect — `pipeline.py bug --help`
+  crashes with `KeyError: 'AZURE_OPENAI_ENDPOINT'` in a checkout without `.env`, because
+  `main()` builds the Azure client before argparse runs — created
+  `bug-20260908-help-crash-without-env` (no dedup candidates: nothing similar exists) and
+  one `step_run` executed `01-triage`: 170 s, 1.08 M input tokens (90 % cached), 8.6 k
+  output. `triage.json` validated on the first attempt — sev-3, `small`, not already fixed
+  (the agent cited the base sha and the 2026-08-25 commit that introduced the ordering,
+  and noted that `repos`/`evals` bypass it), a four-step repro plan the next stage can turn
+  into a subprocess test — and `triage.md` states in its second line that nothing from the
+  report was executed. Code then advanced the run to `02-repro` without a gate, and the
+  memory row landed. The defect itself is left for the lifecycle to fix.
+
 ## D22 — 2026-09-09 — Mission Control v3: the factory's face, and a trace to look at
 
 The factory could run a feature end to end but could not be *watched*. The board

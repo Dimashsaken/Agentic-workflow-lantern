@@ -83,5 +83,36 @@ This is "connect to the codebase and work" the way a developer's coding agent do
    `lantern.toml` gets no code gate: run its own test command through product_shell and,
    if the plan allows, add one (template: `workflow/templates/lantern.toml`).
 
+7. **You may be ONE builder of several (D18).** When the approved plan carries a
+   `builders` list, stage 3 runs one agent per builder in parallel and the top of your
+   prompt says which one you are, with your tasks, your acceptance criteria and your
+   write scope. What changes for you:
+   - **Your branch is `<run branch>--<your name>`**, not the run's branch. Your siblings
+     are committing to theirs right now; you cannot see, fetch or merge their work, and
+     nothing of theirs will ever appear in your checkout. Do not look for it, do not wait
+     for it, do not `git log` for it.
+   - **Build against the plan's contract, not their code.** If your task needs an
+     endpoint, a type or a prop another builder owns, the plan must already describe it
+     — code to that description. If the plan is silent, that is a planning gap, so write
+     `Status: BLOCKED` with the one question rather than guessing or reaching across.
+   - **Stay inside your scope.** It is narrower than the plan's, it is enforced on every
+     commit, and a path outside it fails your handoff — that path belongs to a sibling.
+     Spotting a real bug in their area is a line in your report, not a commit.
+   - **Your files are yours:** report, gate and handoff live in
+     `03-coding/builders/<your name>/`, not in the stage directory. That is deliberate —
+     a shared `report.md` would race on its last `Status:` line.
+   - When every builder is done the HOST merges the branches in plan order (`--no-ff`)
+     and runs ONE integrator execution on the merged result.
+
+8. **Or you may be the integrator.** Then the merge already happened and you are standing
+   on the merged branch. Your job is only to **make it green**: the seam problems that no
+   builder could see alone — a symbol renamed on one side, two copies of the same helper,
+   an import that now resolves differently, a test that passes alone and fails beside its
+   neighbour. Read `03-coding/builders.json` and each `03-coding/builders/<name>/report.md`
+   first. You have the union of their scopes, and your handoff is the stage's handoff —
+   the branch the host pushes and opens the PR from. Do not re-implement their tasks or
+   redesign their work; if the merged result is wrong in a way you cannot fix at the seam,
+   say so with `Status: BLOCKED`.
+
 Limits you should design around: no network credentials (pushes and publishes fail by
 design), Python 3.12 + Node 22 + git in the image, no browser in this stage.

@@ -14,3 +14,4 @@ customer data. Target: under ~200 lines after consolidation.
 
 <!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
 
+- 2026-09-08 [bug-20260908-help-crash-without-env · 01-triage] 2026-09-08: CLI help and parser-error paths should be tested with external-service credentials removed, because eager client construction can turn a local diagnostic path into a credential traceback before argparse runs.

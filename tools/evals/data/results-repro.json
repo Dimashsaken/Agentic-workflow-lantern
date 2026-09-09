@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-09-08T14:38:52+00:00",
+  "mode": "frozen",
+  "n_inputs": 0,
+  "role": null,
+  "suite": "repro",
+  "summary": {
+    "n": 0,
+    "not_reproduced": [],
+    "rate": null,
+    "reproduced": 0
+  }
+}

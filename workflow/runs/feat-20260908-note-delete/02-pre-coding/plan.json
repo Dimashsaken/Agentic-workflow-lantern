@@ -1,0 +1,17 @@
+{
+  "kind": "plan",
+  "run_id": "feat-20260908-note-delete",
+  "tasks": [
+    {"id": 1, "title": "delete_note(note_id) in src/api/notes.py, returning True when the note existed and False otherwise", "size": "XS", "hitl": false, "criteria": ["AC-1", "AC-2"]},
+    {"id": 2, "title": "tests in tests/test_notes.py covering deletion of an existing note and of a missing id", "size": "XS", "hitl": false, "criteria": ["AC-1", "AC-2"]},
+    {"id": 3, "title": "document deletion in docs/api.md alongside the other functions", "size": "XS", "hitl": false, "criteria": ["AC-3"]}
+  ],
+  "write_scope": ["src/**", "tests/**", "docs/**"],
+  "schema_changes": false,
+  "hitl_required": false,
+  "deferred_criteria": [],
+  "builders": [
+    {"name": "api", "write_scope": ["src/**", "tests/**"], "tasks": [1, 2], "criteria": ["AC-1", "AC-2"]},
+    {"name": "docs", "write_scope": ["docs/**"], "tasks": [3], "criteria": ["AC-3"]}
+  ]
+}

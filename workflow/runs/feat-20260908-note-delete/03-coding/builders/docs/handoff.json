@@ -1,0 +1,22 @@
+{
+  "kind": "coding_branch",
+  "run_id": "feat-20260908-note-delete",
+  "branch": "feat/20260908-note-delete--docs",
+  "base": "main",
+  "base_sha": "f3c47e499516bc8008b68b541517e702dca198f7",
+  "start_sha": "f3c47e499516bc8008b68b541517e702dca198f7",
+  "head_sha": "d06b565770dc6d500c79c1e2889da3ef215f7f58",
+  "commits": [
+    {
+      "sha": "d06b565770dc6d500c79c1e2889da3ef215f7f58",
+      "subject": "feat-20260908-note-delete: task 3 \u00e2\u20ac\u201d document note deletion"
+    }
+  ],
+  "bundle": "workflow/runs/feat-20260908-note-delete/03-coding/builders/docs/branch.bundle",
+  "builder": "docs",
+  "auto_committed": false,
+  "diffstat": "docs/api.md | 1 +\n 1 file changed, 1 insertion(+)",
+  "files_changed": [
+    "docs/api.md"
+  ]
+}

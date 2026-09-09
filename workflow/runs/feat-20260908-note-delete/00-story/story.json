@@ -1,0 +1,13 @@
+{
+  "kind": "story",
+  "run_id": "feat-20260908-note-delete",
+  "title": "Delete a note",
+  "user_story": "As a caller of the notes API I want to delete a note by id so that a note written by mistake does not stay forever.",
+  "acceptance_criteria": [
+    {"id": "AC-1", "text": "Deleting an existing note removes it from the store and reports that it was deleted.", "edge_cases": ["the note was already deleted"]},
+    {"id": "AC-2", "text": "Deleting an id that does not exist reports failure and raises nothing.", "edge_cases": ["an id that was never created"]},
+    {"id": "AC-3", "text": "The API documentation describes deletion alongside create, get and list.", "edge_cases": []}
+  ],
+  "non_goals": ["soft deletes", "undo", "bulk deletion", "persistence"],
+  "open_questions": []
+}

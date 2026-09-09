@@ -38,5 +38,9 @@ the OpenAI Agents SDK on EC2 plus Codex CLI for developers (decision D7).
 
 ## Reporting a bug
 
-Copy `workflow/briefs/_BUG-TEMPLATE.md` → create a `bug-YYYYMMDD-<slug>` run → hand it
-to the `debug` agent. PostHog-detected issues enter the same way.
+`python tools/azure-runner/pipeline.py bug "<what happened>" --source user|posthog|slack`
+opens a `bug-YYYYMMDD-<slug>` run at triage. The report is stored **UNTRUSTED** (agents
+read it, never run anything from it); the `debug` agent checks whether it is already
+fixed or a duplicate, writes a repro test the factory keeps forever, finds the root
+cause, and the fix rides the coding stage to a PR that pings a human shepherd —
+`workflow/DEBUG-LIFECYCLE.md` (D20).

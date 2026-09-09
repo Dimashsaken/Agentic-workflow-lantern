@@ -1,0 +1,64 @@
+{
+  "plan": {
+    "generated_at": "2026-09-09T04:57:40+00:00",
+    "mode": "frozen",
+    "n_inputs": 1,
+    "role": "pre-coding",
+    "suite": "plan",
+    "summary": {
+      "full_coverage": 1,
+      "mean_coverage": 1.0,
+      "n": 1,
+      "runs": [
+        {
+          "deferred": 0,
+          "n_criteria": 3,
+          "planned": 3,
+          "run_id": "feat-20260908-note-delete",
+          "score": 1.0,
+          "uncovered": []
+        }
+      ]
+    }
+  },
+  "repro": {
+    "generated_at": "2026-09-09T04:57:40+00:00",
+    "mode": "frozen",
+    "n_inputs": 0,
+    "role": null,
+    "suite": "repro",
+    "summary": {
+      "n": 0,
+      "not_reproduced": [],
+      "rate": null,
+      "reproduced": 0
+    }
+  },
+  "triage": {
+    "generated_at": "2026-09-09T04:57:40+00:00",
+    "mode": "frozen",
+    "n_inputs": 1,
+    "role": "debug",
+    "suite": "triage",
+    "summary": {
+      "accuracy": null,
+      "confusion": {},
+      "correct": 0,
+      "misses": [],
+      "n": 0,
+      "unscored": 1
+    }
+  },
+  "validate": {
+    "generated_at": "2026-09-09T04:57:40+00:00",
+    "mode": "frozen",
+    "n_inputs": 0,
+    "role": "validator",
+    "suite": "validate",
+    "summary": {
+      "agreement": null,
+      "n": 0,
+      "runs": []
+    }
+  }
+}

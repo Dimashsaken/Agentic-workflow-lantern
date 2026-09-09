@@ -12,6 +12,7 @@
     python pipeline.py runboard                    # re-render workflow/RUNBOARD.md from the DB
     python pipeline.py render-memory [--role X]    # re-render agents/<role>/memory.md from role_memory
     python pipeline.py import-run <run-id> [--stage S --status waiting_gate --gate G]  # backfill a file-era run
+    python pipeline.py init-product <path>         # install the factory's gate into a product repo (D21)
 
 Design: docs/ORCHESTRATION.md. Schema: schema.sql.
 """
@@ -25,6 +26,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -44,13 +46,15 @@ from orchestrator import (
     list_dir, list_exports, make_append_memory, make_collect_jsx, model_for,
     model_settings_for, paper_mcp_server,
     product_git,
-    paper_reachable, playwright_mcp_server, read_file, render_role_memory, usage_dict,
-    write_file,
+    paper_reachable, playwright_mcp_server, read_file, render_role_memory, role_for_stage,
+    usage_dict, write_file,
 )
 
 load_dotenv(Path(__file__).parent / ".env")
 
 import factory  # noqa: E402  D17: quality gate + fix loop for the in-process coding path
+import builders  # noqa: E402  D18: stage 3 fans out into scoped parallel builders
+import intake  # noqa: E402  D20: the debug lifecycle — bug runs, their envelopes, the shepherd
 
 PIPELINE_VERSION = "3"  # v3 (D17): story stage + validation execution; v2: stage 1 diverge/design split
 POLL_SECONDS = 5
@@ -306,6 +310,7 @@ FEATURE_STAGES = [
 STAGE_INDEX = {s[0]: i for i, s in enumerate(FEATURE_STAGES)}
 STAGE_DIR = {s[0]: s[1] for s in FEATURE_STAGES}
 STAGE_RUNNER = {s[0]: s[4] for s in FEATURE_STAGES}
+intake.register_stages(STAGE_DIR, STAGE_RUNNER)   # D20: debug-lifecycle stages join the executor/claim maps
 
 
 async def connect() -> asyncpg.Connection:
@@ -493,8 +498,8 @@ async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str) -
 # ── stage execution ──────────────────────────────────────────────────────────
 
 async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
-    role = ROLE_FOR_STAGE[stage]
-    sdir = STAGE_DIR[stage]
+    role = role_for_stage(stage)                      # D18: '03-coding.<x>' is coding
+    sdir = STAGE_DIR.get(stage) or factory.stage_dir(stage)   # D18: builder keys are dynamic
     attempt = await conn.fetchval(
         "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
         run_id, stage,
@@ -514,10 +519,11 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
     # LANTERN_PRODUCT_DIR at call time).
     repo, branch = await product_target(conn, run_id)
     work = await product_work_branch(conn, run_id) if repo else ""
+    work = builders.branch_for(work, stage)      # D18: a builder works on its own branch
     for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
-                "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_CODING_START_SHA"):
+                "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
         os.environ.pop(var, None)
-    if stage == "03-coding" and not repo:
+    if role == "coding" and not repo:
         raise RuntimeError("auto-coding needs a product repo — set one with "
                            f"`pipeline.py set-product {run_id} --repo … --branch …"
                            " [--working-branch …]` or in Mission Control at "
@@ -529,11 +535,13 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         # D15: EVERY stage learns the working branch, not just coding — that is what
         # lets stages 1-2 and 4-7 orient on the code the run is actually working on.
         os.environ["LANTERN_PRODUCT_WORK_BRANCH"] = work
-        if stage == "03-coding":   # D14: writable, on the run's branch, bot identity
+        if role == "coding":       # D14: writable, on the run's branch, bot identity
             start = await asyncio.to_thread(prepare_coding_checkout, checkout, work)
             os.environ["LANTERN_CODING_BRANCH"] = work
             os.environ["LANTERN_CODING_START_SHA"] = start
             os.environ["LANTERN_PRODUCT_WRITABLE"] = "1"
+            if builders.name_for(stage):   # D18: which builder this execution is
+                os.environ["LANTERN_BUILDER"] = builders.name_for(stage)
     session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
 
     problem = check_stage_inputs(run_id, stage)
@@ -588,7 +596,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         for s in mcp_servers:
             await s.cleanup()
         for var in ("LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
-                    "LANTERN_CODING_START_SHA"):
+                    "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
             os.environ.pop(var, None)   # never leak writability into the next stage
 
     # Ledger before the postcondition verdict: tokens are spent either way (P0.4).
@@ -604,7 +612,9 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         raise RuntimeError("postconditions failed: " + "; ".join(missing))
     await upload_stage_media(conn, run_id, sdir, execution_key)
 
-    report = f"workflow/runs/{run_id}/{sdir}/report.md"
+    # D18: a builder's report is in its own subdir — point the artifact row at the file
+    # that exists, not at the stage report the integrator will write later.
+    report = f"workflow/runs/{run_id}/{factory.exec_dir(sdir, factory.builder_of(stage))}/report.md"
     await insert_artifact(conn, run_id, sdir, "report", report)
     if stage == "01-ui-ux.design":
         await register_design_artifacts(conn, run_id, sdir)
@@ -623,8 +633,8 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     postconditions too (defense in depth — a compromised container exiting 0 still
     cannot pass without the report on the mounted run dir and its memory row).
     """
-    role = ROLE_FOR_STAGE[stage]
-    sdir = STAGE_DIR[stage]
+    role = role_for_stage(stage)                      # D18: '03-coding.<x>' is coding
+    sdir = STAGE_DIR.get(stage) or factory.stage_dir(stage)   # D18: builder keys are dynamic
     attempt = await conn.fetchval(
         "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
         run_id, stage,
@@ -666,14 +676,15 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     # bind-mounts it; the entrypoint clones /product-src.git into /work/product.
     repo, branch = await product_target(conn, run_id)
     work = await product_work_branch(conn, run_id) if repo else ""
-    if stage == "03-coding" and not repo:
+    work = builders.branch_for(work, stage)      # D18: a builder works on its own branch
+    if role == "coding" and not repo:
         raise RuntimeError("auto-coding needs a product repo — set one with "
                            f"`pipeline.py set-product {run_id} --repo … --branch …"
                            " [--working-branch …]` or in Mission Control at "
                            f"/run/{run_id}/repo")
     cmd += await asyncio.to_thread(product_mount_args, repo, branch, work)
     timeout_min = STAGE_TIMEOUT_MIN
-    if stage == "03-coding":
+    if role == "coding":
         # D14: the entrypoint puts the checkout on the run's branch and marks it
         # writable; commits carry the bot identity. Still no PAT in the container —
         # the bundle it writes into the run folder is the only way code leaves.
@@ -681,6 +692,8 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
         cmd += ["-e", f"LANTERN_CODING_BRANCH={work}",
                 "-e", f"LANTERN_GIT_AUTHOR_NAME={GIT_AUTHOR_NAME}",
                 "-e", f"LANTERN_GIT_AUTHOR_EMAIL={GIT_AUTHOR_EMAIL}"]
+        if builders.name_for(stage):      # D18: which builder this container is
+            cmd += ["-e", f"LANTERN_BUILDER={builders.name_for(stage)}"]
         for var in ("LANTERN_CODING_MAX_TURNS", "LANTERN_PRODUCT_SHELL_TIMEOUT",
                     "LANTERN_FIX_ROUNDS"):
             if os.environ.get(var):
@@ -1051,6 +1064,8 @@ async def open_gate(conn, run_id: str, stage: str, gate: str,
 
 
 async def advance(conn, run_id: str, stage: str) -> None:
+    if intake.is_bug_run(run_id):   # D20: the debug lifecycle has its own table and skip rule
+        return await intake.advance_bug(conn, run_id, stage)
     nxt = STAGE_INDEX[stage] + 1
     if nxt >= len(FEATURE_STAGES):
         await conn.execute(
@@ -1068,7 +1083,7 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
     row = await conn.fetchrow("SELECT current_stage, coding_mode FROM runs WHERE id = $1", run_id)
     stage = row["current_stage"]
     mode = row["coding_mode"] or "human"
-    _, _, stype, gate, _ = FEATURE_STAGES[STAGE_INDEX[stage]]
+    _, _, stype, gate, _ = intake.stage_row(run_id, stage, FEATURE_STAGES)   # D20: bug runs read their own table
     extra: dict | None = None
     external_ref: str | None = None
     try:
@@ -1078,12 +1093,19 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
         elif stage == "03-coding" and mode == "auto":
             # D14: the coding agent implements the plan in a sandbox; the host then
             # verifies + pushes its branch and opens the PR — the gate's payload.
-            await execute(conn, run_id, stage, runner)
+            # D18: with a `builders` list in the plan this fans out into N scoped
+            # builders, merges them on the host and integrates once; with no builders
+            # it is the single `execute` call it has always been.
+            built = await builders.run_coding(conn, run_id, stage, runner, execute)
             extra = await publish_coding_branch(conn, run_id)
+            if built:                                    # D18
+                extra["builders"] = built
             external_ref = extra.get("pr_url")
         else:  # human stage: nothing to execute — the gate IS the stage
             print(f"[{run_id}] {stage} is a human stage (the developer's own session).")
-        if gate:
+        if intake.is_bug_run(run_id):   # D20: the debug lifecycle gates/advances from its envelopes
+            await intake.after_stage(conn, run_id, stage, gate, extra, external_ref)
+        elif gate:
             await open_gate(conn, run_id, stage, gate, extra, external_ref)
         else:
             await advance(conn, run_id, stage)
@@ -1334,6 +1356,29 @@ async def cmd_decide(run_id: str, gate: str, by: str, note: str, approved: bool)
     await conn.close()
 
 
+def _chmod_retry(func, path, _exc) -> None:
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def force_rmtree(path: Path) -> None:
+    """Remove a git checkout on any platform, and say so when it cannot be removed.
+
+    Git marks objects and packs read-only, which on Windows makes `shutil.rmtree` raise
+    PermissionError. With `ignore_errors=True` that failure was silent and the directory
+    survived, so the NEXT clone into it died with 'destination path already exists' —
+    an error that names neither the cause nor the fix. It bites whenever one process
+    checks out the same run twice: two stages under one daemon tick, and (D18) the
+    scoped builders, which is where it was found.
+    """
+    if not path.exists():
+        return
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_chmod_retry)
+    else:                                    # pragma: no cover - 3.11 and older
+        shutil.rmtree(path, onerror=_chmod_retry)
+
+
 def product_checkout(repo: str, branch: str, run_id: str, work: str = "") -> Path:
     """Host-side working checkout of the product for the in-process executor.
 
@@ -1348,8 +1393,11 @@ def product_checkout(repo: str, branch: str, run_id: str, work: str = "") -> Pat
     """
     mirror = sync_product_mirror(repo)
     dest = PRODUCT_MIRROR_DIR / "checkouts" / run_id
+    force_rmtree(dest)               # D18: loud, and copes with read-only git objects
     if dest.exists():
-        shutil.rmtree(dest, ignore_errors=True)
+        raise RuntimeError(
+            f"could not clear the previous checkout at {dest} — remove it and retry "
+            "(a file in it is locked by another process)")
     dest.parent.mkdir(parents=True, exist_ok=True)
     r = _git("clone", "--no-hardlinks", "--branch", branch, str(mirror), str(dest))
     if r.returncode != 0:
@@ -1678,7 +1726,7 @@ async def cmd_qa_preflight(role: str) -> None:
         print("  sandbox   (skipped — LANTERN_EXECUTOR is not 'docker' here)")
 
 
-REWORK_TARGETS = ("02-pre-coding", "03-coding", "04-qa-dev")
+REWORK_TARGETS = ("02-pre-coding", "03-coding", "04-qa-dev") + intake.BUG_REWORK_TARGETS   # D20
 
 
 async def cmd_rework(run_id: str, to_stage: str, by: str, note: str) -> None:
@@ -1694,7 +1742,8 @@ async def cmd_rework(run_id: str, to_stage: str, by: str, note: str) -> None:
         sys.exit(f"unknown run {run_id}")
     if row["status"] not in ("failed", "waiting_gate"):
         sys.exit(f"{run_id} is {row['status']} — rework applies to failed or waiting_gate runs")
-    if STAGE_INDEX.get(to_stage, 99) >= STAGE_INDEX.get(row["current_stage"], -1):
+    index = intake.stage_index(run_id, STAGE_INDEX)   # D20: bug runs order by the debug lifecycle table
+    if index.get(to_stage, 99) >= index.get(row["current_stage"], -1):
         sys.exit(f"{to_stage} is not earlier than the run's current stage {row['current_stage']}")
     await conn.execute(
         """UPDATE approvals SET status = 'expired', decided_at = now(), decided_by = $2,
@@ -1994,13 +2043,31 @@ async def cmd_usage_check() -> None:
 # Commands that touch neither a model nor the database, and so must not require Azure
 # credentials to be configured. `repos` answers "what can this host offer as a product
 # target" — often the first thing an operator runs on a box, before the fleet is wired.
-LOCAL_ONLY_CMDS = {"repos"}
+# Commands that need neither a database nor an Azure client. `main()` dispatches them
+# before any client setup so they work on a bare laptop (`repos` reads the filesystem;
+# `init-product` writes two files into another repo; `evals` reads run folders and scores).
+LOCAL_ONLY_CMDS = {"repos", "init-product", "evals"}
+
+
+def cmd_evals(argv: list[str]) -> None:
+    """`pipeline.py evals build | run --suite <name> [--live] | report` (D20, tools/evals/).
+    Local-only: reading run folders and scoring needs no Azure; `run --live` configures
+    the client itself."""
+    sys.path.insert(0, str(REPO / "tools" / "evals"))
+    import evals_cli  # noqa: PLC0415 — deliberately lazy; the daemon never imports the evals
+    evals_cli.main(argv)
 
 
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in LOCAL_ONLY_CMDS:
-        {"repos": cmd_repos}[sys.argv[1]]()
-        return
+        if sys.argv[1] == "repos":
+            cmd_repos()
+            return
+        if sys.argv[1] == "evals":      # D20: the factory's evals, no Azure client needed
+            cmd_evals(sys.argv[2:])
+            return
+        import init_product      # D21: `pipeline.py init-product <path> [--force] [--dry-run]`
+        sys.exit(init_product.main(sys.argv[2:]))
     set_default_openai_client(azure_v1_client())
     # Responses API — chat_completions drops image tool outputs, blinding vision
     # critique loops (see orchestrator.py for the full note).
@@ -2067,6 +2134,26 @@ def main() -> None:
     p = sub.add_parser("import-run"); p.add_argument("run_id")
     p.add_argument("--by", default="justin"); p.add_argument("--stage", default="01-ui-ux.design")
     p.add_argument("--status", default="waiting_gate"); p.add_argument("--gate")
+    # D21: install the factory's quality gate into a product repo. Dispatched before this
+    # parser runs (LOCAL_ONLY_CMDS) — registered here so `--help` lists it.
+    p = sub.add_parser("init-product", help="detect a product repo's stack, write its "
+                                            "lantern.toml and note the factory in its AGENTS.md")
+    p.add_argument("path"); p.add_argument("--force", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+    # D20: the debug lifecycle's front door + the factory's evals (intake.py, tools/evals/)
+    p = sub.add_parser("bug", help="open a bug run from UNTRUSTED feedback (text or a file) at 01-triage")
+    p.add_argument("feedback", help="the report text, or a path to a file holding it")
+    p.add_argument("--source", choices=intake.SOURCES, default="user")
+    p.add_argument("--by", default=os.environ.get("USERNAME") or os.environ.get("USER", "unknown"))
+    p.add_argument("--product-repo", default=""); p.add_argument("--product-branch", default="")
+    p.add_argument("--working-branch", default="")
+    p.add_argument("--coding-mode", choices=CODING_MODES, default="",
+                   help="who writes the fix: human (default) or the coding agent (auto)")
+    p.add_argument("--shepherd", default="", help="human pinged at fix-ready (default LANTERN_DEFAULT_SHEPHERD)")
+    p.add_argument("--run-id", default=""); p.add_argument("--slug", default="")
+    p.add_argument("--follow", action="store_true")
+    p = sub.add_parser("evals", help="the factory measures itself: build | run --suite <name> [--live] | report")
+    p.add_argument("evals_args", nargs=argparse.REMAINDER)
     a = ap.parse_args()
 
     match a.cmd:
@@ -2094,6 +2181,10 @@ def main() -> None:
         case "usage-check":   asyncio.run(cmd_usage_check())
         case "render-memory": asyncio.run(cmd_render_memory(a.role))
         case "import-run":    asyncio.run(cmd_import_run(a.run_id, a.by, a.stage, a.status, a.gate))
+        case "bug":           asyncio.run(intake.cmd_bug(a.feedback, a.source, a.by, a.product_repo,   # D20
+                                                         a.product_branch, a.working_branch, a.coding_mode,
+                                                         a.shepherd, a.run_id, a.slug, a.follow))
+        case "evals":         cmd_evals(a.evals_args)   # D20
 
 
 if __name__ == "__main__":

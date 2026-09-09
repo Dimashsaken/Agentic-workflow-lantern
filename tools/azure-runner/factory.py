@@ -17,6 +17,14 @@ Quality gate — after the coding agent's turn the product's own test/lint/typec
 commands (lantern.toml [quality]) run as CODE; only failures go back to the agent, at
 most LANTERN_FIX_ROUNDS times, then the stage fails honestly. The gate also refuses
 commits outside the plan's write scope (Ray Fu's folder-scoped engineers).
+
+Builders (D18) — plan.json may split stage 3 into N named builders, each with its own
+write scope, tasks and branch (`03-coding.<name>`, branch `<work>--<name>`). Inside a
+builder execution LANTERN_BUILDER names it: write_scope() narrows to that builder's
+globs and the gate/handoff files live under 03-coding/builders/<name>/. The host merges
+the builder branches (builders.py) and one integrator execution (`03-coding.integrate`,
+LANTERN_BUILDER=integrate) makes the merged branch green with the union of the scopes.
+Without builders in the plan every function here behaves exactly as before.
 """
 from __future__ import annotations
 
@@ -41,6 +49,16 @@ QUALITY_TIMEOUT_DEFAULT = 900
 QUALITY_TAIL = 3000
 FIX_ROUNDS_DEFAULT = 3
 GATE_FILE = "gate.json"
+
+# ── parallel builders (D18) ──────────────────────────────────────────────────
+# A builder's name becomes a git branch suffix (`<work branch>--<name>`) and a run
+# folder path, so it is restricted to what is safe in both: lowercase alphanumerics
+# and single dashes. `integrate` is the host's own execution and cannot be claimed.
+BUILDER_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+BUILDER_ENV = "LANTERN_BUILDER"
+BUILDERS_DIR = "builders"
+INTEGRATOR = "integrate"
+MERGE_RECORD = "builders.json"
 
 # stage key -> (typed envelope, human-readable twin). Both are required: the JSON is
 # what code and downstream agents read, the markdown is what a human approves.
@@ -128,8 +146,7 @@ def check_envelope(run_id: str, stage: str, product_root: Path | None = None) ->
         problems.append(f"{sdir}/{json_name}: kind must be '{kind}' (got {data.get('kind')!r})")
     if data.get("run_id") != run_id:
         problems.append(f"{sdir}/{json_name}: run_id must be '{run_id}'")
-    checker = {"research": _check_research, "story": _check_story,
-               "plan": _check_plan, "validation": _check_validation}[kind]
+    checker = CHECKERS[kind]   # D20: intake.py registers the debug lifecycle's kinds here
     problems.extend(f"{sdir}/{json_name}: {p}" for p in checker(data, run_id, product_root))
     return problems
 
@@ -245,6 +262,92 @@ def _check_plan(data: dict, run_id: str, product_root: Path | None) -> list[str]
             p.append("acceptance criteria with no task and no deferral reason: "
                      f"{', '.join(uncovered)} — every criterion is either planned or "
                      "explicitly deferred (deferred_criteria: [{id, reason}])")
+    p.extend(_check_builders(data, tasks, story_ids))
+    return p
+
+
+def _task_key(v) -> str:
+    """Task ids compare as text: a plan may number tasks 1,2,3 or 'T-1','T-2'."""
+    return str(v).strip()
+
+
+def _check_builders(data: dict, tasks: list, story_ids: list[str] | None) -> list[str]:
+    """The optional `builders` split (D18): who may write what, in parallel.
+
+    Absent = today's single builder, byte for byte. Present, it must be a real
+    partition — a task built twice is two agents racing on the same file, and two
+    builders sharing a glob is the merge conflict this whole design exists to avoid.
+    """
+    bs = data.get("builders")
+    if bs is None:
+        return []
+    if not _is_list_of_dicts(bs) or not bs:
+        return ["builders must be a non-empty list of {name, write_scope, tasks, criteria} "
+                "— omit the key entirely for a single builder (the default)"]
+    p: list[str] = []
+    names: set[str] = set()
+    glob_owner: dict[str, str] = {}
+    assigned: dict[str, str] = {}
+    for i, b in enumerate(bs):
+        raw = b.get("name")
+        name = raw if isinstance(raw, str) and BUILDER_NAME.match(raw) else ""
+        if not name:
+            p.append(f"builders[{i}].name must be lowercase letters, digits and single "
+                     f"dashes (got {raw!r}) — it becomes the git branch "
+                     "`<work branch>--<name>` and a run-folder path")
+        elif name == INTEGRATOR:
+            p.append(f"builders[{i}].name '{INTEGRATOR}' is reserved for the host's "
+                     "integration execution — pick another name")
+            name = ""
+        elif name in names:
+            p.append(f"duplicate builder name '{name}' — names are branch suffixes and "
+                     "must be unique")
+        names.add(name)
+        label = name or f"builders[{i}]"
+        scope = b.get("write_scope")
+        if not _str_list(scope) or not scope:
+            p.append(f"{label}: write_scope must list at least one path glob this builder "
+                     "may change — it is enforced on that builder's every commit")
+            scope = []
+        for g in scope:
+            key = g.strip()
+            owner = glob_owner.get(key)
+            if owner is not None and owner != label:
+                p.append(f"glob '{key}' is listed under both '{owner}' and '{label}' — two "
+                         "builders writing the same paths is exactly what the split prevents; "
+                         "give the shared surface to one of them")
+            glob_owner.setdefault(key, label)
+        tks = b.get("tasks")
+        if not isinstance(tks, list) or not tks:
+            p.append(f"{label}: tasks must list the plan task ids this builder implements")
+            tks = []
+        for t in tks:
+            key = _task_key(t)
+            owner = assigned.get(key)
+            if owner is not None:
+                p.append(f"task {key} is assigned to both '{owner}' and '{label}' — every "
+                         "task belongs to exactly one builder")
+            assigned.setdefault(key, label)
+        crit = b.get("criteria", [])
+        if not _str_list(crit) and crit != []:
+            p.append(f"{label}: criteria must be a list of acceptance-criterion ids")
+        elif story_ids is not None:
+            unknown = sorted(set(crit) - set(story_ids))
+            if unknown:
+                p.append(f"{label}: criteria the story does not define: {', '.join(unknown)}")
+    plan_ids: list[str] = []
+    for i, t in enumerate(tasks):
+        if t.get("id") is None:
+            p.append(f"tasks[{i}] needs an id — builders assign work by task id")
+            continue
+        plan_ids.append(_task_key(t.get("id")))
+    unknown = sorted(set(assigned) - set(plan_ids))
+    if unknown:
+        p.append(f"builders claim task ids the plan does not define: {', '.join(unknown)}")
+    unbuilt = [k for k in plan_ids if k not in assigned]
+    if unbuilt:
+        p.append(f"tasks assigned to no builder: {', '.join(unbuilt)} — with a builders "
+                 "list every task belongs to exactly one of them, or nobody builds it")
     return p
 
 
@@ -301,6 +404,12 @@ def _check_validation(data: dict, run_id: str, product_root: Path | None) -> lis
     return p
 
 
+# kind -> validator. Other modules register their own envelopes here (D20: intake.py adds
+# triage / repro / rootcause) so check_envelope() stays the single postcondition.
+CHECKERS = {"research": _check_research, "story": _check_story,
+            "plan": _check_plan, "validation": _check_validation}
+
+
 # ── write scope ──────────────────────────────────────────────────────────────
 
 def glob_to_regex(glob: str) -> re.Pattern:
@@ -330,27 +439,125 @@ def path_in_scope(path: str, globs: list[str]) -> bool:
     return any(glob_to_regex(g).match(rel) for g in globs)
 
 
-def write_scope(run_id: str) -> list[str] | None:
-    """The plan's write_scope globs, or None when the run has no plan.json (older runs)."""
+def plan_data(run_id: str) -> dict | None:
+    """The run's plan.json, or None when it has none (runs imported after stage 2)."""
     jp = run_dir(run_id) / "02-pre-coding" / "plan.json"
     if not jp.is_file():
         return None
-    data, err = _load_json(jp)
-    if not data:
+    data, _ = _load_json(jp)
+    return data or None
+
+
+def plan_builders(run_id: str) -> list[dict]:
+    """The plan's builders, in plan order — [] when the plan declares none (D18)."""
+    data = plan_data(run_id) or {}
+    bs = data.get("builders")
+    if not isinstance(bs, list):
+        return []
+    return [b for b in bs if isinstance(b, dict) and BUILDER_NAME.match(str(b.get("name") or ""))]
+
+
+def builder_of(stage: str) -> str:
+    """The builder a STAGE KEY names: '03-coding.api' → 'api', '03-coding' → ''.
+
+    The stage key is the execution's identity — it is in the execution key and the
+    `stage_executions` row — so every check that has one derives the builder from it
+    rather than from the environment. The environment is set only for the duration of
+    the agent's turn; the host's postcondition re-check (docker) and the in-process
+    check after the writability vars are cleared both run without it.
+    """
+    head, _, tail = stage.partition(".")
+    return tail.strip() if head == "03-coding" else ""
+
+
+def current_builder() -> str:
+    """Which builder THIS execution is, from LANTERN_BUILDER — '' for a single builder.
+
+    Set by the dispatcher (in-process) and the sandbox env (docker) for the agent's
+    turn, so the prompt builders and the write scope, which have no stage key to hand,
+    have one answer. Anything holding a stage key uses `builder_of` instead.
+    """
+    return os.environ.get(BUILDER_ENV, "").strip()
+
+
+def exec_dir(sdir: str, builder: str | None = None) -> str:
+    """Where THIS execution's own files go — the stage dir, or the builder's subdir.
+
+    Parallel builders cannot share one `report.md`/`gate.json`: the report's LAST
+    `Status:` line and the gate's `execution_key` would race between them, and the
+    loser would fail on the winner's evidence. The integrator writes the stage dir
+    itself, so `03-coding/` still carries exactly one handoff for the run branch.
+    """
+    name = current_builder() if builder is None else builder
+    return sdir if not name or name == INTEGRATOR else f"{sdir}/{BUILDERS_DIR}/{name}"
+
+
+def merge_record(run_id: str) -> dict | None:
+    """`03-coding/builders.json` — what the host merged, when stage 3 fanned out (D18).
+
+    Written by builders.merge and read by the parts that must know the branch was
+    assembled rather than written by one agent: the integrator's prompt, its handoff
+    check, and Mission Control.
+    """
+    p = run_dir(run_id) / "03-coding" / MERGE_RECORD
+    if not p.is_file():
         return None
+    data, _ = _load_json(p)
+    return data or None
+
+
+def builder_scope(run_id: str, name: str) -> list[str] | None:
+    """One builder's write scope; for the integrator, the union of every builder's.
+
+    The integrator owns the merged branch, so its surface is exactly the surfaces the
+    builders were confined to — no wider (it is not a licence to redesign) and no
+    narrower (it has to be able to fix any of them).
+    """
+    bs = plan_builders(run_id)
+    if not bs or not name:
+        return None
+    if name == INTEGRATOR:
+        union = sorted({g.strip() for b in bs for g in (b.get("write_scope") or [])
+                        if _nonempty_str(g)})
+        return union or None
+    for b in bs:
+        if b.get("name") == name:
+            own = [g for g in (b.get("write_scope") or []) if _nonempty_str(g)]
+            return own or None
+    return None
+
+
+def write_scope(run_id: str) -> list[str] | None:
+    """The write-scope globs this execution is held to, or None when the run has no
+    plan.json (older runs). With LANTERN_BUILDER set it narrows to that builder's own
+    scope (D18); a name the plan does not define falls back to the plan's scope."""
+    data = plan_data(run_id)
+    if data is None:
+        return None
+    own = builder_scope(run_id, current_builder())
+    if own:
+        return own
     scope = data.get("write_scope")
     return [s for s in scope if _nonempty_str(s)] if isinstance(scope, list) and scope else None
 
 
-def check_write_scope(run_id: str, files_changed: list[str]) -> list[str]:
-    scope = write_scope(run_id)
+def check_write_scope(run_id: str, files_changed: list[str],
+                      scope: list[str] | None = None, builder: str | None = None) -> list[str]:
+    """Changed paths ⊆ the scope. `scope` overrides the env-derived one so the HOST can
+    check a builder's handoff against THAT builder's globs (D18), and `builder` names
+    whose scope it is — on the host LANTERN_BUILDER is unset, and a message blaming
+    "the plan's write scope" would send a reviewer to widen the wrong list."""
+    if scope is None:
+        scope = write_scope(run_id)
     if scope is None:
         return []
+    name = current_builder() if builder is None else builder
     outside = [f for f in files_changed if not path_in_scope(f, scope)]
     if not outside:
         return []
     shown = ", ".join(outside[:8]) + (" …" if len(outside) > 8 else "")
-    return [f"{len(outside)} changed path(s) fall outside the plan's write scope "
+    whose = f"builder '{name}'s" if name else "the plan's"
+    return [f"{len(outside)} changed path(s) fall outside {whose} write scope "
             f"{scope}: {shown} — the scope is a planning decision: revert the change, or "
             "widen write_scope in 02-pre-coding/plan.json with the reason in the report"]
 
@@ -442,15 +649,17 @@ def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, ro
     for name, cmd in cfg["commands"]:
         res = run_command(cmd, root, cfg["timeout_s"])
         results.append({"name": name, "command": cmd, **res})
-    scope = write_scope(run_id)
+    builder = builder_of(stage) or current_builder()          # D18
+    scope = builder_scope(run_id, builder) or write_scope(run_id)
     if scope is not None:
         changed = changed_files_since(root, since_sha)
-        problems = check_write_scope(run_id, changed)
+        problems = check_write_scope(run_id, changed, scope=scope, builder=builder)
         results.append({"name": "write-scope", "command": f"changed paths ⊆ {scope}",
                         "exit": 1 if problems else 0, "passed": not problems, "seconds": 0.0,
                         "output_tail": problems[0] if problems else f"{len(changed)} changed path(s), all in scope"})
     gate = {
         "kind": "quality_gate", "run_id": run_id, "stage": stage,
+        "builder": builder or None,                    # D18
         "execution_key": execution_key, "round": round_no,
         "source": cfg.get("source"), "configured": [n for n, _ in cfg["commands"]],
         "passed": all(r["passed"] for r in results),
@@ -461,7 +670,7 @@ def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, ro
         gate["passed"] = False
         gate["results"].append({"name": "config", "command": "lantern.toml", "exit": 1,
                                 "passed": False, "seconds": 0.0, "output_tail": cfg["error"]})
-    d = run_dir(run_id) / stage_dir(stage)
+    d = run_dir(run_id) / exec_dir(stage_dir(stage), builder)   # D18: a builder's own subdir
     d.mkdir(parents=True, exist_ok=True)
     (d / GATE_FILE).write_text(json.dumps(gate, indent=2), encoding="utf-8")
     (d / "gate.md").write_text(render_gate_md(gate), encoding="utf-8")
@@ -510,9 +719,15 @@ def fix_prompt(gate: dict, round_no: int, max_rounds: int) -> str:
             + gate_failure_brief(gate))
 
 
-def check_quality_gate(run_id: str, sdir: str, execution_key: str) -> list[str]:
+def check_quality_gate(run_id: str, sdir: str, execution_key: str,
+                       builder: str = "") -> list[str]:
     """Postcondition: THIS execution's gate.json says green. Missing = degrade (an older
-    sandbox image, or a human-mode stage) with a note, never a silent pass elsewhere."""
+    sandbox image, or a human-mode stage) with a note, never a silent pass elsewhere.
+
+    `builder` (D18) comes from the caller's stage key, not the environment: this runs
+    on the host after the execution's env is gone.
+    """
+    sdir = exec_dir(sdir, builder)                       # D18: a builder's own subdir
     gp = run_dir(run_id) / sdir / GATE_FILE
     if not gp.is_file():
         print(f"[factory] {sdir}/{GATE_FILE} absent — quality gate not enforced for this "
@@ -530,6 +745,58 @@ def check_quality_gate(run_id: str, sdir: str, execution_key: str) -> list[str]:
                 f"{', '.join(failed) or 'unknown'} — see {sdir}/gate.md; the branch is not "
                 "handed off until the product's own checks pass"]
     return []
+
+
+def builder_brief(run_id: str) -> str:
+    """Who this builder is, when the plan splits stage 3 (D18) — '' otherwise.
+
+    The split only works if each builder knows it is ONE of N: that its siblings are
+    editing other files right now, that their tasks are not its tasks, and that the
+    host merges. Discovering that at merge time is a conflict; reading it here is a
+    boundary.
+    """
+    name = current_builder()
+    bs = plan_builders(run_id)
+    if not name or not bs:
+        return ""
+    others = [b.get("name") for b in bs if b.get("name") != name]
+    if name == INTEGRATOR:
+        return ("\n\n## You are the integrator (one stage, several builders — D18)\n"
+                f"{len(bs)} scoped builders ({', '.join(others)}) already ran in parallel, "
+                "each on its own branch, and the HOST has merged all of them into the run's "
+                "branch — you are standing on the merged result. Your task: **make the merged "
+                "branch green**. Fix what only shows up once the pieces are together — imports "
+                "across the seam, a renamed symbol one side missed, duplicated helpers, a test "
+                "that passes alone and fails beside its neighbour. Do NOT re-implement their "
+                "tasks or redesign their work: read the merge in "
+                f"`03-coding/builders.json` and each builder's report under "
+                "`03-coding/builders/<name>/report.md` first. Your write scope is the union "
+                "of theirs, and your handoff is the stage's handoff.")
+    tasks = {_task_key(t.get("id")): t for t in (plan_data(run_id) or {}).get("tasks", [])
+             if isinstance(t, dict)}
+    mine = next((b for b in bs if b.get("name") == name), {})
+    todo = [f"  - task {k}: {str(tasks.get(k, {}).get('title', '(not in the plan)'))[:140]}"
+            for k in (_task_key(t) for t in (mine.get("tasks") or []))]
+    crit = [c for c in (mine.get("criteria") or []) if isinstance(c, str)]
+    return ("\n\n## You are one builder of several (D18)\n"
+            f"This run's plan splits stage 3 into {len(bs)} scoped builders and you are "
+            f"**`{name}`**"
+            + (f"; `{'`, `'.join(str(o) for o in others)}` "
+               f"{'is' if len(others) == 1 else 'are'} building other surfaces IN PARALLEL "
+               "right now, on their own branches." if others else ".")
+            + "\n\n**Your tasks — and only these:**\n" + ("\n".join(todo) or "  - (none listed)")
+            + (f"\n\n**Your acceptance criteria:** {', '.join(crit)}" if crit else "")
+            + "\n\nRules that come with the split:\n"
+            "- Stay inside YOUR write scope (below). It is enforced on every commit, and a "
+            "path outside it fails your handoff — that path belongs to a sibling.\n"
+            "- Do not implement, fix or 'while I'm here' another builder's tasks, even if you "
+            "can see they are wrong. Note it in your report instead; the integrator reads it.\n"
+            "- Do not wait for, look for, or depend on a sibling's commits: they do not exist "
+            "on your branch and never will. Code against the interface the plan describes, and "
+            "if the plan is silent, report `Status: BLOCKED` with the one question.\n"
+            "- The host merges the branches when every builder is done, then ONE integrator "
+            "execution makes the merged branch green. Your report and your gate live in "
+            f"`03-coding/builders/{name}/`.")
 
 
 def coding_gate_note(run_id: str, root: Path | None) -> str:
@@ -550,9 +817,12 @@ def coding_gate_note(run_id: str, root: Path | None) -> str:
                      "product_shell yourself, and add a `lantern.toml` (see "
                      "workflow/templates/lantern.toml) as part of your task if the plan allows.")
     if scope:
-        lines.append("Write scope from the approved plan — commits touching other paths are "
+        whose = (f"Write scope for builder `{current_builder()}` (D18)"
+                 if builder_scope(run_id, current_builder()) else
+                 "Write scope from the approved plan")
+        lines.append(whose + " — commits touching other paths are "
                      "refused at handoff: " + ", ".join(f"`{g}`" for g in scope) + ".")
-    return "\n".join(lines)
+    return builder_brief(run_id) + "\n".join(lines)
 
 
 # ── the bounded fix loop ─────────────────────────────────────────────────────
