@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-09-08T14:38:52+00:00",
+  "mode": "frozen",
+  "n_inputs": 0,
+  "role": "debug",
+  "suite": "triage",
+  "summary": {
+    "accuracy": null,
+    "confusion": {},
+    "correct": 0,
+    "misses": [],
+    "n": 0,
+    "unscored": 0
+  }
+}

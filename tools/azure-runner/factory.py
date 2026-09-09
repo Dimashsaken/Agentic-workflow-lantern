@@ -155,9 +155,7 @@ def check_envelope(run_id: str, stage: str, product_root: Path | None = None) ->
         problems.append(f"{sdir}/{json_name}: kind must be '{kind}' (got {data.get('kind')!r})")
     if data.get("run_id") != run_id:
         problems.append(f"{sdir}/{json_name}: run_id must be '{run_id}'")
-    checker = {"research": _check_research, "story": _check_story,
-               "plan": _check_plan, "validation": _check_validation,
-               "review": _check_review}[kind]   # D19
+    checker = CHECKERS[kind]   # D20: intake.py registers the debug lifecycle's kinds here
     problems.extend(f"{sdir}/{json_name}: {p}" for p in checker(data, run_id, product_root))
     return problems
 
@@ -490,6 +488,13 @@ def _check_review(data: dict, run_id: str, product_root: Path | None) -> list[st
         p.append(f"verdict says '{verdict}' but the findings say '{expected}' — approve ⇔ no "
                  "blocker/major; the verdict is computed from the severities, not chosen")
     return p
+
+
+# kind -> validator. Other modules register their own envelopes here (D20: intake.py adds
+# triage / repro / rootcause) so check_envelope() stays the single postcondition.
+CHECKERS = {"research": _check_research, "story": _check_story,
+            "plan": _check_plan, "validation": _check_validation,
+            "review": _check_review}     # D19
 
 
 # ── write scope ──────────────────────────────────────────────────────────────

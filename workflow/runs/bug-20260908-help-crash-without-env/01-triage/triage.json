@@ -1,0 +1,16 @@
+{
+  "kind": "triage",
+  "run_id": "bug-20260908-help-crash-without-env",
+  "severity": "sev-3",
+  "already_fixed": false,
+  "evidence": null,
+  "duplicates": [],
+  "not_duplicates": [],
+  "classification": "small",
+  "repro_plan": [
+    "Start the pipeline CLI in a clean subprocess whose environment omits the Azure endpoint and API-key variables and whose runner directory has no local .env file.",
+    "Request top-level help and help for the bug subcommand; record each process exit code and stderr without allowing any network or model call.",
+    "Assert that each help request exits with code 0, prints argparse usage for the requested command, and emits no credential exception or traceback.",
+    "Run the same regression with minimal dummy Azure variables as a control so parser construction and the bug subcommand's help text are independently verified."
+  ]
+}

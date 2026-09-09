@@ -5,6 +5,12 @@
 # fails honestly. $LANTERN_PYTHON is the harness interpreter (use it when the product is
 # Lantern itself; other stacks ignore it).
 
+# Every bug run lands its regression test under lantern/regressions/ (D20). The test
+# command MUST discover that directory so every past repro re-runs on every future run:
+# pytest and jest do by default; unittest needs
+#   && python -m unittest discover -s lantern/regressions -p 'test_*.py'
+# Playwright needs the directory in its testDir / spec pattern.
+
 [quality]
 test = "npm test -- --runInBand"          # or: pytest -q · go test ./... · cargo test
 lint = "npm run lint"                      # optional

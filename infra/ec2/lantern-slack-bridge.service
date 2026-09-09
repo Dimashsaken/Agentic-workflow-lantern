@@ -1,0 +1,20 @@
+[Unit]
+Description=Lantern Slack bridge (Socket Mode front door for runs and gates)
+After=network.target postgresql.service
+# Not required-by anything: the factory runs fine with no Slack surface, and a bridge
+# that cannot start must never take the pipeline with it.
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Agentic-workflow-lantern/tools/slack-bridge
+# Socket Mode = an OUTBOUND WebSocket to Slack. The box keeps no inbound endpoint, which
+# is the whole reason this is a bridge and not a webhook receiver (symphony plan §4).
+ExecStart=/home/ubuntu/Agentic-workflow-lantern/tools/azure-runner/.venv/bin/python bridge.py
+# Tokens and the approver allowlist come from the environment, never from disk in the
+# repo: SSM -> /etc/lantern/slack.env, mode 0600, root:ubuntu (infra/ec2/README.md).
+EnvironmentFile=/etc/lantern/slack.env
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

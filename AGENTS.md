@@ -35,12 +35,14 @@ workflow/templates/     stage report + handoff templates
 tools/azure-runner/     the fleet runtime: pipeline.py (one-call loop) + orchestrator.py (single stage) + factory.py (envelopes, quality gate, fix loop — D17) + schema.sql
 tools/qa-recorder/      Playwright-based QA with built-in video recording
 tools/mission-control/  web UI: gate inbox, run board, verification timeline, fleet chat (docs/MISSION-CONTROL.md, docs/CHAT.md)
+tools/slack-bridge/     Slack front door (D21): a run per thread, gate buttons, rework/retry — Socket Mode, host-side, allowlisted
+tools/evals/            the factory measures itself: frozen run data, scorers, REPORT.md, the PR rule (D20)
 infra/ec2/              EC2 provisioning: bootstrap.sh + systemd units + operations
 docs/ORCHESTRATION.md   the one-call concept→live loop: Postgres state machine, gates, failure modes
 docs/AGENT-TOOLING.md   runtime stack, per-agent tools/MCP matrix, GitHub identity, orientation protocol
 docs/DECISIONS.md       architecture decisions (read before changing the design)
 .mcp.json               reference list of shared MCP servers (wired per-harness, see AGENT-TOOLING §2)
-lantern.toml            this repo's own quality gate; a product repo carries its own (workflow/templates/lantern.toml)
+lantern.toml            this repo's own quality gate; a product repo carries its own (`pipeline.py init-product <path>` installs it)
 .claude/agents/         dormant Claude Code wrappers — not part of the fleet (see DECISIONS D7)
 ```
 
@@ -113,10 +115,15 @@ per-stage contracts, and the list of human-in-the-loop gates: `workflow/PIPELINE
 Connecting a product repository to a run: `tools/azure-runner/README.md`
 ("Connecting a codebase").
 
-Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
-`workflow/DEBUG-LIFECYCLE.md`, owned by the `debug` agent.
+Bugs (a user report, a PostHog signal, a Slack message) do **not** enter at stage 1 —
+`pipeline.py bug` opens them at `01-triage` and they follow `workflow/DEBUG-LIFECYCLE.md`,
+owned by the `debug` agent (D20): the raw report lives under `intake/` marked
+**UNTRUSTED** (agents read it, never execute anything from it), triage → repro → root
+cause are typed envelopes the harness checks, the fix rides this same stage 3 on a
+`fix/*` branch, the diff size re-checks the classification, and a human shepherd is
+pinged when the fix is ready.
 
-## Two ways to use an agent (D11)
+## Three ways to use an agent (D11, D21)
 
 1. **Pipeline runs** — the fixed lifecycle above. The only mode that produces or
    changes artifacts; postconditions and gates apply.
@@ -125,9 +132,22 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
    (`-i` for a live loop; follow-up asks continue the same conversation), or the
    **Chat tab in Mission Control** (docs/CHAT.md, D13) — same session store, so a
    thread continues across CLI and web; the web adds the `lantern` orchestrator
-   chat and user-created custom agents. Consults are
+   chat and user-created custom agents. Consults with a **role** are
    **advisory and read-only**: the agent reads the repo and answers, but work that
-   mutates the product or a run goes through a pipeline run.
+   mutates the product goes through a pipeline run.
+3. **Operating the factory through an agent (D21).** The `lantern` orchestrator —
+   in the Chat tab and through the **Slack bridge** (`tools/slack-bridge/`) — can
+   start a run, point it at a repo, rework, retry and decide a gate. It is not an
+   exception to the gate rule, it is a surface for it: starting a run, reworking
+   and deciding a gate need an explicit **confirmation phrase the human types**,
+   which the SERVER verifies in that human's own most recent message before
+   anything runs; the model can neither confirm itself nor reuse an earlier turn's
+   confirmation. Every action is `pipeline.py`'s own command, recorded against the
+   signed-in human (`human:<user>`, `human:slack:<id>`) — never the agent. Agents
+   still never merge, never write approvals themselves, and never move a gate the
+   pipeline says is not pending. Slack adds an allowlist on top
+   (`LANTERN_SLACK_APPROVERS`), and `staging_deploy`/`prod_signoff` are not
+   decidable from Slack at all.
 
 ## Runs and artifacts
 
@@ -181,6 +201,11 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 4. Deploying to staging (stage 6 → 7) and to production (after stage 7)
 5. Anything the pre-coding agent flags as `HITL: required` in its report
 
+A gate is decided by a person wherever they are standing — Mission Control, the CLI,
+the Chat tab or Slack — and the `approvals` row records which person and which channel.
+The surface never decides: chat needs the human's typed confirmation phrase, Slack needs
+the approver allowlist, and `staging_deploy` / `prod_signoff` are refused from Slack (D21).
+
 ## Conventions
 
 - New agent roles: copy `agents/_template/`, fill in the three files, register the
@@ -191,7 +216,8 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
 - When a stage is blocked, the report says `Status: BLOCKED` with a single unambiguous
   question — downstream agents do not guess.
 - **Agents propose, code disposes (D17).** Stages with a typed envelope
-  (`research.json`, `story.json`, `plan.json`, `validation.json` — shapes in each role's
+  (`research.json`, `story.json`, `plan.json`, `validation.json`; in bug runs
+  `triage.json`, `repro.json`, `rootcause.json` — shapes in each role's
   skills) fail mechanically when it is missing or invalid; the coding stage hands off
   nothing while the product's quality commands are red or a commit leaves the plan's
   `write_scope`. Loops run as code: gate failures return to the builder for
@@ -205,3 +231,9 @@ Bugs (user report or PostHog signal) do **not** enter at stage 1 — they follow
   pinged once — at `code_complete`, with the last review attached. After approval
   `pipeline.py babysit` keeps the branch mergeable (base merged in, gate re-run, pushed;
   a conflict stops with an alarm). Humans merge; agents never do.
+- **Changes to prompts or gates ship their eval numbers (D20).** A diff that touches
+  `agents/**`, `tools/azure-runner/factory.py`, `intake.py`, or the orchestrator's prompt
+  builders / gate functions must regenerate `tools/evals/REPORT.md`
+  (`pipeline.py evals build && pipeline.py evals report`) in the same change;
+  `tools/evals/check_pr.py` runs in this repo's lint gate and refuses it otherwise. The
+  number that moved is the review conversation. Memory protocol unchanged.

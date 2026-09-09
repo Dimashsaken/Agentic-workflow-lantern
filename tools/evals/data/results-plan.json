@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-09-08T14:38:52+00:00",
+  "mode": "frozen",
+  "n_inputs": 0,
+  "role": "pre-coding",
+  "suite": "plan",
+  "summary": {
+    "full_coverage": 0,
+    "mean_coverage": null,
+    "n": 0,
+    "runs": []
+  }
+}

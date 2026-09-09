@@ -187,8 +187,8 @@ database** — agents read it during orientation but never write it.
 | validator | git diff (read), run-folder evidence (QA manifest, handoff) | — | run folder only (`05-post-coding/validation.*`) |
 | security | git, `npm audit`, `github` (read), WebSearch for advisories | github | run folder only (vuln details follow charter confidentiality) |
 | qa-staging | `playwright` (video-recording, orchestrator-configured), qa-recorder, `posthog`, `github` (read) | github, posthog, `/lantern/qa/staging/*` (as `QA_*`) | run folder, PR comments |
-| debug | `posthog`, CloudWatch logs (read), git, `github`, qa-recorder | github, posthog | bug run folder, `fix/*` (trivial fixes only, per charter) |
+| debug | `posthog`, CloudWatch logs (read), `product_git`, `playwright`, `github` | github, posthog | bug run folder only: the envelopes + the regression test under `02-repro/regressions/`; the fix is the coding stage's, on `fix/*` (D20) |
 
 Rule of thumb behind the matrix: **review-type agents get read + comment, never
-push**; only ui-ux (prototypes), qa-dev (regression specs), and debug (trivial fixes)
-touch branches, and only their own prefixes.
+push**; only ui-ux (prototypes), qa-dev (regression specs), and the coding stage (feature
+and bug-fix branches alike, D20) touch branches, and only their own prefixes.

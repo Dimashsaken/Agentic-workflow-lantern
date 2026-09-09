@@ -159,6 +159,53 @@ def tool_line(name: str, args, spec: bool = False) -> str:
             f"<span class='tn'>{H(name)}</span>{tail}</div>")
 
 
+CARD_CSS = ("border:1px solid var(--line);border-left:3px solid var(--dawn-3);"
+            "border-radius:6px;padding:12px 14px;margin:10px 0;background:var(--surface-2, transparent)")
+
+
+def card_html(ev: dict) -> str:
+    """A decision card (D21): what the agent is asking to do, and the phrase the human
+    must type themselves. Rendered by the SERVER from the trace, never from the model's
+    prose — so what the page shows is what the tool actually asked for, and the phrase
+    on screen is the one `confirmed()` will look for."""
+    lines = "".join(f"<li>{H(str(x))}</li>" for x in (ev.get("lines") or []))
+    links = []
+    if ev.get("run_id"):
+        links.append(f"<a href='/run/{H(ev['run_id'])}'>open the run</a>")
+    if ev.get("gate"):
+        links.append(f"<a href='/#{H(ev['run_id'] or '')}'>the gate inbox</a>")
+    link_html = (" · ".join(links)) if links else ""
+    phrase = ev.get("phrase", "")
+    return (f"<div class='dcard' style='{CARD_CSS}'>"
+            f"<div class='caps' style='color:var(--dawn-3)'>needs your confirmation</div>"
+            f"<div style='font-weight:600;margin:2px 0 6px'>{H(ev.get('title', ''))}</div>"
+            f"<ul style='margin:0 0 8px 18px;padding:0'>{lines}</ul>"
+            f"<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'>"
+            f"<code class='phrase' style='user-select:all'>{H(phrase)}</code>"
+            f"<button class='btn sm usephrase' type='button' data-phrase='{H(phrase)}'>"
+            f"Type it for me</button>"
+            f"{('<span style=\"color:var(--text-dim)\">' + link_html + '</span>') if link_html else ''}"
+            f"</div>"
+            f"<div style='color:var(--text-dim);margin-top:6px'>Nothing has happened yet. "
+            f"Send that phrase as your own message to go ahead.</div></div>")
+
+
+def action_html(ev: dict) -> str:
+    """An executed write: what changed, under whose name, or why the pipeline refused."""
+    ok = ev.get("ok")
+    head = ("✓ done" if ok else "✗ not applied")
+    color = "var(--ok, #2f855a)" if ok else "var(--bad, #c53030)"
+    who = f" · as {H(ev.get('by', ''))}" if ev.get("by") else ""
+    detail = H(ev.get("detail", ""))[:600]
+    link = (f" · <a href='/run/{H(ev['run_id'])}'>{H(ev['run_id'])}</a>"
+            if ev.get("run_id") else "")
+    return (f"<div class='dact' style='{CARD_CSS};border-left-color:{color}'>"
+            f"<span style='color:{color};font-weight:600'>{head}</span> "
+            f"{H(ev.get('action', ''))}{who}{link}"
+            + (f"<pre style='margin:6px 0 0;white-space:pre-wrap'>{detail}</pre>" if detail else "")
+            + "</div>")
+
+
 def trace_html(trace) -> str:
     """The agent's visible work: tool lines with folded results, in order.
 
@@ -170,10 +217,16 @@ def trace_html(trace) -> str:
             trace = json.loads(trace)
         except ValueError:
             trace = []
-    out, calls = [], 0
+    out, calls, decisions = [], 0, []
     for ev in trace or []:
         k = ev.get("kind")
-        if k == "tool":
+        if k == "card":
+            # Never folded, never abbreviated: a confirmation card and the phrase it
+            # asks for are the point of the turn (D21).
+            decisions.append(card_html(ev))
+        elif k == "action":
+            decisions.append(action_html(ev))
+        elif k == "tool":
             calls += 1
             out.append(tool_line(ev.get("name", "?"), ev.get("args", "")))
         elif k == "tool_done":
@@ -193,13 +246,13 @@ def trace_html(trace) -> str:
             out.append(f"<div class='tl'><span class='g'>·</span>"
                        f"<span class='ta'>{H(ev.get('text', ''))}</span></div>")
     if not out:
-        return ""
+        return "".join(decisions)
     body = f"<div class='work'>{''.join(out)}</div>"
     if calls > WORK_FOLD_AT:
         # Long traces stay available but stop pushing the answer off the screen.
-        return (f"<details class='workfold'><summary>{calls} tool calls</summary>"
+        body = (f"<details class='workfold'><summary>{calls} tool calls</summary>"
                 f"{body}</details>")
-    return body
+    return body + "".join(decisions)
 
 
 def turn_ledger(turn) -> str:
@@ -260,6 +313,10 @@ def composer(sid_or_new: str, agent_slug: str, directory: dict, session_est: flo
               else "nothing billed yet")
     scope = f"<b>run {H(run_id)}</b><span>·</span>" if run_id else ""
     dis = " disabled" if disabled else ""
+    # The line has to be true per agent: only the orchestrator has hands, and only
+    # behind a confirmation you type (D21). Specialists remain D11's read-only consult.
+    line = ("acts only on your typed confirmation" if agent_slug == cs.LANTERN_AGENT
+            else "advisory, read-only")
     return f"""<div class='composer'>
       <button class='jumplatest' id='jumplatest' type='button'>↓ Jump to latest</button>
       <div class='cbox'>
@@ -269,7 +326,7 @@ def composer(sid_or_new: str, agent_slug: str, directory: dict, session_est: flo
         <button class='send' id='csend' title='Send (Enter)'{dis}>↑</button>
       </div>
       <div class='cfoot'>{scope}<b>{H(label)} consult</b><span>·</span>
-        <span>advisory, read-only</span><span>·</span>
+        <span>{H(line)}</span><span>·</span>
         <span id='cbilled'>{H(billed)}</span>
         <span class='cstat' id='cstat'><span class='dot'></span>
           <span id='cstattext'></span></span>
@@ -285,6 +342,7 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
 <script>
 (function(){
   var CFG = """ + cfg + """;
+  var CARDCSS = """ + json.dumps(CARD_CSS) + """;
   var tr = document.getElementById('transcript');
   var inner = tr ? tr.querySelector('.tinner') : null;
   var pad = tr ? tr.querySelector('.tailpad') : null;
@@ -506,6 +564,37 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
     liveWork.appendChild(d); grew();
   }
 
+  /* Decision cards (D21). The live copy mirrors what the server renders when the
+     turn is swapped in; the phrase is shown verbatim because the server matches on
+     exactly that text — and the button only TYPES it, so the confirmation is still
+     the reader's own message. */
+  function agentBox(){ return live ? live.querySelector('.msg.agent') : null }
+  function decisionCard(ev){
+    var box = agentBox(); if(!box) return;
+    setPhase('Waiting for you');
+    var d = document.createElement('div'); d.className = 'dcard'; d.style.cssText = CARDCSS;
+    var lis = (ev.lines || []).map(function(l){ return '<li>' + esc(String(l)) + '</li>' }).join('');
+    d.innerHTML = "<div class='caps' style='color:var(--dawn-3)'>needs your confirmation</div>" +
+      "<div style='font-weight:600;margin:2px 0 6px'>" + esc(ev.title || '') + "</div>" +
+      "<ul style='margin:0 0 8px 18px;padding:0'>" + lis + "</ul>" +
+      "<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'>" +
+      "<code class='phrase' style='user-select:all'>" + esc(ev.phrase || '') + "</code>" +
+      "<button class='btn sm usephrase' type='button' data-phrase='" + esc(ev.phrase || '') +
+      "'>Type it for me</button></div>" +
+      "<div style='color:var(--text-dim);margin-top:6px'>Nothing has happened yet. " +
+      "Send that phrase as your own message to go ahead.</div>";
+    box.appendChild(d); grew();
+  }
+  function actionLine(ev){
+    var box = agentBox(); if(!box) return;
+    var d = document.createElement('div'); d.className = 'dact';
+    d.style.cssText = CARDCSS + ';border-left-color:' + (ev.ok ? 'var(--ok, #2f855a)' : 'var(--bad, #c53030)');
+    d.innerHTML = "<span style='font-weight:600'>" + (ev.ok ? '✓ done' : '✗ not applied') + "</span> " +
+      esc(ev.action || '') + (ev.by ? ' · as ' + esc(ev.by) : '') +
+      (ev.detail ? "<pre style='margin:6px 0 0;white-space:pre-wrap'>" + esc(ev.detail) + "</pre>" : "");
+    box.appendChild(d); grew();
+  }
+
   var es = new EventSource('/chat/' + encodeURIComponent(CFG.sid) + '/events');
   var opened = false;
   es.onopen = function(){ if(opened && live) resetLive(); opened = true; };
@@ -519,6 +608,8 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
       case 'delta': if(liveText){liveText.textContent += ev.text; setPhase('Responding'); grew()} break;
       case 'tool': case 'specialist': if(liveWork) toolLine(ev); break;
       case 'tool_done': case 'specialist_done': if(liveWork) toolOut(ev); break;
+      case 'card': decisionCard(ev); break;
+      case 'action': actionLine(ev); break;
       case 'final': updateTotals(ev.session); endLive(ev.turn_id, true); break;
       case 'totals': updateTotals(ev.session); break;
       case 'idle':
@@ -615,6 +706,14 @@ def chat_js(sid: str, label: str, running_turn: int | None) -> str:
     send.addEventListener('click', submit);
     autosize(); if(!input.disabled) input.focus();
   }
+  // "Type it for me" fills the composer and stops there — the confirmation still
+  // leaves as the reader's own message, which is the only thing the server accepts.
+  document.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('.usephrase') : null;
+    if(!b || !input) return;
+    input.value = b.dataset.phrase || '';
+    autosize(); saveDraft(input.value); input.focus();
+  });
   // Copy a reply without selecting it by hand — delegated, so the turns the
   // server swaps in get it for free.
   document.addEventListener('click', function(e){
@@ -672,7 +771,8 @@ async def chat_hub(request: Request, agent: str = "", run: str = "", error: str 
         data-agent='{cs.LANTERN_AGENT}'><span class='an'>Lantern</span>
       <div class='ad'>{H(info["desc"])}</div>
       <div class='am'><span>orchestrator</span><span>reads the pipeline database</span>
-        <span>hands questions to specialists</span></div></label>""")
+        <span>hands questions to specialists</span><span>acts on your confirmation</span>
+        </div></label>""")
     for slug, i in directory.items():
         if i["kind"] == "orchestrator":
             continue
@@ -694,9 +794,10 @@ async def chat_hub(request: Request, agent: str = "", run: str = "", error: str 
 
     main = f"""<main class='chatmain'><div class='hub'><div class='inner'>
       <h1>Talk to the fleet</h1>
-      <p class='lede'>One question, one agent. Lantern sees the whole pipeline and pulls
-        specialists in; each role answers from its own charter, skills and memory. Consults
-        are advisory and read-only — work that changes the product goes through a run.</p>
+      <p class='lede'>One question, one agent. Lantern sees the whole pipeline, pulls
+        specialists in, and can operate the factory for you — start a run, point it at a
+        repo, decide a gate — but only after you type the confirmation it asks for, and
+        always in your name. Every specialist stays advisory and read-only.</p>
       {notice}{err}{run_chip}
       <form id='newform' method='post' action='/chat/new'>
         <input type='hidden' name='agent' id='agentfield' value='{H(sel)}'>
@@ -709,7 +810,8 @@ async def chat_hub(request: Request, agent: str = "", run: str = "", error: str 
             <button class='send' id='csend' {'' if ok else 'disabled '}title='Send (Enter)'>↑</button>
           </div>
           <div class='cfoot'><b id='selname'>{H(agent_label(directory, sel))} consult</b>
-            <span>·</span><span>advisory, read-only</span>
+            <span>·</span><span id='selline'>{'acts only on your typed confirmation'
+              if sel == cs.LANTERN_AGENT else 'advisory, read-only'}</span>
             <span>·</span><span>nothing billed yet</span></div>
         </div></div>
       </form>
@@ -725,6 +827,9 @@ async def chat_hub(request: Request, agent: str = "", run: str = "", error: str 
           document.querySelectorAll('.acard.sel').forEach(function(x){{x.classList.remove('sel')}});
           c.classList.add('sel'); f.value = c.dataset.agent;
           nm.textContent = (c.querySelector('.an').textContent) + ' consult';
+          var ln = document.getElementById('selline');
+          if(ln) ln.textContent = (c.dataset.agent === 'lantern')
+            ? 'acts only on your typed confirmation' : 'advisory, read-only';
           if(input) input.focus();
         }});
       }});
