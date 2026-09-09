@@ -1,0 +1,31 @@
+{
+  "kind": "plan",
+  "run_id": "feat-20260908-status-version",
+  "tasks": [
+    {
+      "id": 1,
+      "title": "status_payload() returns pipeline_version",
+      "size": "XS",
+      "hitl": false,
+      "criteria": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": 2,
+      "title": "test_status_json.py asserts pipeline_version",
+      "size": "XS",
+      "hitl": false,
+      "criteria": [
+        "AC-2"
+      ]
+    }
+  ],
+  "write_scope": [
+    "tools/azure-runner/pipeline.py",
+    "tools/azure-runner/test_status_json.py"
+  ],
+  "schema_changes": false,
+  "hitl_required": false,
+  "deferred_criteria": []
+}

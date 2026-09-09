@@ -181,6 +181,7 @@ database** — agents read it during orientation but never write it.
 | ui-ux | `paper` (workstation only), `playwright`, qa-recorder | — | run folder, `proto/*` branches |
 | pre-coding | `github`, git (read), product repo clone | github bot token | run folder only |
 | coding (developer) | developer's own gh/git + product tooling | human's own | `feat/*`, `fix/*` |
+| reviewer | git diff (read), run-folder evidence (handoff, gate.md, coding report, story, plan) | — | run folder only (`03-coding/review/*`); the HOST posts each round as one PR review from the bot token (D19) |
 | qa-dev | `playwright` (video-recording, orchestrator-configured), qa-recorder, `github` (read + PR comments) | github, `/lantern/qa/dev/*` (as `QA_*`) | run folder, PR comments, regression specs on the feature branch |
 | post-coding | git diff, `github` (PR review comments) | github | run folder, PR comments |
 | validator | git diff (read), run-folder evidence (QA manifest, handoff) | — | run folder only (`05-post-coding/validation.*`) |

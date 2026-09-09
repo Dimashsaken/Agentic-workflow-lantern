@@ -94,7 +94,7 @@ everyone downstream — the checks are sound under concurrent runs by design
 | 0 | `00-story`       | `researcher` → `story` | `research.md/json` (read-only codebase map — every path verified), `story.md/json` (user story + numbered acceptance criteria) | Justin/developer approves the story (`story_signoff`) |
 | 1 | `01-ui-ux`       | `ui-ux`      | 2–3 flow options on Paper → PNGs + handoff package + video | Justin/developer picks an option   |
 | 2 | `02-pre-coding`  | `pre-coding` | Blast-radius report, schema plan, task plan  | Schema + plan approved             |
-| 3 | `03-coding`      | developer, or `coding` agent (auto mode, D14) — N scoped builders in parallel + an integrator when the plan asks (D18) | Implementation on a feature branch — a pull request in auto mode; the product's `lantern.toml` quality commands + the plan's write scope run as a code gate with a bounded fix loop (D17) | Code complete (in auto mode a human reviews the PR) |
+| 3 | `03-coding`      | developer, or `coding` agent (auto mode, D14) — N scoped builders in parallel + an integrator when the plan asks (D18), then the `reviewer` review bot (D19) | Implementation on a feature branch — a pull request in auto mode; the product's `lantern.toml` quality commands + the plan's write scope run as a code gate with a bounded fix loop (D17); then the review bot reviews the published branch and a fix execution works its `must_fix` list, at most `LANTERN_REVIEW_ROUNDS` rounds (D19) | Code complete (in auto mode a human reviews the PR with the last review attached; once approved, the merge babysitter keeps the branch mergeable until a human merges) |
 | 4 | `04-qa-dev`      | `qa-dev`     | Test design + executed runs + **videos**     | No open sev-1/sev-2 bugs           |
 | 5 | `05-post-coding` | `post-coding` → `validator` | Cleanliness / tech-debt / backward-compat, then `validation.md/json` — a verdict per acceptance criterion with evidence (D17) | Findings resolved or waived; validation verdict `pass` |
 | 6 | `06-security`    | `security`   | Deploy-risk + vulnerability report           | No unmitigated high-risk findings  |
@@ -224,6 +224,13 @@ the approver allowlist, and `staging_deploy` / `prod_signoff` are refused from S
   `LANTERN_FIX_ROUNDS` rounds, then a human; a failed validation or QA round goes back
   to stage 3 with `pipeline.py rework <run-id> --to 03-coding`. Second executions in a
   shared stage dir append their section to `report.md`; the last `Status:` line counts.
+- **The review bot runs before a human does (D19).** In auto mode the `reviewer` reads
+  the published branch against the story, the plan and the gate; `review.json` is
+  validated (approve ⇔ no blocker/major, `must_fix` ⊇ every blocker/major), a fix
+  execution of the `coding` role works `must_fix` on the same branch, and the human is
+  pinged once — at `code_complete`, with the last review attached. After approval
+  `pipeline.py babysit` keeps the branch mergeable (base merged in, gate re-run, pushed;
+  a conflict stops with an alarm). Humans merge; agents never do.
 - **Changes to prompts or gates ship their eval numbers (D20).** A diff that touches
   `agents/**`, `tools/azure-runner/factory.py`, `intake.py`, or the orchestrator's prompt
   builders / gate functions must regenerate `tools/evals/REPORT.md`

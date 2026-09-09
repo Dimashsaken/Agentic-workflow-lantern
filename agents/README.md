@@ -18,6 +18,7 @@ invariant is what made the D7 provider pivot cheap).
 - `ui-ux` — flow options, prototype, walkthrough video (pipeline stage 1)
 - `pre-coding` — blast radius, schema plan, task plan (stage 2)
 - `coding` — implementation conventions for the developer's primary session (stage 3)
+- `reviewer` — the review bot: correctness, missing tests, plan conformance, security smells on the published branch (stage 3, auto mode, D19)
 - `qa-dev` — exploratory + scripted QA in dev, video on (stage 4)
 - `post-coding` — cleanliness, tech debt, backward compatibility (stage 5)
 - `validator` — a verdict per acceptance criterion with evidence (stage 5, validate)
