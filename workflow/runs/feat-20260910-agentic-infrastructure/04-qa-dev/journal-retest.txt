@@ -1,0 +1,12 @@
+test_completed_and_partial_usage_survive_a_later_failure (test_execution_journal.ExecutionJournal.test_completed_and_partial_usage_survive_a_later_failure) ... ok
+test_container_executor_emits_known_usage_on_failure (test_execution_journal.ExecutionJournal.test_container_executor_emits_known_usage_on_failure) ... ok
+test_inprocess_executor_records_usage_before_propagating_failure (test_execution_journal.ExecutionJournal.test_inprocess_executor_records_usage_before_propagating_failure) ... ok
+test_same_exception_is_not_accounted_twice_at_outer_boundary (test_execution_journal.ExecutionJournal.test_same_exception_is_not_accounted_twice_at_outer_boundary) ... ok
+test_transport_retry_after_tool_calls_is_not_blind_replay (test_execution_journal.ExecutionJournal.test_transport_retry_after_tool_calls_is_not_blind_replay) ... ok
+test_transport_retry_before_tools_still_recovers (test_execution_journal.ExecutionJournal.test_transport_retry_before_tools_still_recovers) ... ok
+test_unknown_failed_usage_stays_unknown (test_execution_journal.ExecutionJournal.test_unknown_failed_usage_stays_unknown) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 1.644s
+
+OK

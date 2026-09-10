@@ -32,7 +32,11 @@ ORCHESTRATOR = "tools/azure-runner/orchestrator.py"
 WATCHED_PATHS = (
     "tools/azure-runner/factory.py",
     "tools/azure-runner/intake.py",
+    "tools/azure-runner/tool_policy.py",
+    "tools/azure-runner/readonly_git.py",
+    "tools/azure-runner/evidence.py",
     "tools/evals/scorers.py",
+    "tools/evals/integrity.py",
 )
 WATCHED_GLOBS = ("agents/*/*.md", "agents/*/*/*.md")
 UNWATCHED_GLOBS = ("agents/*/memory.md", "agents/_template/*")
@@ -44,6 +48,7 @@ PROMPT_BUILDERS = (
 GATE_FUNCS = (
     "check_postconditions", "check_claimed_artifacts", "check_coding_handoff",
     "check_stage_inputs", "report_blocker", "finalize_coding",
+    "stage_tools", "_resolve_read", "_writable", "_product_git", "make_collect_jsx",
 )
 WATCHED_UNITS = PROMPT_BUILDERS + GATE_FUNCS
 FINGERPRINT_MARK = "lantern-evals-fingerprint:"

@@ -1,4 +1,4 @@
-openai-agents[sqlalchemy]>=0.22
+openai-agents[sqlalchemy]>=0.22,<0.23
 openai>=1.60
 python-dotenv>=1.0
 asyncpg>=0.29

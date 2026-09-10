@@ -1,0 +1,32 @@
+test_exports_cannot_overwrite_harness_or_manifest (test_tool_policy.Capabilities.test_exports_cannot_overwrite_harness_or_manifest) ... No active span; trace error was not attached
+No active span; trace error was not attached
+ok
+test_hardlink_cannot_alias_a_secret_under_an_innocent_name (test_tool_policy.Capabilities.test_hardlink_cannot_alias_a_secret_under_an_innocent_name) ... ok
+test_host_artifacts_and_sibling_outputs_are_protected (test_tool_policy.Capabilities.test_host_artifacts_and_sibling_outputs_are_protected) ... ok
+test_portable_paths_reject_traversal_streams_and_secret_aliases (test_tool_policy.Capabilities.test_portable_paths_reject_traversal_streams_and_secret_aliases) ... ok
+test_product_file_scope_is_checked_before_write (test_tool_policy.Capabilities.test_product_file_scope_is_checked_before_write) ... ok
+test_roles_cannot_inherit_coding_shell_or_design_exports (test_tool_policy.Capabilities.test_roles_cannot_inherit_coding_shell_or_design_exports) ... ok
+test_scope_holds_through_real_sdk_tools (test_tool_policy.Capabilities.test_scope_holds_through_real_sdk_tools) ... No active span; trace error was not attached
+No active span; trace error was not attached
+No active span; trace error was not attached
+No active span; trace error was not attached
+No active span; trace error was not attached
+No active span; trace error was not attached
+ok
+test_shared_reports_are_append_only_for_later_roles (test_tool_policy.Capabilities.test_shared_reports_are_append_only_for_later_roles) ... ok
+test_stage_tools_capture_identity_when_other_execution_changes_environment (test_tool_policy.Capabilities.test_stage_tools_capture_identity_when_other_execution_changes_environment) ... No active span; trace error was not attached
+ok
+test_symlink_cannot_alias_secret_or_escape (test_tool_policy.Capabilities.test_symlink_cannot_alias_secret_or_escape) ... skipped "symlinks unavailable: [WinError 1314] A required privilege is not held by the client: 'C:\\\\Users\\\\dimas\\\\AppData\\\\Local\\\\Temp\\\\tmp28k6juep\\\\product\\\\.env' -> 'C:\\\\Users\\\\dimas\\\\AppData\\\\Local\\\\Temp\\\\tmp28k6juep\\\\product\\\\innocent.txt'"
+test_windows_case_aliases_cannot_cross_role_or_run_boundaries (test_tool_policy.Capabilities.test_windows_case_aliases_cannot_cross_role_or_run_boundaries) ... ok
+test_generated_catalog_matches_policy (test_tool_policy.CapabilityDocumentation.test_generated_catalog_matches_policy) ... ok
+test_mutation_execution_and_file_escape_forms_are_rejected (test_tool_policy.ReadOnlyGit.test_mutation_execution_and_file_escape_forms_are_rejected) ... ok
+test_normal_inspection_works (test_tool_policy.ReadOnlyGit.test_normal_inspection_works) ... ok
+test_optional_value_cannot_smuggle_an_output_flag (test_tool_policy.ReadOnlyGit.test_optional_value_cannot_smuggle_an_output_flag) ... ok
+test_protected_contents_are_excluded_from_search_history_and_wildcards (test_tool_policy.ReadOnlyGit.test_protected_contents_are_excluded_from_search_history_and_wildcards) ... ok
+test_repository_config_cannot_execute_a_diff_driver_or_fsmonitor (test_tool_policy.ReadOnlyGit.test_repository_config_cannot_execute_a_diff_driver_or_fsmonitor) ... ok
+test_worktree_aliases_do_not_bypass_git_content_policy (test_tool_policy.ReadOnlyGit.test_worktree_aliases_do_not_bypass_git_content_policy) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 3.791s
+
+OK (skipped=1)

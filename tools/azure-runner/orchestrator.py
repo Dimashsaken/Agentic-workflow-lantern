@@ -34,6 +34,8 @@ from agents.mcp import MCPServerStdio, MCPServerStreamableHttp
 import factory  # D17: envelopes, write scope, quality gate, fix loop (pure — no SDK import)
 import review   # D19: review-round / fix-execution task blocks (pure — no SDK import)
 import intake  # D20: the debug lifecycle — its envelopes register into factory on import
+import tool_policy
+import readonly_git
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -578,16 +580,7 @@ def _resolve_read(rel: str) -> Path:
     Both branches confine the result to their own root — a `..` escape is an error,
     not a traversal, and the product root can never be reached from the repo one.
     """
-    norm = rel.replace("\\", "/").lstrip("/")
-    if norm == "product" or norm.startswith("product/"):
-        if not product_wired():
-            raise FileNotFoundError(PRODUCT_HINT)
-        sub = norm[len("product"):].lstrip("/")
-        p = (product_root() / sub).resolve() if sub else product_root().resolve()
-        if not p.is_relative_to(product_root().resolve()):
-            raise ValueError(f"path escapes the product checkout: {rel}")
-        return p
-    return _safe(rel)
+    return tool_policy.readable(REPO, product_root() if product_wired() else None, rel)
 
 
 def _writable(rel: str) -> Path:
@@ -630,7 +623,7 @@ def _writable(rel: str) -> Path:
         raise ValueError(
             f"{COLLECTED_MANIFEST} is written only by collect_jsx — it is the proof that "
             "a jsx file came through the host verbatim, so agents never write it")
-    return p
+    raise PermissionError("Lantern writes require an execution-bound stage tool")
 
 
 @function_tool
@@ -710,7 +703,9 @@ def make_append_memory(role: str, run_id: str, stage: str, execution_key: str):
 @function_tool
 def list_dir(path: str) -> str:
     """List a directory. Path is relative to the Lantern repo root."""
-    return "\n".join(sorted(x.name + ("/" if x.is_dir() else "") for x in _safe(path).iterdir()))
+    return "\n".join(sorted(x.name + ("/" if x.is_dir() else "")
+                            for x in _resolve_read(path).iterdir()
+                            if not tool_policy.is_secret((x.name,))))
 
 
 # ── product repository: read-only git, no shell ──────────────────────────────
@@ -718,14 +713,7 @@ def list_dir(path: str) -> str:
 # state, and pre-coding's blast-radius work is `grep broadly` by definition — both
 # need git, neither needs a shell. This is git with an allowlist: read-only
 # subcommands, no flags that can write a file or execute anything, fixed cwd.
-PRODUCT_GIT_ALLOWED = {
-    "log", "show", "branch", "diff", "ls-files", "ls-tree", "grep",
-    "shortlog", "blame", "tag", "rev-parse", "describe", "status",
-}
-# `-c`/`--exec-path` inject config and binaries; the rest write files or open
-# network paths. Matched exactly and as `--flag=value`.
-PRODUCT_GIT_DENY = ("-c", "--exec-path", "--upload-pack", "--receive-pack",
-                    "--output", "--git-dir", "--work-tree", "-o", "--ext-diff")
+PRODUCT_GIT_ALLOWED = frozenset(readonly_git.FLAGS)
 PRODUCT_GIT_MAX = 24000
 
 
@@ -749,20 +737,15 @@ def product_git(subcommand: str, args: list[str] | None = None) -> str:
     return _product_git(subcommand, args)
 
 
-def _product_git(subcommand: str, args: list[str] | None = None) -> str:
+def _product_git(subcommand: str, args: list[str] | None = None, *, root: Path | None = None) -> str:
     """The tool body, callable as a plain function (see test_product_access.py)."""
-    if not product_wired():
+    root = root if root is not None else product_root()
+    if not root.is_dir():
         raise FileNotFoundError(PRODUCT_HINT)
-    if subcommand not in PRODUCT_GIT_ALLOWED:
-        raise ValueError(f"'{subcommand}' is not a read-only git subcommand. "
-                         f"Allowed: {', '.join(sorted(PRODUCT_GIT_ALLOWED))}")
-    argv = [str(a) for a in (args or [])]
-    for a in argv:
-        if any(a == d or a.startswith(d + "=") for d in PRODUCT_GIT_DENY):
-            raise ValueError(f"flag not allowed in the sandboxed product repo: {a}")
+    argv = readonly_git.argv(subcommand, args, root=root)
     try:
-        r = subprocess.run(["git", subcommand, *argv], cwd=product_root(), timeout=120,
-                           capture_output=True, text=True, errors="replace")
+        r = subprocess.run(argv, cwd=root, timeout=120, env=readonly_git.environment(),
+                           capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         raise TimeoutError("git command took over 120s — narrow it (add a path or -n limit)")
     out = (r.stdout or "") + (("\n[stderr] " + r.stderr) if r.stderr.strip() else "")
@@ -786,9 +769,10 @@ PRODUCT_SHELL_MAX = 24000
 PRODUCT_SHELL_TIMEOUT = int(os.environ.get("LANTERN_PRODUCT_SHELL_TIMEOUT", "900"))
 
 
-def _product_shell(command: str, timeout_s: int | None = None) -> str:
+def _product_shell(command: str, timeout_s: int | None = None, *,
+                   access: tool_policy.StageAccess | None = None) -> str:
     """The tool body, callable as a plain function (test_coding_stage.py)."""
-    if not product_writable():
+    if not (access.product_write if access is not None else product_writable()):
         raise PermissionError(
             "product_shell is available only in an auto-coding execution — this stage's "
             "product checkout is read-only (use product_git and read_file)")
@@ -804,7 +788,7 @@ def _product_shell(command: str, timeout_s: int | None = None) -> str:
     if os.name == "nt":
         shell = ["bash", "-c", command]  # Git Bash on a laptop; -l would source profiles
     try:
-        r = subprocess.run(shell, cwd=product_root(), timeout=timeout, env=env,
+        r = subprocess.run(shell, cwd=access.product if access else product_root(), timeout=timeout, env=env,
                            capture_output=True, text=True, errors="replace",
                            stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
@@ -1356,14 +1340,20 @@ def collect_export(filename: str, dest_path: str) -> str:
     (see list_exports); `dest_path` is repo-relative, e.g.
     'workflow/runs/<run-id>/01-ui-ux/verdict@2x.png'. Returns the size actually written.
     """
-    src = export_dir() / Path(filename).name          # no traversal out of the export dir
+    raise PermissionError("collect_export requires an execution-bound design tool")
+
+
+def _collect_export(filename: str, dst: Path) -> str:
+    parts = tool_policy.path_parts(filename)
+    if len(parts) != 1 or tool_policy.is_secret(parts):
+        raise ValueError("choose a non-secret filename inside the export directory")
+    src = tool_policy.confined(export_dir(), parts)
     if not src.is_file():
         raise FileNotFoundError(f"{src.name} not in the export folder — check list_exports()")
     if src.stat().st_mtime < PROCESS_START:
         raise ValueError(
             f"{src.name} predates this stage run — it is a leftover from an earlier run, not "
             "something you exported. Export it again from the artboard you built, then collect it.")
-    dst = _safe(dest_path)
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(src), str(dst))                   # move, so re-runs never see stale exports
     return f"collected {dst.relative_to(REPO).as_posix()} ({dst.stat().st_size // 1024} KB)"
@@ -1388,7 +1378,7 @@ def _record_collected(dst: Path, node_id: str) -> None:
     manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def make_collect_jsx(paper: MCPServerStreamableHttp):
+def make_collect_jsx(paper: MCPServerStreamableHttp, access: tool_policy.StageAccess | None = None):
     """Build the collect_jsx tool bound to this stage's Paper MCP connection.
 
     Host-side for a reason: get_jsx returns 7–9 KB per artboard, and routing that
@@ -1410,6 +1400,9 @@ def make_collect_jsx(paper: MCPServerStreamableHttp):
         'workflow/runs/<run-id>/01-ui-ux/jsx/<axis>.jsx'. Call once per presented
         option. Returns the size written, not the JSX.
         """
+        if access is None or not access.exports:
+            raise PermissionError("collect_jsx requires a design execution")
+        dst = access.write(dest_path)
         call_args = {"nodeId": node_id}
         fid = os.environ.get("LANTERN_PAPER_FILE_ID")
         if fid:
@@ -1422,7 +1415,6 @@ def make_collect_jsx(paper: MCPServerStreamableHttp):
             raise RuntimeError(
                 f"get_jsx returned no markup for node {node_id} — check the id against "
                 "what create_artboard returned, and that the node still exists")
-        dst = _safe(dest_path)
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(text, encoding="utf-8")
         _record_collected(dst, node_id)
@@ -1435,11 +1427,74 @@ def stage_tools(role: str, run_id: str, stage: str, execution_key: str, paper=No
     """The tool set for one stage execution — one definition for the container path
     (main below) and the in-process path (pipeline.run_agent_stage), so a tool added
     for a role cannot silently exist in one executor and not the other."""
-    tools = [read_file, write_file, append_file, list_dir, list_exports, collect_export,
-             product_git, make_append_memory(role, run_id, stage, execution_key)]
-    if paper:
-        tools.append(make_collect_jsx(paper))
-    if product_writable():
+    if role_for_stage(stage) != role:
+        raise ValueError("stage and role do not match")
+    builder = factory.builder_of(stage)
+    scope = factory.builder_scope(run_id, builder) or factory.write_scope(run_id)
+    access = tool_policy.StageAccess(
+        REPO.resolve(), product_root().resolve() if product_wired() else None,
+        run_id, role, stage, factory.exec_dir(stage_dir(stage), builder),
+        product_write=role == "coding" and product_writable(),
+        product_scope=tuple(scope) if scope is not None else None)
+
+    @function_tool
+    def read_file(path: str) -> str:
+        """Read a non-secret file in the Lantern repo, this run, or product/."""
+        return access.read(path).read_text(encoding="utf-8")
+
+    @function_tool
+    def list_dir(path: str) -> str:
+        """List files in the Lantern repo, this run, or product/."""
+        target = access.read(path)
+        if target == (access.repo / "workflow/runs").resolve():
+            return run_id + "/"
+        return "\n".join(sorted(x.name + ("/" if x.is_dir() else "")
+                                for x in target.iterdir() if not tool_policy.is_secret((x.name,))))
+
+    @function_tool
+    def write_file(path: str, content: str) -> str:
+        """Write your stage's text artifacts, or approved product files when coding."""
+        target = access.write(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        return f"wrote {path}"
+
+    @function_tool
+    def append_file(path: str, content: str) -> str:
+        """Append your section to a report or other permitted text artifact."""
+        target = access.write(path, append=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("a", encoding="utf-8") as stream:
+            stream.write(content)
+        return f"appended to {path}"
+
+    @function_tool
+    def product_git(subcommand: str, args: list[str] | None = None) -> str:
+        """Inspect history/code with read-only Git. Put paths after --; show HEAD:path
+        supports permitted literal files. Broad reads omit conventional credential
+        filenames. Use read_file for .env.example; anonymous blobs are refused."""
+        if access.product is None:
+            raise FileNotFoundError(PRODUCT_HINT)
+        return _product_git(subcommand, args, root=access.product)
+
+    @function_tool
+    def product_shell(command: str, timeout_s: int = 600) -> str:
+        """Run one command in this coding execution's product checkout."""
+        return _product_shell(command, timeout_s, access=access)
+
+    @function_tool
+    def collect_export(filename: str, dest_path: str) -> str:
+        """Collect a fresh design export into this execution's own stage directory."""
+        target = access.write(dest_path, binary=True)
+        return _collect_export(filename, target)
+
+    tools = [read_file, write_file, append_file, list_dir, product_git,
+             make_append_memory(role, run_id, stage, execution_key)]
+    if access.exports:
+        tools.extend([list_exports, collect_export])
+        if paper:
+            tools.append(make_collect_jsx(paper, access))
+    if access.product_write:
         tools.append(product_shell)
     return tools
 
@@ -1639,7 +1694,8 @@ def report_blocker(report: Path) -> str | None:
 
 
 async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
-                               stage: str, execution_key: str) -> list[str]:
+                               stage: str, execution_key: str,
+                               verify_product: Path | None = None) -> list[str]:
     """The two written postconditions: stage report on disk, memory row from THIS execution.
 
     The memory check queries by execution_key, not by diffing memory.md — the file diff
@@ -1655,9 +1711,14 @@ async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
     builder = factory.builder_of(stage)
     edir = factory.exec_dir(sdir, builder)
     report_path = REPO / "workflow/runs" / run_id / edir / "report.md"
-    if not report_path.exists():
+    if not report_path.is_file():
         missing.append(f"stage report workflow/runs/{run_id}/{edir}/report.md not written")
     else:
+        content = report_path.read_text(encoding="utf-8", errors="replace")
+        statuses = re.findall(r"^\s*[-*]?\s*\**Status:?\**:?\s*\**\s*([A-Za-z_-]+)", content, re.M)
+        if not statuses or statuses[-1].upper() not in {"PASS", "PASS-WITH-NOTES", "BLOCKED"}:
+            missing.append("stage report needs an explicit PASS, PASS-WITH-NOTES or BLOCKED status; "
+                           "empty reports and agent-authored waivers cannot complete a stage")
         # A BLOCKED report is a legitimate outcome, but it is NOT a completed stage.
         # Until this check existed, blocked and succeeded were indistinguishable to the
         # dispatcher: both wrote a report + a memory row, so both opened the stage's
@@ -1675,7 +1736,8 @@ async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
     # D17: typed envelopes — presence AND validity, cross-checked against the story;
     # cited paths verified against the checkout when this process has one.
     missing.extend(factory.check_envelope(
-        run_id, stage, product_root() if product_wired() else None))
+        run_id, stage, verify_product if verify_product is not None else
+        (product_root() if product_wired() else None)))
     if role == "coding":
         missing.extend(factory.check_quality_gate(run_id, sdir, execution_key, builder))
         # The branch bundle is the deliverable; a report without one is a claim.
@@ -1753,6 +1815,7 @@ async def main() -> None:
 
     for s in mcp_servers:
         await s.connect()
+    journal = None
     try:
         agent = Agent(
             name=role,
@@ -1769,17 +1832,19 @@ async def main() -> None:
         kickoff = (f"Begin your {args.stage} session for run {args.run_id}{attempt_note}. "
                    "Do not reply with a plan — start calling tools now and keep working "
                    "until the report is on disk and append_memory has been called.")
+        journal = factory.ExecutionJournal(args.run_id, args.stage, execution_key,
+                                           agent.instructions, kickoff)
 
         def _retrying(attempt: int, of: int, exc: Exception, delay: float) -> None:
-            print(f"RETRY {attempt}/{of} after {type(exc).__name__}: {exc} "
+            print(f"RETRY {attempt}/{of} after {type(exc).__name__}: {factory.redact(str(exc))} "
                   f"— sleeping {delay:.1f}s", file=sys.stderr)
 
         async def run_turn(text: str):
             # D23: a 429 from the shared Azure deployment is transport, not content.
             # Retrying here costs seconds; failing the stage costs every turn again.
             return await factory.with_retry(
-                lambda: Runner.run(agent, input=text, session=session,
-                                   max_turns=max_turns_for(role)),
+                lambda: journal.attempt(lambda: Runner.run(agent, input=text, session=session,
+                                                          max_turns=max_turns_for(role))),
                 on_retry=_retrying)
 
         if role == "coding" and product_writable():
@@ -1794,31 +1859,34 @@ async def main() -> None:
         else:
             results = [await run_turn(kickoff)]
         result = results[-1]
-        factory.write_trace(args.run_id, args.stage, execution_key,   # D22: compiled prompt +
-                            agent.instructions, kickoff, results)     # tool calls for the drawer
         print(result.final_output)
         if role == "coding":
             # The checkout dies with this process; bundle the committed branch into
             # the run folder NOW so the host can verify, push and open the PR (D14).
             for p in finalize_coding(args.run_id, args.stage):
                 print(f"FINALIZE: {p}", file=sys.stderr)
-        print(USAGE_MARKER + json.dumps(
-            {**factory.merge_usage([usage_dict(r) for r in results]),
-             "model": model_for(role, args.stage)}))
         calls = sum(1 for r in results for i in r.new_items if type(i).__name__ == "ToolCallItem")
         if calls == 0:
             print("\nDIAGNOSIS: the agent ended its turn without calling a single tool — the "
                   "stage stopped before doing any work. Re-run it (see 'How to run your turn' "
                   "in the system prompt).", file=sys.stderr)
+        missing = await check_postconditions(conn, role, args.run_id, args.stage, execution_key)
+        if missing:
+            raise RuntimeError("postconditions failed: " + "; ".join(missing))
+    except BaseException as exc:
+        if journal is not None:
+            journal.failed(exc, model_attempt=False)
+        raise
     finally:
-        for s in mcp_servers:
-            await s.cleanup()
-
-    missing = await check_postconditions(conn, role, args.run_id, args.stage, execution_key)
-    await conn.close()
-    if missing:
-        print("POSTCONDITIONS FAILED:\n- " + "\n- ".join(missing), file=sys.stderr)
-        sys.exit(1)
+        try:
+            if journal is not None:
+                journal.flush()
+                print(USAGE_MARKER + json.dumps({**journal.usage, "model": model_for(role, args.stage)}), flush=True)
+        finally:
+            try:
+                await asyncio.gather(*(s.cleanup() for s in mcp_servers))
+            finally:
+                await conn.close()
     print("postconditions ok")
 
 

@@ -303,7 +303,7 @@ class Loop(Base):
         self.assertEqual(out["review"]["verdict"], "error")
         self.assertIn("postconditions failed", out["review"]["rounds"][0]["error"])
         failed = conn.statements("SET status = 'failed'")
-        self.assertEqual(failed[0][1][1:], (RUN, r.REVIEW_STAGE))
+        self.assertEqual(failed[0][1][1:], (RUN, r.REVIEW_STAGE, "terminal"))
         self.assertIn("review_failed", [e[1] for e in self.events])
 
     def test_wrong_round_in_review_json_is_an_error(self):
@@ -325,7 +325,7 @@ class Loop(Base):
         self.assertEqual(rv["verdict"], "request_changes")
         self.assertIn("added no commits", rv["rounds"][0]["fix_error"])
         self.assertEqual(rv["last"]["must_fix"], ["R-1"])
-        self.assertEqual(conn.statements("SET status = 'failed'")[0][1][1:], (RUN, r.FIX_STAGE))
+        self.assertEqual(conn.statements("SET status = 'failed'")[0][1][1:], (RUN, r.FIX_STAGE, "terminal"))
 
     def test_pr_review_is_posted_per_round_when_a_pr_exists(self):
         posted = []
@@ -539,7 +539,7 @@ class Babysitter(Base):
         self.assertEqual(len(self.alarms), 1)
         self.assertIn("RED", self.alarms[0])
         self.assertEqual(r.read_babysit_state(RUN)["base_sha"], base)
-        self.assertEqual(self.conn.statements("SET status = 'failed'")[-1][1][1:], (RUN, r.FIX_STAGE))
+        self.assertEqual(self.conn.statements("SET status = 'failed'")[-1][1][1:], (RUN, r.FIX_STAGE, "terminal"))
         # the merge commit IS on the branch (a human sees the truth): the next pass finds the
         # branch up to date and spends nothing more until the base moves again
         self.assertEqual(git("merge-base", "--is-ancestor", "main", BRANCH, cwd=self.origin), "")

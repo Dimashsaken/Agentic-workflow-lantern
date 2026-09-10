@@ -29,6 +29,7 @@ Without builders in the plan every function here behaves exactly as before.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import random
@@ -40,6 +41,9 @@ import time
 import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
+
+import evidence
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -165,14 +169,19 @@ def check_envelope(run_id: str, stage: str, product_root: Path | None = None) ->
 
 def _paths_exist(paths: list[str], product_root: Path | None) -> list[str]:
     """Paths an agent cites that do not exist in the checkout — fabrications."""
-    if product_root is None or not (product_root / ".git").exists():
+    if product_root is None:
         return []
     missing = []
     for p in paths:
         rel = str(p).replace("\\", "/").strip().rstrip("/")
         if rel.startswith("product/"):
             rel = rel[len("product/"):]
-        if not rel or not (product_root / rel).exists():
+        try:
+            from tool_policy import confined, path_parts
+            exists = bool(rel) and confined(product_root, path_parts(rel)).exists()
+        except (OSError, ValueError):
+            exists = False
+        if not exists:
             missing.append(str(p))
     return missing
 
@@ -386,9 +395,12 @@ def _check_validation(data: dict, run_id: str, product_root: Path | None) -> lis
             p.append(f"{cid}: status must be one of {'/'.join(VALIDATION_STATUSES)}")
         elif c["status"] != "covered":
             all_covered = False
-        if not _nonempty_str(c.get("evidence")):
+        if not c.get("evidence"):
             p.append(f"{cid}: evidence is required — the file, test, video timestamp or "
                      "report line that proves the status (never 'looks fine')")
+        else:
+            p.extend(f"{cid}: {problem}" for problem in evidence.validation_problems(
+                c["evidence"], run_dir(run_id), product_root))
     fix_now = data.get("fix_now", [])
     if not _is_list_of_dicts(fix_now):
         p.append("fix_now must be a list of {id, title, criterion}")
@@ -490,6 +502,12 @@ def _check_review(data: dict, run_id: str, product_root: Path | None) -> list[st
     elif verdict != expected:
         p.append(f"verdict says '{verdict}' but the findings say '{expected}' — approve ⇔ no "
                  "blocker/major; the verdict is computed from the severities, not chosen")
+    if product_root is not None:
+        handoff, error = _load_json(run_dir(run_id) / "03-coding" / "handoff.json")
+        if error:
+            p.append("review requires a valid coding handoff")
+        else:
+            p.extend(evidence.review_problems(findings, handoff, product_root))
     return p
 
 
@@ -656,25 +674,38 @@ def check_write_scope(run_id: str, files_changed: list[str],
 # ── quality gate ─────────────────────────────────────────────────────────────
 
 def quality_config(root: Path) -> dict:
-    """Commands from <product>/lantern.toml [quality]; absent file = no commands."""
+    """Validate executable quality policy. No test command is a hold, never green."""
     cfg = {"commands": [], "timeout_s": QUALITY_TIMEOUT_DEFAULT, "source": None}
     toml = root / "lantern.toml"
     if not toml.is_file():
+        cfg["error"] = "no lantern.toml [quality] test command — configure the product before automatic coding"
         return cfg
     try:
-        data = tomllib.loads(toml.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as e:
+        from tool_policy import confined
+        content = confined(root, ("lantern.toml",)).read_bytes()
+        cfg["sha256"] = hashlib.sha256(content).hexdigest()
+        data = tomllib.loads(content.decode("utf-8"))
+    except (OSError, ValueError, UnicodeError) as e:
         cfg["error"] = f"lantern.toml unreadable: {e}"
         return cfg
-    q = data.get("quality") or {}
+    q = data.get("quality", {})
     cfg["source"] = "lantern.toml [quality]"
+    if not isinstance(q, dict):
+        cfg["error"] = "lantern.toml [quality] must be a table"
+        return cfg
     for key in QUALITY_KEYS:
         cmd = q.get(key)
         if _nonempty_str(cmd):
             cfg["commands"].append((key, cmd.strip()))
+        elif key in q:
+            cfg["error"] = f"quality.{key} must be a non-empty command string"
     t = q.get("timeout_s")
-    if isinstance(t, int) and t > 0:
+    if type(t) is int and 0 < t <= 86400:
         cfg["timeout_s"] = t
+    elif t is not None:
+        cfg["error"] = "quality.timeout_s must be an integer from 1 to 86400"
+    if not any(name == "test" for name, _ in cfg["commands"]):
+        cfg.setdefault("error", "no runnable quality.test command — automatic coding is held")
     return cfg
 
 
@@ -710,45 +741,54 @@ def run_command(cmd: str, root: Path, timeout_s: int) -> dict:
 
 def changed_files_since(root: Path, since_sha: str | None) -> list[str]:
     """Committed (since_sha..HEAD) plus uncommitted paths — what the builder touched."""
-    files: list[str] = []
+    from readonly_git import environment, repository_options
+    options = repository_options(root)
+    commands = [["diff", "--name-only", "--no-renames", "-z", "HEAD", "--"],
+                ["ls-files", "--others", "--exclude-standard", "-z"]]
     if since_sha:
-        r = subprocess.run(["git", "diff", "--name-only", f"{since_sha}..HEAD"], cwd=root,
-                           capture_output=True, text=True, errors="replace")
-        if r.returncode == 0:
-            files += [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
-    r = subprocess.run(["git", "status", "--porcelain"], cwd=root,
-                       capture_output=True, text=True, errors="replace")
-    if r.returncode == 0:
-        for ln in r.stdout.splitlines():
-            path = ln[3:].strip()
-            if " -> " in path:
-                path = path.split(" -> ", 1)[1]
-            if path:
-                files.append(path.strip('"'))
+        commands.insert(0, ["diff", "--name-only", "--no-renames", "-z", f"{since_sha}..HEAD", "--"])
+    files: list[str] = []
+    for args in commands:
+        r = subprocess.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", *options, *args],
+                           cwd=root, capture_output=True, env=environment(),
+                           stdin=subprocess.DEVNULL, timeout=30)
+        if r.returncode:
+            raise ValueError("cannot verify changed paths: Git inspection failed")
+        files.extend(os.fsdecode(name) for name in r.stdout.split(b"\x00") if name)
     return sorted(set(files))
 
 
 def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, round_no: int,
-                     since_sha: str | None = None, restored_from: int | None = None) -> dict:
+                     since_sha: str | None = None, restored_from: int | None = None,
+                     contract: dict | None = None) -> dict:
     """Run the product's quality commands + the write-scope check; write gate.json/gate.md.
 
-    Always writes the files, even with nothing configured, so a host re-check can tell
-    'no commands' (passed, configured=[]) from 'the gate never ran' (no file).
+    Always writes the files. Missing tests and invalid configuration fail closed.
+    A contract captured before the first agent turn fixes policy for the whole loop.
 
     `restored_from` records that this gate ran against an EARLIER round's tree, put back
     because the later rounds were worse (D23) — it goes in gate.json so the handoff, the
     execution drawer and a human all see which round actually shipped.
     """
-    cfg = quality_config(root)
+    current = quality_config(root)
+    cfg = dict(contract) if contract is not None else current
     results = []
-    for name, cmd in cfg["commands"]:
+    if contract is not None and current != contract:
+        cfg["error"] = "lantern.toml changed during this execution — restore the approved quality policy"
+    for name, cmd in ([] if cfg.get("error") else cfg["commands"]):
         res = run_command(cmd, root, cfg["timeout_s"])
         results.append({"name": name, "command": cmd, **res})
+    if not cfg.get("error") and quality_config(root) != (contract if contract is not None else current):
+        cfg["error"] = "lantern.toml changed while quality commands ran — gate policy is not stable"
     builder = builder_of(stage) or current_builder()          # D18
     scope = builder_scope(run_id, builder) or write_scope(run_id)
     if scope is not None:
-        changed = changed_files_since(root, since_sha)
-        problems = check_write_scope(run_id, changed, scope=scope, builder=builder)
+        changed = []
+        try:
+            changed = changed_files_since(root, since_sha)
+            problems = check_write_scope(run_id, changed, scope=scope, builder=builder)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            problems = [str(exc)]
         results.append({"name": "write-scope", "command": f"changed paths ⊆ {scope}",
                         "exit": 1 if problems else 0, "passed": not problems, "seconds": 0.0,
                         "output_tail": problems[0] if problems else f"{len(changed)} changed path(s), all in scope"})
@@ -757,6 +797,7 @@ def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, ro
         "builder": builder or None,                    # D18
         "execution_key": execution_key, "round": round_no,
         "source": cfg.get("source"), "configured": [n for n, _ in cfg["commands"]],
+        "config_sha256": cfg.get("sha256"),
         "passed": all(r["passed"] for r in results),
         "results": results,
         "ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -821,8 +862,7 @@ def fix_prompt(gate: dict, round_no: int, max_rounds: int) -> str:
 
 def check_quality_gate(run_id: str, sdir: str, execution_key: str,
                        builder: str = "") -> list[str]:
-    """Postcondition: THIS execution's gate.json says green. Missing = degrade (an older
-    sandbox image, or a human-mode stage) with a note, never a silent pass elsewhere.
+    """Recompute THIS execution's verdict from typed command results; missing = fail.
 
     `builder` (D18) comes from the caller's stage key, not the environment: this runs
     on the host after the execution's env is gone.
@@ -830,21 +870,70 @@ def check_quality_gate(run_id: str, sdir: str, execution_key: str,
     sdir = exec_dir(sdir, builder)                       # D18: a builder's own subdir
     gp = run_dir(run_id) / sdir / GATE_FILE
     if not gp.is_file():
-        print(f"[factory] {sdir}/{GATE_FILE} absent — quality gate not enforced for this "
-              "execution (older sandbox image or no coding_turns)", file=sys.stderr)
-        return []
+        return [f"{sdir}/{GATE_FILE} absent — this execution has no verifiable quality gate"]
     gate, err = _load_json(gp)
     if err:
         return [f"{sdir}/{err}"]
     if gate.get("execution_key") != execution_key:
         return [f"{sdir}/{GATE_FILE} belongs to execution {gate.get('execution_key')!r}, not "
                 f"this one — the gate did not run for this attempt"]
-    if not gate.get("passed"):
+    problems = gate_problems(gate, run_id, stage_dir(sdir), builder)
+    if problems:
+        return [f"{sdir}/{GATE_FILE}: {p}" for p in problems]
+    if gate["passed"] is not True:
         failed = [r["name"] for r in gate.get("results", []) if not r.get("passed")]
         return [f"quality gate RED after {gate.get('round', 0)} fix round(s): "
                 f"{', '.join(failed) or 'unknown'} — see {sdir}/gate.md; the branch is not "
                 "handed off until the product's own checks pass"]
     return []
+
+
+def gate_problems(gate: dict, run_id: str, sdir: str, builder: str = "") -> list[str]:
+    """Check the evidence shape and recalculate the summary instead of trusting it."""
+    problems = []
+    if gate.get("kind") != "quality_gate" or gate.get("run_id") != run_id:
+        problems.append("gate kind/run identity does not match")
+    stage = gate.get("stage")
+    if not isinstance(stage, str) or stage_dir(stage) != sdir.split("/")[0] or builder_of(stage) != builder:
+        problems.append("gate stage/builder identity does not match")
+    if gate.get("builder") not in (builder or None,):
+        problems.append("gate builder does not match")
+    if type(gate.get("round")) is not int or gate["round"] < 0:
+        problems.append("gate round must be a non-negative integer")
+    configured = gate.get("configured")
+    if not isinstance(configured, list) or not all(isinstance(n, str) and n in QUALITY_KEYS for n in configured):
+        return problems + ["configured must list quality command names"]
+    if len(configured) != len(set(configured)):
+        problems.append("duplicate configured commands")
+    results = gate.get("results")
+    if not isinstance(results, list) or not results or not all(isinstance(r, dict) for r in results):
+        return problems + ["non-empty command results are required"]
+    names = []
+    for result in results:
+        name = result.get("name")
+        if not isinstance(name, str) or name not in (*QUALITY_KEYS, "config", "write-scope"):
+            problems.append("unknown result name")
+            continue
+        names.append(name)
+        if type(result.get("exit")) is not int or type(result.get("passed")) is not bool:
+            problems.append(f"{name}: exit must be an integer and passed a boolean")
+        elif result["passed"] != (result["exit"] == 0):
+            problems.append(f"{name}: passed contradicts the command exit code")
+        if not _nonempty_str(result.get("command")):
+            problems.append(f"{name}: command is required")
+    if len(names) != len(set(names)):
+        problems.append("duplicate command results")
+    if gate.get("passed") is True:
+        if "test" not in configured:
+            problems.append("green gate requires a configured test command")
+        if set(n for n in names if n in QUALITY_KEYS) != set(configured):
+            problems.append("green gate must contain exactly one result per configured command")
+        if not isinstance(gate.get("config_sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", gate["config_sha256"]):
+            problems.append("green gate requires the captured quality configuration hash")
+    computed = bool(results) and all(r.get("passed") is True and type(r.get("exit")) is int and r["exit"] == 0 for r in results)
+    if type(gate.get("passed")) is not bool or gate["passed"] != computed:
+        problems.append("gate verdict contradicts its command results")
+    return problems
 
 
 def builder_brief(run_id: str) -> str:
@@ -912,10 +1001,11 @@ def coding_gate_note(run_id: str, root: Path | None) -> str:
                      "fix rounds; still red = the stage fails and no branch is handed off. "
                      "Run these yourself before you finish.")
     else:
-        lines.append("This product has no `lantern.toml [quality]` commands, so no tests run "
-                     "as code after your turn — run the product's own test command through "
-                     "product_shell yourself, and add a `lantern.toml` (see "
-                     "workflow/templates/lantern.toml) as part of your task if the plan allows.")
+        lines.append("This product has no `lantern.toml [quality]` test command. Automatic "
+                     "coding is held until the product owner configures it. A model's own "
+                     "test claim cannot substitute for the gate.")
+    lines.append("The harness captures lantern.toml before your first turn. Do not change "
+                 "that policy to pass the gate; policy changes need a separate reviewed change.")
     if scope:
         whose = (f"Write scope for builder `{current_builder()}` (D18)"
                  if builder_scope(run_id, current_builder()) else
@@ -997,6 +1087,13 @@ async def with_retry(make_awaitable, *, attempts: int | None = None,
             return await make_awaitable()
         except Exception as e:
             if attempt >= tries or classify_error(e) != "retryable":
+                raise
+            partial = getattr(e, "run_data", None)
+            if partial is not None and any(_item_kind(item) in _CALL_KINDS
+                                           for item in (getattr(partial, "new_items", None) or [])):
+                # Runner.run is a whole tool loop, not one HTTP request. Replaying
+                # the kickoff after a tool ran can duplicate side effects. The SDK
+                # handles request retries; a partial loop needs explicit resumption.
                 raise
             # Full jitter in the top half of the window: never a thundering herd of
             # builders retrying in lockstep, never a delay so short it re-throttles.
@@ -1132,12 +1229,16 @@ async def coding_turns(run_turn, kickoff: str, *, run_id: str, stage: str, root:
     round that made things worse costs a round, not the work.
     """
     rounds = fix_rounds() if max_rounds is None else max_rounds
+    contract = quality_config(root)
+    if contract.get("error"):
+        gate = run_quality_gate(run_id, stage, root, execution_key, 0, since_sha, contract=contract)
+        raise ValueError("automatic coding held: " + contract["error"])
     results = [await run_turn(kickoff)]
     round_no = 0
     best: tuple[tuple[int, int, int], str, int] | None = None   # (score, sha, round)
     while True:
         sha = checkpoint_tree(root, execution_key, round_no) if checkpoints else None
-        gate = run_quality_gate(run_id, stage, root, execution_key, round_no, since_sha)
+        gate = run_quality_gate(run_id, stage, root, execution_key, round_no, since_sha, contract=contract)
         score = gate_score(gate)
         if sha and (best is None or score > best[0]):
             best = (score, sha, round_no)
@@ -1146,7 +1247,7 @@ async def coding_turns(run_turn, kickoff: str, *, run_id: str, stage: str, root:
                 # Re-gate so gate.json describes the tree that actually ships, not the
                 # one we threw away — the host re-check reads that file at handoff.
                 gate = run_quality_gate(run_id, stage, root, execution_key, round_no,
-                                        since_sha, restored_from=best[2])
+                                        since_sha, restored_from=best[2], contract=contract)
             return results, gate
         round_no += 1
         results.append(await run_turn(fix_prompt(gate, round_no, rounds)))
@@ -1354,7 +1455,7 @@ def extract_tool_calls(results, env: dict | None = None) -> list[dict]:
 
 
 def write_trace(run_id: str, stage: str, execution_key: str, instructions, kickoff,
-                results) -> Path | None:
+                results, *, failure: dict | None = None, usage_incomplete: bool = False) -> Path | None:
     """Write <stage-dir>/trace/<execution-key>.json for Mission Control. Never raises."""
     try:
         turns = []
@@ -1377,6 +1478,9 @@ def write_trace(run_id: str, stage: str, execution_key: str, instructions, kicko
             "redaction": {"qa_target_dropped": bool(_QA_TARGET_RE.search(raw_prompt)),
                           "secret_values_known": len(secret_values())},
         }
+        if failure is not None:
+            data["failure"] = {k: redact(_as_text(v)) for k, v in failure.items()}
+        data["usage_incomplete"] = usage_incomplete
         path = trace_path(run_id, stage, execution_key)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
@@ -1386,6 +1490,56 @@ def write_trace(run_id: str, stage: str, execution_key: str, instructions, kicko
     except Exception as e:  # noqa: BLE001 — observability must never fail a stage
         print(f"[trace] not written for {execution_key}: {type(e).__name__}: {e}", file=sys.stderr)
         return None
+
+
+class ExecutionJournal:
+    """Persist available turns after every SDK attempt, including failed attempts.
+
+    SDK exceptions can carry RunErrorDetails with tools and usage. Other errors
+    cannot: retain known spend and label its incompleteness instead of inventing 0.
+    A process killed before the SDK returns still needs external streaming telemetry.
+    """
+
+    def __init__(self, run_id: str, stage: str, execution_key: str, instructions, kickoff):
+        self.identity = (run_id, stage, execution_key, instructions, kickoff)
+        self.results = []
+        self.failure = None
+        self.usage_incomplete = False
+        self._last_error = None
+
+    async def attempt(self, invoke):
+        try:
+            result = await invoke()
+        except BaseException as exc:
+            self.failed(exc)
+            raise
+        else:
+            self.results.append(result)
+            self.failure = None
+            self.flush()
+            return result
+
+    def failed(self, exc: BaseException, *, model_attempt: bool = True):
+        if self._last_error is exc:
+            return
+        self._last_error = exc
+        data = getattr(exc, "run_data", None)
+        if data is not None:
+            self.results.append(SimpleNamespace(
+                new_items=getattr(data, "new_items", []) or [], final_output="",
+                context_wrapper=getattr(data, "context_wrapper", None)))
+        if model_attempt and (data is None or not _usage_of(data)):
+            self.usage_incomplete = True
+        self.failure = {"type": type(exc).__name__, "class": classify_error(exc), "message": str(exc)}
+        self.flush()
+
+    @property
+    def usage(self):
+        return merge_usage([_usage_of(r) for r in self.results])
+
+    def flush(self):
+        return write_trace(*self.identity, self.results, failure=self.failure,
+                           usage_incomplete=self.usage_incomplete)
 
 
 def read_trace(run_id: str, stage: str, execution_key: str) -> dict | None:

@@ -221,6 +221,19 @@ run auto mode on repos you trust until they land.
 
 ## The gate, the envelopes and the loops (D17)
 
+**D24 update:** automatic coding requires a non-empty `[quality].test` command
+before its first model turn. Missing policy or gate artifacts are errors, including
+on older sandbox images; upgrade host and sandbox together. The harness captures
+`lantern.toml` before the build and refuses changes during that execution. Land
+quality-policy changes separately through human review, then start a fresh run.
+An exit-zero command only proves that configured command succeeded: product owners
+still need meaningful tests and independent QA.
+
+Validation `evidence` accepts `{path, line?}` lists (or compact `path:line` strings),
+with explanation in `reason`; references must resolve. Existing prose-only validation
+envelopes must be regenerated if their stage is retried. Historical artifacts stay
+readable in Mission Control. See `docs/AGENT-CAPABILITIES.md` for current tool grants.
+
 `factory.py` holds the software-factory mechanics — pure functions, no SDK, tested by
 `test_factory.py`:
 

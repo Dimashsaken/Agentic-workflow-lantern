@@ -41,6 +41,7 @@ def product_repo(tmp: Path) -> Path:
     (root / "src" / "ui").mkdir()
     (root / "src" / "ui" / "list.tsx").write_text("export const List = () => null;\n", encoding="utf-8")
     (root / "README.md").write_text("# product\n", encoding="utf-8")
+    (root / "lantern.toml").write_text('[quality]\ntest = "test -f README.md"\n', encoding="utf-8")
     git("add", "-A", cwd=root)
     git("commit", "-q", "-m", "seed", cwd=root)
     return root
@@ -180,13 +181,14 @@ class Envelopes(Base):
 
     def validation(self, **over):
         data = {"kind": "validation", "run_id": RUN,
-                "criteria": [{"id": "AC-1", "status": "covered", "evidence": "src/api/saved.py + tests/test_saved.py; qa session 1 0:12"},
-                             {"id": "AC-2", "status": "covered", "evidence": "src/ui/saved.tsx; qa session 1 0:40"},
-                             {"id": "AC-3", "status": "covered", "evidence": "qa session 2 0:05"}],
+                "criteria": [{"id": "AC-1", "status": "covered", "evidence": "04-qa-dev/results.txt:1"},
+                             {"id": "AC-2", "status": "covered", "evidence": "04-qa-dev/results.txt:2"},
+                             {"id": "AC-3", "status": "covered", "evidence": "04-qa-dev/results.txt:3"}],
                 "fix_now": [], "verdict": "pass"}
         data.update(over)
         write_json(self.rd / "05-post-coding" / "validation.json", data)
         write_md(self.rd / "05-post-coding" / "validation.md")
+        write_md(self.rd / "04-qa-dev" / "results.txt", "AC-1: passed\nAC-2: passed\nAC-3: passed\n")
 
     def test_validation_pass(self):
         self.story()
@@ -250,12 +252,13 @@ class QualityGate(Base):
     def toml(self, body: str) -> None:
         (self.product / "lantern.toml").write_text(body, encoding="utf-8")
 
-    def test_no_config_means_green_with_nothing_configured(self):
+    def test_no_config_cannot_be_green(self):
+        (self.product / "lantern.toml").unlink()
         gate = f.run_quality_gate(RUN, "03-coding", self.product, f"{RUN}:03-coding:1", 0)
-        self.assertTrue(gate["passed"])
+        self.assertFalse(gate["passed"])
         self.assertEqual(gate["configured"], [])
         self.assertTrue((self.rd / "03-coding" / "gate.json").is_file())
-        self.assertIn("No quality commands are configured", (self.rd / "03-coding" / "gate.md").read_text(encoding="utf-8"))
+        self.assertIn("no lantern.toml", (self.rd / "03-coding" / "gate.md").read_text(encoding="utf-8"))
 
     def test_failures_only_reach_the_brief(self):
         self.toml('[quality]\ntest = "echo all good"\nlint = "echo boom >&2; exit 3"\n')
@@ -308,7 +311,7 @@ class QualityGate(Base):
         self.assertIn("src/ui/list.tsx", scope["output_tail"])
 
     def test_postcondition_reads_only_this_executions_gate(self):
-        self.assertEqual(f.check_quality_gate(RUN, "03-coding", "k1"), [])       # absent: degrade
+        self.assertTrue(f.check_quality_gate(RUN, "03-coding", "k1"))
         self.toml('[quality]\ntest = "exit 1"\n')
         f.run_quality_gate(RUN, "03-coding", self.product, "k1", 2)
         probs = f.check_quality_gate(RUN, "03-coding", "k1")

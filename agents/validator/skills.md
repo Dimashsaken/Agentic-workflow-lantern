@@ -56,11 +56,16 @@ the human reads). `05-post-coding/validation.json`:
   "run_id": "feat-20260908-saved-items",
   "criteria": [
     {"id": "AC-1", "status": "covered",
-     "evidence": "src/api/saved.py::save_item + tests/test_saved.py::test_save_once; QA session 1 0:12-0:40 (saved badge without reload)"},
+     "evidence": [{"path": "product/src/api/saved.py", "line": 41},
+                  {"path": "04-qa-dev/test-results.txt", "line": 12}],
+     "reason": "save_item and the recorded test result cover the double-click case"},
     {"id": "AC-2", "status": "off-spec",
-     "evidence": "/saved renders oldest first (src/ui/saved.tsx:41 sorts ascending); QA bug QA-3 sev-2 open"},
+     "evidence": [{"path": "product/src/ui/saved.tsx", "line": 41},
+                  {"path": "04-qa-dev/bugs.md", "line": 8}],
+     "reason": "/saved renders oldest first; QA-3 is still open"},
     {"id": "AC-3", "status": "skipped",
-     "evidence": "plan.json deferred_criteria: PostHog project not provisioned for dev"}
+     "evidence": [{"path": "02-pre-coding/plan.json"}],
+     "reason": "plan deferred the criterion because the dev project is not provisioned"}
   ],
   "fix_now": [
     {"id": "F-1", "title": "sort /saved newest first", "criterion": "AC-2"}
@@ -70,7 +75,13 @@ the human reads). `05-post-coding/validation.json`:
 ```
 
 Rules the harness enforces: every story criterion appears exactly once; `status` is
-one of covered / missing / skipped / off-spec / insecure; `evidence` is never empty;
+one of covered / missing / skipped / off-spec / insecure; `evidence` is a non-empty
+list of `{path, line?}` references to existing, non-empty files. Lines are positive
+and must exist. Use `product/` for product code and stage-relative paths for this
+run's artifacts. A compact `path:line; path:line` string is also accepted. Prose
+belongs in `reason`; bare assertions and references to validation itself fail.
+For video cite the actual local media artifact and describe the timestamp in
+`reason`; this file check does not attest the video's content or provenance.
 `verdict` is `pass` only when all are covered and `fix_now` is empty — write the
 verdict the statuses imply, it is checked. A `fail` verdict is a correct outcome, not a
 failure of your work: the stage stops the run and the fix goes to stage 3.

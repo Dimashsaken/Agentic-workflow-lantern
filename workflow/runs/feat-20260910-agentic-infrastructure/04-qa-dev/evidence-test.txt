@@ -1,0 +1,16 @@
+test_deleted_file_is_valid_only_without_a_new_line (test_evidence.Evidence.test_deleted_file_is_valid_only_without_a_new_line) ... ok
+test_product_and_run_references_resolve (test_evidence.Evidence.test_product_and_run_references_resolve) ... ok
+test_product_evidence_cannot_pass_without_a_checkout (test_evidence.Evidence.test_product_evidence_cannot_pass_without_a_checkout) ... ok
+test_report_status_is_an_explicit_postcondition (test_evidence.Evidence.test_report_status_is_an_explicit_postcondition) ... ok
+test_research_paths_cannot_escape_into_an_existing_host_file (test_evidence.Evidence.test_research_paths_cannot_escape_into_an_existing_host_file) ... ok
+test_review_allows_general_findings_for_missing_work (test_evidence.Evidence.test_review_allows_general_findings_for_missing_work) ... ok
+test_review_file_and_line_resolve_to_the_committed_revision (test_evidence.Evidence.test_review_file_and_line_resolve_to_the_committed_revision) ... ok
+test_review_rejects_unchanged_file_and_wrong_head (test_evidence.Evidence.test_review_rejects_unchanged_file_and_wrong_head) ... ok
+test_secret_traversal_cross_run_and_self_references_fail (test_evidence.Evidence.test_secret_traversal_cross_run_and_self_references_fail) ... ok
+test_sentence_missing_file_empty_file_and_invalid_line_fail (test_evidence.Evidence.test_sentence_missing_file_empty_file_and_invalid_line_fail) ... ok
+test_validation_envelope_uses_the_resolver (test_evidence.Evidence.test_validation_envelope_uses_the_resolver) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 4.246s
+
+OK

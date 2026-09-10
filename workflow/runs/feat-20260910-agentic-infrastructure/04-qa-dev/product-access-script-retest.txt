@@ -1,0 +1,47 @@
+confinement:
+  ok    product/ resolves into the product tree
+  ok    product root itself lists
+  ok    product/../ escape is refused
+  ok    repo paths cannot reach the product tree
+  ok    repo paths still resolve in the repo
+read-only:
+  ok    _writable refuses 'product/src/app.ts'
+  ok    _writable refuses 'product'
+  ok    _writable refuses '/product/x'
+  ok    _writable refuses 'product\\src\\app.ts'
+git tool allowlist:
+  ok    push/fetch/config/remote/clone are not allowlisted
+  ok    refuses `push`
+  ok    refuses `config`
+  ok    refuses `-c` injection
+  ok    refuses `--output=`
+  ok    refuses `--upload-pack`
+no credential leak:
+  ok    host fetch URL carries the token
+  ok    _scrub removes it from any message
+  ok    a local path is never credentialed
+  ok    an already-credentialed URL is not double-stuffed
+  ok    no product target = no mount, no env
+brief parsing:
+  ok    parse '- **Product repo:** https://github.com/org/rep'
+  ok    parse '- **Product repo:** <https://github.com/org/re'
+  ok    parse '- **Product repo:** �'
+  ok    parse '- **Product repo:** `https://github.com/org/re'
+  ok    parse '# Feature Brief: nothing here'
+  ok    parse '- **Product repo:** https://github.com/org/rep'
+  ok    parse '- **Product repo:** https://github.com/org/rep'
+orientation blocks (D15):
+  ok    env block survives a non-git directory
+  ok    �and says so rather than claiming a repo
+  ok    no docs -> an explicit 'discover them yourself'
+  ok    docs block respects the total budget
+  ok    truncation is announced
+  ok    untrusted-data fences are present
+  ok    �and labelled as reference material, not instructions
+  ok    AGENTS.md is loaded before README (priority order)
+  ok    task block survives a missing run folder
+  ok    �and still names this stage's deliverable
+  ok    read-only note carries the read-only contract
+  ok    read-only note does not offer product_shell
+
+all product-access properties hold

@@ -5,6 +5,16 @@ topic adversarially fact-checked; the load-bearing code findings re-verified by 
 inclusion here. Claims sourced from a research agent are marked *(researched)*; claims verified
 directly against this repo carry a `file:line`.
 
+**Implementation update, 2026-09-10.** This assessment is a historical baseline,
+not the current capability inventory. D23 shipped retries, per-role budgets and
+worktree checkpoints. Decision D24 now implements execution-bound file tools,
+validated Git reads, fail-closed quality records, evidence resolution and failed
+attempt diagnostics. It covers parts of the proposed D24–D27 work below; those
+proposal numbers are not all completed decision records. See
+[the implementation report](../../workflow/runs/feat-20260910-agentic-infrastructure/03-coding/report.md)
+for measured results and remaining OS isolation, recovery, live QA and provenance
+gaps. The original research claims and line references below retain their audit date.
+
 ---
 
 ## 1. What we actually run

@@ -174,6 +174,14 @@ database** — agents read it during orientation but never write it.
 
 ## 6. Per-agent connection matrix
 
+The enforced file/tool policy is generated from `tool_policy.py` in
+[AGENT-CAPABILITIES.md](AGENT-CAPABILITIES.md), and checked by a regression test.
+`stage_tools` binds run, role, product checkout and write scope into each tool;
+changing another execution's environment cannot redirect an existing file tool.
+The table below describes integration responsibilities, not a grant of filesystem
+or Git permissions. Credentials, Git metadata, path escapes and file aliases are
+refused by file tools; the coding shell still relies on OS isolation (D24).
+
 | Agent | MCP / CLIs | Credentials (SSM) | May write to |
 |-------|-----------|-------------------|--------------|
 | researcher | git (read), product repo clone (read-only) | — | run folder only (`00-story/research.*`) |

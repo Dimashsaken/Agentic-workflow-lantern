@@ -381,6 +381,7 @@ class Merge(Base):
         (seed / "src" / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
         (seed / "docs").mkdir()
         (seed / "docs" / "README.md").write_text("# product\n", encoding="utf-8")
+        (seed / "lantern.toml").write_text('[quality]\ntest = "test -f docs/README.md"\n', encoding="utf-8")
         git("add", "-A", cwd=seed)
         git("commit", "-q", "-m", "initial", cwd=seed)
         self.origin = self.tmp / "origin.git"

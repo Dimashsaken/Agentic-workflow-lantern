@@ -237,3 +237,10 @@ the approver allowlist, and `staging_deploy` / `prod_signoff` are refused from S
   (`pipeline.py evals build && pipeline.py evals report`) in the same change;
   `tools/evals/check_pr.py` runs in this repo's lint gate and refuses it otherwise. The
   number that moved is the review conversation. Memory protocol unchanged.
+- **Capabilities and evidence are checked by the harness (D24).** File tools are
+  bound to a role, run and product scope; `docs/AGENT-CAPABILITIES.md` is the generated
+  inventory. Automatic coding requires a configured test before its first model
+  turn, and cannot replace the quality policy during that execution. Validation
+  cites resolvable artifact paths and lines; review locations refer to the handoff
+  revision. These are tool and evidence checks, not proof of OS isolation or test
+  coverage. New policy/evidence modules are included in the D20 eval fingerprint.

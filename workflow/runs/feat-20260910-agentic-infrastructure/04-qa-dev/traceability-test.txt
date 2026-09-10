@@ -1,0 +1,14 @@
+test_builder_handoffs_are_read_too (test_traceability.MatrixTests.test_builder_handoffs_are_read_too) ... ok
+test_charter_sections_split_on_headings (test_traceability.MatrixTests.test_charter_sections_split_on_headings) ... ok
+test_every_stage_present_and_rows_traced_by_identifier (test_traceability.MatrixTests.test_every_stage_present_and_rows_traced_by_identifier) ... ok
+test_no_story_means_no_matrix (test_traceability.MatrixTests.test_no_story_means_no_matrix) ... ok
+test_notes_name_what_traces_to_nothing (test_traceability.MatrixTests.test_notes_name_what_traces_to_nothing) ... ok
+test_partial_run_marks_later_stages_pending (test_traceability.MatrixTests.test_partial_run_marks_later_stages_pending) ... ok
+test_render_shows_chips_headers_and_summary (test_traceability.MatrixTests.test_render_shows_chips_headers_and_summary) ... ok
+test_structured_evidence_locations_render_and_escape (test_traceability.MatrixTests.test_structured_evidence_locations_render_and_escape) ... ok
+test_unplanned_and_untraced_are_gaps_once_the_stage_ran (test_traceability.MatrixTests.test_unplanned_and_untraced_are_gaps_once_the_stage_ran) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.032s
+
+OK

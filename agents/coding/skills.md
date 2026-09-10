@@ -80,8 +80,10 @@ This is "connect to the codebase and work" the way a developer's coding agent do
    re-run the failing command yourself, commit, reply. Still red = the stage fails and
    nothing is handed off. The exact commands and the scope are in "The gate your branch
    must pass" at the end of your prompt — run them before you finish. A product with no
-   `lantern.toml` gets no code gate: run its own test command through product_shell and,
-   if the plan allows, add one (template: `workflow/templates/lantern.toml`).
+   runnable `lantern.toml [quality].test` command is held before the first build turn.
+   The harness captures the quality policy before you run and rejects changes to it
+   during the loop. A policy update is a separate reviewed change, never a fix that
+   makes the current gate easier to pass (template: `workflow/templates/lantern.toml`).
 
 7. **You may be ONE builder of several (D18).** When the approved plan carries a
    `builders` list, stage 3 runs one agent per builder in parallel and the top of your

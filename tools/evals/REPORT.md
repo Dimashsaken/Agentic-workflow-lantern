@@ -1,10 +1,10 @@
 # Factory evals — REPORT
 
-Generated 2026-09-10 03:57 UTC at commit `39090c2172ae` from frozen data: 11 briefs, 5 stories, 2 plans, 2 validations, 1 repros.
+Generated 2026-09-10 06:43 UTC at commit `25bb11334b22` from frozen data: 11 briefs, 5 stories, 2 plans, 3 validations, 1 repros.
 
-<!-- lantern-evals-fingerprint: 7604c771133164dcebc42a9d3fcf732b78302c26dc9ad57e194355c5d85be207 -->
+<!-- lantern-evals-fingerprint: 15d61e5a1a45e6d895d9a53b526df51f4dcc56634ca51535feb0ac7f66c4cc2b -->
 
-**The rule (D20):** a diff that touches `agents/**`, `factory.py`, `intake.py`, the scorers, or the orchestrator's prompt builders / gate functions must regenerate this file (`pipeline.py evals build && pipeline.py evals report`) in the same change. `tools/evals/check_pr.py` enforces it from this repo's `lantern.toml` lint command. A number that moved is the review conversation; a number that did not move is the evidence the change was safe. `evals run --suite <name> --live` replays the role on the real model for a before/after — opt-in, costs cents per row.
+**The rule (D20):** a diff that touches `agents/**`, `factory.py`, `intake.py`, the scorers, or the orchestrator's prompt builders / gate functions must regenerate this file (`pipeline.py evals build && pipeline.py evals report`) in the same change. `tools/evals/check_pr.py` enforces it from this repo's `lantern.toml` lint command. A number that moved is the review conversation; unchanged frozen scores only describe the existing corpus and do not establish runtime safety. `evals run --suite <name> --live` replays the role on the real model for a before/after — opt-in, costs cents per row.
 
 ## Summary
 
@@ -42,3 +42,9 @@ Truth from the coding handoff's diff: trivial ≤ 10 lines, small ≤ 60 (`LANTE
 3. `pipeline.py evals report` scores every suite on the frozen data (or reuses a fresh `--live` result) and writes this file with the fingerprint above.
 
 Scorers: `tools/evals/scorers.py` (stdlib, tested by `tools/evals/test_evals.py`).
+
+## Gate integrity — labelled negative and positive controls
+
+Invalid records accepted: **0/14**. Valid records rejected: **0/1**.
+
+Checks cover missing tests/results, identity mismatch, contradictory exit codes, truthy strings, duplicate commands and missing policy fingerprints. These are deterministic verifier fixtures, not production false-green rates, live model evaluations, or proof of OS isolation. Regression tests also exercise the command runner, SDK tools, evidence resolver and both execution paths.

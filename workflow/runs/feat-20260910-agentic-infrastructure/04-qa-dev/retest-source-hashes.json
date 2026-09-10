@@ -1,0 +1,37 @@
+{
+  "captured_at": "2026-09-10T05:10:14.4382080Z",
+  "sources": [
+    {
+      "path": "tools/azure-runner/tool_policy.py",
+      "sha256": "824e269f1510306f6750e615d827a865811ca81bb4597a5e043e5063fa9213ef"
+    },
+    {
+      "path": "tools/azure-runner/readonly_git.py",
+      "sha256": "d69b0429b9ce2411a8e2f657c23ff406301ec9dfcd5a2bd9037b196f13c160c6"
+    },
+    {
+      "path": "tools/azure-runner/evidence.py",
+      "sha256": "ccab8621cda99b900e4f6bf56f7db2c1b61d78686a831d11494b181ad9731425"
+    },
+    {
+      "path": "tools/azure-runner/factory.py",
+      "sha256": "aa352a3adb06e2a4d9189dc5c8e3e703302e1ab3f105eab2fb63ccdd30930d58"
+    },
+    {
+      "path": "tools/azure-runner/orchestrator.py",
+      "sha256": "a65c958975fa0509b3ec47466722c4f251d91540caa16e67494a4df4f41f104a"
+    },
+    {
+      "path": "tools/azure-runner/pipeline.py",
+      "sha256": "563ad0e4399da996edf5bb6f2f8f8e283738bbb45ea6781abdc368598b630349"
+    },
+    {
+      "path": "tools/mission-control/app.py",
+      "sha256": "9276a78a60d9f486a188dd12be2be855f1492f40c8ffd680e4e2702a99f0c365"
+    },
+    {
+      "path": "tools/mission-control/traceability.py",
+      "sha256": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60"
+    }
+  ]
+}

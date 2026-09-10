@@ -186,6 +186,16 @@ def _cell(state: str, details: list[str]) -> str:
     return f"<div class='cell'>{chip(state, CHIP_KIND.get(state, ''))}{d}{more}</div>"
 
 
+def evidence_details(value) -> list[str]:
+    """Render structured locations and legacy prose without exposing JSON syntax."""
+    if not value:
+        return []
+    if not isinstance(value, list):
+        return [str(value)]
+    return [str(ref.get("path", "")) + (f":{ref['line']}" if ref.get("line") is not None else "")
+            for ref in value if isinstance(ref, dict)]
+
+
 def render_matrix(m: dict) -> str:
     p = m["present"]
     if not p["story"]:
@@ -210,7 +220,7 @@ def render_matrix(m: dict) -> str:
         if r["deferred"] is not None:
             plan_d = [f"deferred: {r['deferred']}"] + plan_d
         commit_d = [f"{k['sha']} {k['subject']}" + (f" [{k['builder']}]" if k.get("builder") else "") for k in r["commits"]]
-        val_d = [r["verdict"]["evidence"]] if r["verdict"] and r["verdict"].get("evidence") else []
+        val_d = evidence_details(r["verdict"].get("evidence")) if r["verdict"] else []
         rows.append(
             f"<tr><td class='ac'>{H(r['id'])}</td><td class='txt'>{H(r['text'])}{edge}</td>"
             f"<td>{_cell(r['plan_state'], plan_d)}</td><td>{_cell(r['coding_state'], commit_d)}</td>"

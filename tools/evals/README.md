@@ -53,6 +53,13 @@ note; it never blocks on infrastructure the checkout lacks.
 
 ## Reading the numbers
 
+`evals report` also runs labelled gate-integrity controls from `integrity.py`:
+invalid gate records must be rejected and a valid tested record must be accepted.
+The report separates these deterministic false-green/false-red counts from the
+frozen role scores. Neither measures live production rejection rates or proves OS
+containment. The policy, Git grammar, evidence resolver and integrity controls are
+included in the report fingerprint.
+
 Numbers are only as good as the data: with a handful of runs a suite reports `n/a` or
 swings on one row. That is fine — the point is the *delta* when a prompt changes, and
 that a change to the factory cannot ship without saying what its numbers are. Grow the

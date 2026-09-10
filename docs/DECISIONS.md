@@ -980,3 +980,58 @@ survives a restore" — the bug `stash create` would have shipped — and ".giti
 respected"), `CoherenceCollapse` (3: a worse round is discarded, a better final round
 ships unchanged, checkpoints can be switched off). Whole-suite green, `check_pr.py` green
 with a regenerated `tools/evals/REPORT.md`.
+
+## D24 — 2026-09-10 — Bind capabilities and verify the evidence behind a green gate
+
+**Context.** The architecture assessment identified a mismatch between the role
+charters and runtime authority: file tools could overwrite the harness or another
+role's artifacts, a Git subcommand allowlist still admitted write/execute forms,
+and a missing quality gate or missing test command could pass. Validation accepted
+prose as evidence. A failed SDK turn discarded available trace and usage data.
+
+**Decision.** Keep Azure OpenAI, the Agents SDK and the fixed code-driven pipeline.
+Make the existing boundaries enforceable before adding another agent framework.
+
+- File tools capture the run, role, output directory, product root and approved
+  file scope at construction. Role outputs, shared report append rules, builder
+  subdirectories and host artifacts are checked in code. Design collection uses
+  the same policy. Windows case aliases, links, traversal and conventional
+  credential filenames are checked before access. `docs/AGENT-CAPABILITIES.md` is
+  generated from this policy and checked for drift.
+- Read-only Git uses an explicit command/option grammar, disables external
+  drivers and pagers, excludes protected filenames from broad searches and
+  historical diffs, and rejects anonymous blob reads. File paths follow `--`;
+  explicit `show revision:path` remains supported for permitted files.
+- Automatic coding requires a configured test before the first model call. The
+  initial quality configuration is fixed for the execution; replacing it during
+  build/fix/test cannot produce a green gate. Missing, stale, malformed and
+  contradictory gate records fail. Scope inspection uses NUL-delimited names,
+  checks both sides of renames, and fails if Git cannot enumerate changes.
+- Validation references identify existing confined files and valid text lines;
+  self-citation fails. Review locations must belong to the handoff's diff and
+  commit. Docker host rechecks obtain their own product checkout. These checks
+  establish reference resolution, not semantic correctness or recording provenance.
+- An execution journal persists completed SDK attempts and available partial
+  failure data. Known usage survives later failures; absent usage remains
+  explicitly incomplete. Transport retries do not replay a loop that has already
+  called tools. Failure records use redacted messages and a retry classification.
+- The eval report now includes labelled positive and negative verifier controls.
+  Both false acceptance and false rejection are measured; an always-rejecting
+  verifier cannot masquerade as success. Frozen scores are not live model scores.
+
+**Validation.** Local SDK wrappers, temporary Git repositories, injected SDK/DB
+failures and the repository's complete configured test command. Independent QA
+found Windows aliases and implicit Git reads that the initial tests missed; all
+three findings were fixed and the exact reproductions retested. Evidence and final
+counts live in `workflow/runs/feat-20260910-agentic-infrastructure/03-coding/report.md`
+and `04-qa-dev/report.md`.
+
+**Limits and rollout.** This is a tool boundary, not an OS sandbox or cryptographic
+gate attestation. Coding shells, MCP capabilities, database credentials, arbitrary
+secret content, network egress and same-user filesystem races need separate
+containment. Commands remain only as meaningful as their tests and human review.
+Hard process kills before an SDK return still need streaming telemetry. No live
+Azure run, Docker isolation proof or recorded browser QA is claimed here. Deploy
+the host and sandbox image together; old green gates without fingerprints fail,
+and new validation executions must replace prose-only citations. No schema change,
+deployment or human gate decision is included in this local engineering change.

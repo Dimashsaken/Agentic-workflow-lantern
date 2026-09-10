@@ -15,6 +15,7 @@ from pathlib import Path
 
 import check_pr
 import replay
+import integrity
 
 REPORT_NAME = "REPORT.md"
 
@@ -52,8 +53,8 @@ def render(results: dict[str, dict], fingerprint: str, counts: dict[str, int], s
              "or the orchestrator's prompt builders / gate functions must regenerate this file "
              "(`pipeline.py evals build && pipeline.py evals report`) in the same change. "
              "`tools/evals/check_pr.py` enforces it from this repo's `lantern.toml` lint command. "
-             "A number that moved is the review conversation; a number that did not move is the "
-             "evidence the change was safe. `evals run --suite <name> --live` replays the role on "
+             "A number that moved is the review conversation; unchanged frozen scores only "
+             "describe the existing corpus and do not establish runtime safety. `evals run --suite <name> --live` replays the role on "
              "the real model for a before/after — opt-in, costs cents per row.", "",
              "## Summary", ""]
     summary_rows = []
@@ -123,6 +124,7 @@ def write_report(root: Path, data_dir: Path, results: dict[str, dict], counts: d
     if counts is None:
         counts = {name: len(replay.build.load(data_dir, name)) for name in replay.build.FILES}
     text = render(results, check_pr.fingerprint(root), counts, git_sha(root), datetime.now(timezone.utc))
+    text += "\n" + integrity.render(integrity.evaluate())
     path = data_dir.parent / REPORT_NAME
     path.write_text(text, encoding="utf-8", newline="\n")
     (data_dir / "results.json").write_text(json.dumps(results, indent=2, sort_keys=True) + "\n",

@@ -560,6 +560,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         mcp_servers.append(paper)
     for s in mcp_servers:
         await s.connect()
+    journal = None
     try:
         agent = Agent(
             name=role,
@@ -572,13 +573,14 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         kickoff = (f"Begin your {stage} session for run {run_id} (attempt {attempt}). Do not "
                    "reply with a plan — start calling tools now and keep working until the "
                    "report is on disk and append_memory has been called.")
+        journal = factory.ExecutionJournal(run_id, stage, execution_key, agent.instructions, kickoff)
 
         async def run_turn(text: str):
             # D23: same retry policy as the container path — a throttled builder is a
             # retriable transport failure, not a failed stage.
             return await factory.with_retry(
-                lambda: Runner.run(agent, input=text, session=session,
-                                   max_turns=max_turns_for(role)),
+                lambda: journal.attempt(lambda: Runner.run(agent, input=text, session=session,
+                                                          max_turns=max_turns_for(role))),
                 on_retry=lambda n, of, e, d: print(
                     f"[{run_id}] retry {n}/{of} after {type(e).__name__} — {d:.1f}s"))
 
@@ -594,23 +596,25 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         else:
             results = [await run_turn(kickoff)]
         result = results[-1]
-        factory.write_trace(run_id, stage, execution_key,          # D22: compiled prompt +
-                            agent.instructions, kickoff, results)  # tool calls for the drawer
         final = str(result.final_output)
         # D14: bundle the committed branch into the run folder while the checkout exists.
         finalize_problems = finalize_coding(run_id, stage) if role == "coding" else []
+    except BaseException as exc:
+        if journal is not None:
+            journal.failed(exc, model_attempt=False)
+        raise
     finally:
-        for s in mcp_servers:
-            await s.cleanup()
-        for var in ("LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
-                    "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
-            os.environ.pop(var, None)   # never leak writability into the next stage
-
-    # Ledger before the postcondition verdict: tokens are spent either way (P0.4).
-    # Known gap, both paths: a Runner.run exception (max_turns, API error) yields no
-    # result/usage line, so that spend goes unmetered — `usage` reports the count.
-    await record_usage(conn, exec_id, factory.merge_usage([usage_dict(r) for r in results]),
-                       model_for(role, stage))
+        try:
+            if journal is not None:
+                journal.flush()
+                await record_usage(conn, exec_id, journal.usage, model_for(role, stage))
+        finally:
+            try:
+                await asyncio.gather(*(s.cleanup() for s in mcp_servers))
+            finally:
+                for var in ("LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
+                            "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
+                    os.environ.pop(var, None)   # cleanup even if ledger or MCP fails
 
     if finalize_problems:
         raise RuntimeError("coding handoff failed: " + "; ".join(finalize_problems))
@@ -728,7 +732,10 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     # The video-evidence gate for QA stages lives inside check_postconditions
     # (mtime-scoped to this attempt), so it holds at all three verdict sites:
     # container self-check, this host re-check, and the in-process path.
-    missing = await check_postconditions(conn, role, run_id, stage, execution_key)
+    verify_product = None
+    if repo and stage in {"00-story.scout", "03-coding.review", "05-post-coding.validate"}:
+        verify_product = await asyncio.to_thread(product_checkout, repo, branch, run_id, work)
+    missing = await check_postconditions(conn, role, run_id, stage, execution_key, verify_product)
     if missing:
         raise RuntimeError("postconditions failed (host re-check): " + "; ".join(missing))
     await render_role_memory(conn, role)   # keep the host's rendered view fresh
@@ -1120,12 +1127,12 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
             await advance(conn, run_id, stage)
     except Exception as e:  # noqa: BLE001 — orchestrator must not die with a claim held
         await conn.execute(
-            """UPDATE stage_executions SET status = 'failed', error = $1, finished_at = now()
+            """UPDATE stage_executions SET status = 'failed', error = $1, error_class = $4, finished_at = now()
                WHERE run_id = $2 AND stage = $3 AND status = 'running'""",
-            str(e)[:4000], run_id, stage)
+            factory.redact(str(e))[:4000], run_id, stage, factory.classify_error(e))
         await conn.execute(
             "UPDATE runs SET status = 'failed', updated_at = now() WHERE id = $1", run_id)
-        await log_event(conn, run_id, "orchestrator", "stage_failed", {"stage": stage, "error": str(e)[:500]})
+        await log_event(conn, run_id, "orchestrator", "stage_failed", {"stage": stage, "error": factory.redact(str(e))[:500]})
         print(f"[{run_id}] {stage} FAILED: {e}\n  rework, then: python pipeline.py retry {run_id}", file=sys.stderr)
     await render_runboard(conn)
 

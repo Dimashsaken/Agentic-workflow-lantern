@@ -322,5 +322,20 @@ class PrRule(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class IntegrityControls(unittest.TestCase):
+    def test_verifier_accepts_positive_and_rejects_negative_controls(self):
+        import integrity
+        result = integrity.evaluate()
+        self.assertEqual(result["false_green"], 0)
+        self.assertEqual(result["false_red"], 0)
+        self.assertGreater(result["negative_controls"], 10)
+        self.assertGreater(result["positive_controls"], 0)
+
+    def test_unconditional_acceptance_and_refusal_are_both_detected(self):
+        import integrity
+        self.assertGreater(integrity.evaluate(lambda _: True)["false_green"], 0)
+        self.assertGreater(integrity.evaluate(lambda _: False)["false_red"], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

@@ -1,0 +1,11 @@
+{
+  "platform": "nt",
+  "coding_can_overwrite_uppercase_review_alias": true,
+  "post_coding_can_overwrite_uppercase_validation_alias": true,
+  "coding_can_read_other_run_via_uppercase_workflow": true,
+  "validation_self_citation_case_alias_accepted": true,
+  "git_show_head_reads_protected_file": true,
+  "git_grep_reads_protected_file_without_explicit_path": true,
+  "git_grep_reads_protected_file_as_unchecked_positional_path": true,
+  "git_show_reads_protected_file_via_wildcard": true
+}

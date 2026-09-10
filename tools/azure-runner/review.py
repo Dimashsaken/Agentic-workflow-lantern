@@ -312,9 +312,9 @@ async def _mark_failed(conn, run_id: str, stage: str, err: Exception) -> None:
     it only knows the run's current stage. Close its row here, never raise."""
     try:
         await conn.execute(
-            """UPDATE stage_executions SET status = 'failed', error = $1, finished_at = now()
+            """UPDATE stage_executions SET status = 'failed', error = $1, error_class = $4, finished_at = now()
                WHERE run_id = $2 AND stage = $3 AND status = 'running'""",
-            str(err)[:4000], run_id, stage)
+            factory.redact(str(err))[:4000], run_id, stage, factory.classify_error(err))
     except Exception as e:  # noqa: BLE001
         print(f"[{run_id}] could not mark {stage} failed: {e}", file=sys.stderr)
 
@@ -347,7 +347,7 @@ async def after_publish(conn, run_id: str, payload: dict, runner: str = "ec2",
                                    "after the review execution")
         except Exception as e:  # noqa: BLE001 — a failed review must not fail a published branch
             await _mark_failed(conn, run_id, REVIEW_STAGE, e)
-            entry = {"round": n, "verdict": "error", "error": str(e)[:600]}
+            entry = {"round": n, "verdict": "error", "error": factory.redact(str(e))[:600]}
             history.append(entry)
             summary["verdict"] = "error"
             await deps.event(conn, run_id, "orchestrator", "review_failed", entry)
@@ -378,7 +378,7 @@ async def after_publish(conn, run_id: str, payload: dict, runner: str = "ec2",
             fresh = await deps.publish(conn, run_id)
         except Exception as e:  # noqa: BLE001
             await _mark_failed(conn, run_id, FIX_STAGE, e)
-            entry["fix_error"] = str(e)[:600]
+            entry["fix_error"] = factory.redact(str(e))[:600]
             await deps.event(conn, run_id, "orchestrator", "review_fix_failed",
                              {"round": n, "error": entry["fix_error"]})
             print(f"[{run_id}] fix execution after round {n} FAILED — the gate opens with the "

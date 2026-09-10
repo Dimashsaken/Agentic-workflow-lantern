@@ -20,8 +20,9 @@ the autonomy slider's detents, and they stay.
 **Outer layer — a Postgres state machine.** Runs and stage executions are rows; a
 single orchestrator daemon (systemd, `Restart=always`) polls every few seconds,
 claims runnable work with `FOR UPDATE SKIP LOCKED`, executes one stage, advances.
-All state is in Postgres, so a crash, reboot, or week-long gate wait costs nothing —
-no process ever waits on a human.
+Gate state survives a crash, reboot or week-long wait without a process waiting
+on a human. Interrupted running stages require recovery/retry; persisting the
+outer state does not make an in-flight SDK turn resumable.
 
 **Inner layer — Agents SDK primitives.** Each stage runs one agent whose
 conversation persists via `SQLAlchemySession` (session ID `{run_id}:{stage}`) in the
@@ -53,7 +54,7 @@ when we outgrow one machine.
  │  verify postconditions│      │        webhook (fail-closed)      │
  │  record artifacts     │      └───────────────────────────────────┘
  │  gate? → approval row + status=waiting_gate   (process holds nothing)
- │  fail? → attempt++/failed + heartbeat sweeper
+ │  fail? → failed; retry/startup recovery (no live stage sweeper yet)
  └───────────────────────┘
 ```
 
@@ -99,16 +100,37 @@ unchanged.
 
 ## Failure modes engineered against (from the research)
 
-1. **Resume-time drift** — every run stamps `pipeline_version`; stage rows stamp
-   `run_state_version`; on mismatch, re-run the stage from its input artifact.
+1. **Resume-time drift** — runs stamp `pipeline_version`. `run_state_version` and
+   `run_state` exist in the schema but SDK turn resumption/version checking are not
+   implemented. Restart recovery re-executes the stage; it is not checkpoint replay.
 2. **Replayed side effects** — idempotency key per stage-attempt; check-before-acting
    on external mutations; intent recorded in `events` first.
 3. **Fail-open gates** — see rules above.
 4. **Cross-stage cascade** (MAST: 42% spec / 21% verification failures) — stage
    inputs/outputs are typed JSONB validated at the boundary; QA stays an independent
    execute-and-verify stage, never trusting the coder's self-report.
-5. **Zombie runs** — `heartbeat_at` + sweeper requeues/fails stale stages;
-   `lantern status` lists every non-terminal run; gate SLAs re-notify.
+5. **Zombie runs** — runner heartbeats and startup orphan recovery exist. Stage
+   heartbeat renewal, leases/fencing and a live stale-stage sweeper remain unimplemented;
+   `heartbeat_at` is currently stamped at insertion, not continuously renewed.
+
+### Verified tool and evidence boundaries (D24)
+
+File capabilities are execution-bound and the read-only Git tool accepts only
+inspection forms. An automatic coding run without a test command is held before
+model execution. Its quality configuration is captured before the build and cannot
+be weakened during the fix loop. Missing/stale gate files and contradictory results
+fail the postcondition; green is recomputed from the command exits.
+
+Validation evidence resolves to real files and lines. Review locations resolve to
+the published diff and revision. Docker review/validation host checks obtain their
+own checkout instead of silently skipping product evidence. This checks references,
+not whether the cited prose is true or the tests adequately cover a requirement.
+
+Both executors persist completed SDK attempts and available partial failure data,
+with redaction and known usage. Missing failure usage remains marked incomplete.
+An SDK loop with tool calls is not automatically replayed after a transport error;
+request-level retries remain the SDK's responsibility. Hard process death before
+the SDK returns still needs streaming telemetry or durable turn resumption.
 
 ## The execution plane — sandbox per stage (D10)
 

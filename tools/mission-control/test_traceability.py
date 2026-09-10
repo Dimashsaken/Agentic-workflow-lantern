@@ -165,6 +165,15 @@ class MatrixTests(unittest.TestCase):
         self.assertEqual(secs[2]["mentions"], {"AC-2"})
         self.assertEqual(tr.charter_sections(""), [])
 
+    def test_structured_evidence_locations_render_and_escape(self):
+        matrix = self.full()
+        matrix["rows"][0]["verdict"]["evidence"] = [
+            {"path": "product/app.py", "line": 12}, {"path": "04-qa-dev/<result>.txt"}]
+        html = tr.render_matrix(matrix)
+        self.assertIn("product/app.py:12", html)
+        self.assertIn("04-qa-dev/&lt;result&gt;.txt", html)
+        self.assertNotIn("<result>", html)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

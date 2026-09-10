@@ -549,7 +549,7 @@ def validation_table(data: dict) -> str:
         st = str(c.get("status", "?"))
         rows.append(f"<tr><td class='id'>{H(str(c.get('id', '?')))}</td>"
                     f"<td>{chip(st, VALIDATION_CHIP.get(st, ''))}</td>"
-                    f"<td>{H(str(c.get('evidence', '')))}</td></tr>")
+                    f"<td>{H('; '.join(traceability.evidence_details(c.get('evidence'))))}</td></tr>")
     verdict = str(data.get("verdict", "?"))
     fix = data.get("fix_now") or []
     head = (f"<div class='abh'><b>05-post-coding/validation.json</b>"

@@ -87,6 +87,12 @@ major carries a `suggestion`; `must_fix` ⊆ finding ids and ⊇ every blocker/m
 `03-coding/report.md` with its own `- **Status:**` line (PASS for either verdict — a
 request_changes is your job done, not a blocked stage) and the one-line verdict.
 
+File findings must resolve inside the handoff's diff. A line must exist in that
+file at `head_sha`, and the checkout must be at `head_sha`. For a deleted file use
+`line: null`. For missing work whose file is not in the diff, use `file: ""` and
+`line: null`, and name the expected file in the summary. This verifies location;
+it does not establish that the reviewer found every defect.
+
 ## 5. Session end
 
 Report section as above; `append_memory` with the defect class this product's builds
