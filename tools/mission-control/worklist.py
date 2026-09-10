@@ -3,6 +3,7 @@
 from urllib.parse import urlencode
 
 from ui import H, ago, chip
+import lifecycle
 
 
 FILTERS = (("active", "Active"), ("review", "Needs review"),
@@ -15,6 +16,9 @@ def items(snap, now, *, stage_dir, stage_meta, gate_meta, short_name, blocked,
     for approval in sorted(snap["pend"], key=lambda a: a["requested_at"]):
         pending.setdefault(approval["run_id"], approval)
     result = []
+    executions = {}
+    for execution in snap.get("latest_executions", ()):
+        executions.setdefault(execution["run_id"], []).append(execution)
     for run in snap["runs"]:
         rid = run["id"]
         approval = pending.get(rid)
@@ -54,8 +58,12 @@ def items(snap, now, *, stage_dir, stage_meta, gate_meta, short_name, blocked,
         title = short_name(rid).replace("-", " ")
         title = title[:1].upper() + title[1:]
         repo = (dict(run).get("product_repo") or "").replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+        cycle = lifecycle.build(run, executions.get(rid, ()), [approval] if approval else [])
+        if state in ("running", "queued"):
+            detail = cycle["now"]
         result.append(dict(id=rid, title=title, state=state, label=label, tone=tone,
                            detail=detail, href=href, when=when, stale=stale, repo=repo,
+                           cycle=cycle,
                            owner=run["created_by"], kind="Bug" if rid.startswith("bug-") else "Feature"))
     order = {"review": 0, "blocked": 1, "running": 2, "queued": 3, "closed": 4}
     return sorted(result, key=lambda r: (order[r["state"]],
@@ -93,7 +101,7 @@ def render(rows, now, *, selected="active", query="", path="/"):
             f"<span class='work-symbol state-{row['state']}' aria-hidden='true'>"
             f"{'◇' if row['kind'] == 'Feature' else '○'}</span>"
             f"<span class='work-name'><strong>{H(row['title'])}</strong><span>{H(meta)}</span></span>"
-            f"<span class='work-detail'>{H(row['detail'])}</span>"
+            f"<span class='work-detail'>{lifecycle.mini(row['cycle'])}<span>{H(row['detail'])}</span></span>"
             f"<span class='work-state'>{chip(row['label'], row['tone'])}</span>"
             f"<time class='work-age{' overdue' if row['stale'] else ''}' datetime='{row['when'].isoformat()}' "
             f"title='{H(age_label + age + ' · ' + row['when'].strftime('%b %d %H:%M UTC'))}'>"

@@ -7,7 +7,7 @@ The web UI for the software factory — design and rationale in
 |------|--------|-----------------|
 | **Work** `/`, `/runs` | `worklist.py`, `app.py` | One searchable queue. Reviews and blocked runs first; filters for active work, reviews, completed work, and history. |
 | **Reviews** `/gates` | `app.py` | Open one review to see its artifact and decide. Timing and decision history are optional disclosures. |
-| **Run** `/run/<id>` | `app.py`, `lanes.py` | Current decision and recent activity. Full execution lanes, reports, and audit history are available on demand. |
+| **Run** `/run/<id>` | `app.py`, `lifecycle.py`, `lanes.py` | Connected lifecycle, current agents, next handoff, and rework. Select a stage for attempts and evidence; open the full execution history on demand. |
 | **Drawer** `/run/<id>/exec/<n>` | `drawer.py` | Prompt, tool calls, report, validation, quality gate, memory, ledger, retry and rework. |
 | **Traceability** `/run/<id>/trace` | `traceability.py` | Story criteria mapped to plan tasks, commits, QA, and validation. |
 | **Chat** `/chat` | `chat.py` | Start with Lantern; choose a specialist only when needed. |

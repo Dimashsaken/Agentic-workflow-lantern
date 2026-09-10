@@ -7,13 +7,18 @@ Mission Control opens on the work that needs attention. The primary navigation i
 - **Work** `/`: a single searchable list, with reviews and blocked work first.
   Active, Needs review, Completed, and All work filters retain the search query.
   Search matches the run name, repository, owner, and current activity. `/runs`
-  opens the same view with all history selected.
+  opens the same view with all history selected. Each row keeps a compact stage
+  path, current position, and current agent activity visible.
 - **Reviews** `/gates`: compact summaries, oldest first. Open a review to see the
   full artifact and decision form. Recent decisions and review timing are folded
   below the queue. Existing `#gate-<id>` links reveal the matching evidence.
-- **Run** `/run/<id>`: the current decision and recent actual activity. An activity
-  row opens the execution drawer. Full execution lanes, reports, files, and audit
-  history are available in disclosures; metadata lives under Run details.
+- **Run** `/run/<id>`: an always-visible lifecycle connects the brief to staging
+  QA, with the current stage, human handoff, and next step. Click a stage to inspect
+  its agents, attempts, and evidence. Parallel builders remain separate. A return
+  from QA appears as a rework arrow with its reason; previous-cycle evidence is
+  retained without marking downstream stages complete. Bug runs show their debug
+  lifecycle, including conditional planning. Repository and branch stay visible;
+  full execution lanes, reports, and audit history open on demand.
 - **Chat** `/chat`: describe the work to Lantern. Specialist selection is optional,
   and links from a run preserve the chosen role and run context. On phones,
   conversation history is available from the Conversations disclosure.
@@ -31,7 +36,17 @@ criterion matrix, `d` changes theme, and `?` opens keyboard help. Typing or open
 disclosure pauses automatic refresh so it cannot discard the reader's context.
 
 Implementation: `tools/mission-control/worklist.py`, `app.py`, `ui.py`, `chat.py`,
-`lanes.py`. Tests: `python -m unittest discover -s tools/mission-control -p 'test_*.py'`.
+`lanes.py`, `lifecycle.py`. Tests: `python -m unittest discover -s tools/mission-control -p 'test_*.py'`.
+
+Lifecycle references: [Super Simple Software Factory](https://github.com/disler/super-simple-software-factory)
+uses compact phase indicators and a selectable session trace; [Last Light](https://lastlight.dev/)
+shows workflow stages and review loops. Lantern adapts those interaction patterns
+to its existing fixed pipeline, without adding a workflow editor or copying code.
+Stage position comes from the run, attempts from executions, and rework reasons
+from recorded events. Missing execution evidence is labeled, not inferred as success.
+The work list uses the latest execution snapshot; the run page shows full attempts
+and the most recent rework among its latest 100 audit events. Both retain the
+existing 30-second refresh behavior; they are not a live agent stream.
 
 ## Earlier design and evidence
 

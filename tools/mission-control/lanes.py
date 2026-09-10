@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from intake import is_bug_run
 from orchestrator import ROLE_FOR_STAGE, tier_for
 from pipeline import FEATURE_STAGES, STAGE_DIR, STAGE_INDEX, est_cost_usd
 from ui import H, chip, dur, fmt_k, fmt_money
@@ -146,8 +147,8 @@ def build_lanes(run, execs, approvals, now: datetime, traces: set[str] | None = 
     # it is going to run a ui-ux stage it will never reach. Its lanes are what it
     # actually executed, and render_lanes says which lifecycle it is on.
     cur = run["current_stage"]
-    feature_run = cur in STAGE_INDEX
-    cur_i = STAGE_INDEX.get(cur, -1)
+    feature_run = not is_bug_run(run_id) and cur.split(".", 1)[0] in {s[1] for s in FEATURE_STAGES}
+    cur_i = pipe_index(cur)
     if feature_run:
         for stage, _sdir, stype, _gate, _runner in FEATURE_STAGES:
             if stage in lanes:
@@ -160,6 +161,8 @@ def build_lanes(run, execs, approvals, now: datetime, traces: set[str] | None = 
                 lane["current"] = True          # queued / executing with no row yet
             else:
                 lane["future"] = True
+        if cur not in lanes:
+            lanes[cur] = _new_lane(cur, run_id)
     if cur in lanes and run["status"] not in ("done", "cancelled"):
         lanes[cur]["current"] = True
 
@@ -230,25 +233,6 @@ def gate_row(lane: dict, gate_short: dict, gate_meta: dict) -> str:
     return (f"<div class='gaterow {kind}'><span class='dia'>◆</span>"
             f"<span class='gn'>{H(label)}</span><span title='{H(title)}'>{H(text)}</span>"
             f"<span class='who'>{who}</span>{link}</div>")
-
-
-def render_activity(model: dict, run_id: str, stage_meta: dict) -> str:
-    """Recent actual work, with the full execution model available in the disclosure."""
-    attempts = [(a, lane) for lane in model["lanes"] for a in lane["attempts"]]
-    attempts.sort(key=lambda item: item[0]["started_at"], reverse=True)
-    rows = []
-    for attempt, lane in attempts[:8]:
-        name = stage_meta.get(lane["dir"], (lane["stage"],))[0].split(" · ", 1)[-1]
-        label, tone = STATUS_LABEL.get(attempt["status"], (attempt["status"], ""))
-        rows.append(f"<a class='activity-row' href='/run/{H(run_id)}/exec/{attempt['exec_id']}' data-drawer data-k>"
-                    f"<span><strong>{H(name)}</strong><small>{H(lane['role'])} · Attempt {attempt['attempt']}</small></span>"
-                    f"{chip(label, tone)}<time>{H(dur(attempt['seconds']))}</time>"
-                    f"<span aria-hidden='true'>↗</span></a>")
-    if len(attempts) > 8:
-        rows.append(f"<p class='sub'>Latest 8 of {len(attempts)} executions. Full history is below.</p>")
-    if not rows:
-        rows.append("<p class='sub'>No activity yet. Executions will appear here as work begins.</p>")
-    return "<section class='activity'><h2>Activity</h2>" + "".join(rows) + "</section>"
 
 
 def render_lanes(model: dict, run_id: str, gate_short: dict, gate_meta: dict,

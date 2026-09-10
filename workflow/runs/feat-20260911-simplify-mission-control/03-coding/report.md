@@ -89,3 +89,88 @@ identity). The tool updated its database row and rendered role memory.
 A list that sends a reviewer to evidence avoids duplicated decisions and makes the
 queue scannable. Prefix state classes by component: a generic `.queued` chat rule
 hid an unrelated work-list marker and shifted every grid cell.
+
+---
+
+## Lifecycle follow-up — 2026-09-11
+
+Status: PASS
+
+The user clarified that the simplified queue removed essential developer context.
+This follow-up restores an understandable run cycle while keeping evidence and
+secondary controls available on demand. It continues on `codex/simplify-mission-control`,
+branched from main, under the user's authorization to implement the frontend.
+
+### Research and decisions
+
+- [Super Simple Software Factory](https://github.com/disler/super-simple-software-factory):
+  inspected the actual Vue visualizer, especially
+  [PhaseDots.vue](https://github.com/disler/super-simple-software-factory/blob/main/.claude/skills/sssf/apps/visualizer/src/components/PhaseDots.vue)
+  and [SessionTrace.vue](https://github.com/disler/super-simple-software-factory/blob/main/.claude/skills/sssf/apps/visualizer/src/components/SessionTrace.vue).
+  The useful patterns are compact phase progress per session and a selectable
+  execution trace. Lantern uses its own implementation and fixed lifecycle.
+- [Last Light](https://lastlight.dev/): its workflow view connects the agent stages,
+  human approval, and review loops. Applied the connected path and visible rework
+  relationship, without adding a graph editor.
+- [AgentFactory](https://github.com/LiteTrackerApp/agentfactory): the fleet/work
+  status view and session drill-down reinforce keeping queue status separate from
+  development-stage progress.
+
+### Implementation
+
+- Every work row includes its stage path, position, and current agent activity.
+- The run page always shows the feature or debug lifecycle. Selecting a stage
+  opens that stage's executions, agents, attempts, reports, and existing drawer.
+- Happening now and Up next expose the current owner and the next human handoff.
+  Gate decisions still happen with their existing evidence and authentication.
+- A recorded rework displays the return path, timestamp, and reason. Downstream
+  evidence from the previous pass remains available without being marked complete.
+  Old running records do not count as live agents after a recorded rework.
+- Parallel builders retain separate identities. Unknown execution history is
+  explicit. Bug planning is conditional; early bug completion does not imply the
+  remaining stages ran. Completion does not assert production deployment.
+- Repository and working branch remain visible. Deep links reveal their report
+  or full-history disclosure. Keyboard navigation includes the stage executions.
+- Corrected feature/debug classification in the older lane view at shared coding
+  stages and preserved the current lane for coding subphases with no execution yet.
+- Removed the redundant recent-activity list, replacing it with stage-specific work.
+  No new frontend dependencies, backend workflow changes, or schema changes.
+
+### Verification and evidence
+
+- Mission Control: 191 tests run, 190 passed, one existing skip.
+- Browser: Work, feature rework, bug fix, and pending review at 320, 390, 820,
+  1024, and 1440 pixels: all 20 route/viewport combinations have no horizontal
+  document overflow. Desktop, mobile, and dark-mode screenshots inspected.
+- Stage selection, unknown-stage selection fallback, report deep links, full
+  execution history, review link, drawer open/close, and keyboard open/close verified.
+  Browser reported zero JavaScript errors.
+- Preview uses synthetic data and rejects writes. No production decisions or
+  Azure agent turns were made. Refresh remains the existing 30-second snapshot.
+- Full repository quality policy passed: all 30 configured test commands and both
+  lint commands (compileall and the D20 eval rule). No watched prompts or gates changed.
+- Screenshot: `C:/Users/dimas/AppData/Local/Temp/lantern-cycle-final.png`.
+- Mobile: `C:/Users/dimas/AppData/Local/Temp/lantern-cycle-mobile-final.png`.
+- Work list: `C:/Users/dimas/AppData/Local/Temp/lantern-cycle-work-final.png`.
+- Video: `C:/Users/dimas/AppData/Local/Temp/lantern-cycle-video/page@0bcd3c0dc6672e3a1b269a67d0ee597d.webm`.
+- Test logs: `C:/Users/dimas/AppData/Local/Temp/lantern-cycle-tests.log` and
+  `C:/Users/dimas/AppData/Local/Temp/lantern-cycle-quality.log`.
+
+### Durable learning
+
+Attempted the repository `append_memory` tool through `make_append_memory` and
+`ToolContext`, execution key `feat-20260911-simplify-mission-control:lifecycle-followup`.
+The tool could not reach its database (`WinError 1225`, connection refused).
+The generated role-memory file was not edited. Candidate retained here for retry:
+
+> In a developer automation UI, simplification must preserve the current stage,
+> responsible agent, next human handoff, and why work returned to an earlier stage.
+> Keep the lifecycle visible and reveal detailed evidence per stage; distinguish
+> older-cycle records from active work.
+
+### Remaining limits
+
+The run page reads its most recent 100 audit events, so older rework events may be
+outside that window. The work list uses the latest execution snapshot; full attempts
+and recorded rework reasons live on the run page. Live production data and streaming
+agent behavior were not exercised in the local preview.

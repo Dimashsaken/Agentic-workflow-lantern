@@ -65,7 +65,8 @@ class EmptyDatabase(unittest.TestCase):
     def test_bare_run_renders_lanes_matrix_and_404_drawer(self):
         pool = FakePool(runs=[run_row(id=RUN, status="running", current_stage="00-story.scout")])
         html = body_of(get(mc.run_page, RUN, signed(), pool=pool))
-        self.assertIn("Activity", html)
+        self.assertIn("Feature lifecycle", html)
+        self.assertIn("Happening now", html)
         self.assertIn("class='lane cur'", html)            # queued stage 0 is the current lane
         self.assertIn("class='lane future'", html)
         self.assertIn("queued — waiting for a runner slot", html)
@@ -104,7 +105,7 @@ class BugRunOnEveryPage(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         html = body_of(resp)
         self.assertIn(self.BUG, html)
-        self.assertIn("02 repro", html)
+        self.assertIn("Reproduce", html)
 
     def test_board_and_run_page_too(self):
         pool = FakePool(runs=[self.bug_run()],

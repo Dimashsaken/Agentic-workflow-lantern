@@ -60,6 +60,7 @@ import traceability  # noqa: E402
 import ui  # noqa: E402
 import workspace  # noqa: E402
 import worklist  # noqa: E402
+import lifecycle  # noqa: E402
 from ui import H, ago, chip, fmt_int, fmt_k, fmt_money  # noqa: E402
 
 # Board columns = run-folder dirs; split stage-1 executions share one column.
@@ -373,7 +374,7 @@ async def snapshot(p) -> dict:
             led["models"].add(r["model"])
     runners = {r["name"]: r for r in runner_rows}
     online = {n: (r["age"] is not None and r["age"] < 90) for n, r in runners.items()}
-    return {"runs": runs, "latest_by_dir": latest_by_dir, "ledger": ledger,
+    return {"runs": runs, "latest_executions": latest, "latest_by_dir": latest_by_dir, "ledger": ledger,
             "pend": pend, "gate_latency": gate_latency, "runners": runners,
             "online": online, "today": today, "feed": feed}
 
@@ -1006,9 +1007,9 @@ async def cost_page(request: Request):
 def run_header(run, run_id: str, now: datetime, totals: dict, active: str) -> str:
     status_chip = {"running": ("Queued", ""), "executing": ("Running", "ok"),
                    "waiting_gate": ("Waiting on a human", "gate"),
-                   "failed": ("Failed", "blocked"), "done": ("Shipped", "ok"),
+                   "failed": ("Failed", "blocked"), "done": ("Completed", "ok"),
                    "cancelled": ("Cancelled", "")}.get(run["status"], (run["status"], ""))
-    curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
+    curdir = lifecycle.directory(run["current_stage"])
     verdict = report_verdict(report_text(run_id, curdir)) \
         if run["status"] not in ("done", "cancelled") else None
     v_chip = chip("report: blocked", "blocked") if verdict == "BLOCKED" else ""
@@ -1043,14 +1044,13 @@ def run_header(run, run_id: str, now: datetime, totals: dict, active: str) -> st
         <a class='back-link' href='/'>← All work</a>
         <h1>{H(run_short(run_id).replace('-', ' ').capitalize())}</h1>
         <div class='run-status'>{chip(*status_chip)}{v_chip}<span>{H(STAGE_META.get(curdir, (curdir,))[0])}</span></div>
+        <div class='run-codebase'>{repo_bit}</div>
         <details class='run-meta'><summary>Run details</summary><div class='meta'>
           <code>{H(run_id)}</code> · pipeline v{H(str(run['pipeline_version']))} {mode}<br>
           brief <code>{H(run['brief'])}</code><br>
           Started by <b>{H(run['created_by'])}</b> · {run['created_at']:%b %d %H:%M} UTC<br>
-          product repo: {repo_bit}<br>
           Est. spend {H(fmt_money(totals.get('cost', 0.0)) if tot else '—')} · {H(tok_line)}{unm_line}{sec_line}
         </div></details>
-        {repo_bit if not dict(run).get('product_repo') else ''}
         <nav class='runnav' aria-label='Run views'>{nav}</nav></div></div>"""
 
 
@@ -1069,7 +1069,7 @@ def _trace_keys(run_id: str, execs) -> set[str]:
 
 
 @app.get("/run/{run_id}", response_class=HTMLResponse)
-async def run_page(run_id: str, request: Request):
+async def run_page(run_id: str, request: Request, stage: str = ""):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
@@ -1100,6 +1100,9 @@ async def run_page(run_id: str, request: Request):
               "unmetered": model["unmetered"], "seconds": model["seconds"]}
     body = [run_header(run, run_id, now, totals, f"/run/{run_id}")]
 
+    cycle = lifecycle.build(run, execs, approvals, events)
+    body.append(lifecycle.render(cycle, now, selected=stage))
+
     for a in pend:
         body.append(gate_card(a, run, now))
 
@@ -1113,10 +1116,8 @@ async def run_page(run_id: str, request: Request):
             body.append("<div class='notice'><b>Review unavailable.</b> This run is waiting for a decision, but its approval record is missing.</div>")
         elif status in ("done", "cancelled"):
             body.append(f"<p class='sub'>This run is {H(status)}. Its evidence and history are below.</p>")
-        else:
-            body.append("<p class='sub'>Work is in progress. The next review will appear here when it's ready.</p>")
-    body.append(lanes.render_activity(model, run_id, STAGE_META))
-    body.append(f"<details class='disclosure'><summary>Execution details <span>{model['executions']} executions</span></summary>"
+
+    body.append(f"<details class='disclosure' id='execution-history'><summary>Execution details <span>{model['executions']} executions</span></summary>"
                 + lanes.render_lanes(model, run_id, GATE_SHORT, GATE_META, STAGE_META) + "</details>")
 
     # Traceability, one line: the counts and a link to the matrix.
@@ -1132,8 +1133,8 @@ async def run_page(run_id: str, request: Request):
     # Stage folders: the run-folder view (reports, artifacts, consults) per stage dir.
     by_dir: dict[str, list] = {}
     for e in execs:
-        by_dir.setdefault(STAGE_DIR.get(e["stage"], e["stage"]), []).append(e)
-    curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
+        by_dir.setdefault(lifecycle.directory(e["stage"]), []).append(e)
+    curdir = lifecycle.directory(run["current_stage"])
     body.append("<details class='disclosure'><summary>Reports &amp; files</summary>")
     for d in dict.fromkeys([*BOARD_DIRS, *by_dir, curdir]):
         if d not in by_dir and d != curdir:
@@ -1182,7 +1183,7 @@ async def run_page(run_id: str, request: Request):
         if role and tries:      # a stage that ran can be asked about (consult mode, D11)
             bits.append(f"<div class='arts'><a href='/chat?agent={H(role)}&amp;run={H(run_id)}'>"
                         f"💬 consult {H(role)} about this run</a></div>")
-        body.append(f"<div class='{cls}'>{''.join(bits)}</div>")
+        body.append(f"<div class='{cls}' id='files-{H(d)}'>{''.join(bits)}</div>")
 
     body.append("</details>")
 
