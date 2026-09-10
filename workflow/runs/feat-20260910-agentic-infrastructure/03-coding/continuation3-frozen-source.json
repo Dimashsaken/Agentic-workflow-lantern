@@ -1,0 +1,55 @@
+{
+  "environment": "actual Docker image and disposable Git tree; no Azure or database",
+  "exit_code": 0,
+  "observations": [
+    {
+      "kind": "real-isolated-quality-evidence",
+      "image_digest": "sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756",
+      "tested_product": {
+        "head_sha": "f992d572f313b8378ffb42cd45e00a456159c132",
+        "tree_sha": "331abb9014a861416a20f39b17458bff77879fe3",
+        "worktree_sha256": "6ea129319f1d048bf7715354827301c517efd67a24679f4ce4ac17903e683be7"
+      },
+      "harness_state": {
+        "revision": "a5d5a846592757777106dd69d472dcbca7acf2c9",
+        "dirty": true,
+        "source_sha256": "56f3dcd021ba82c5946def41a2abd27a471bbca8117e4d256e12729c7f62a03a",
+        "source_scope": [
+          "tools/azure-runner source",
+          "infra/sandbox source",
+          "agents",
+          "workflow/templates"
+        ]
+      },
+      "execution_key": "feat-test:03-coding:1",
+      "manifest_sha256": "c0791cebfa2587023c66e6a4c927b4964e23edda87084df197c9ab32c35a9a9e",
+      "command": {
+        "command": "python source.py",
+        "exit_code": 0,
+        "id": "quality:test",
+        "observed_at": "2026-09-10T15:51:37+00:00",
+        "outcome": "pass",
+        "seconds": 0.6
+      },
+      "valid_gate": true,
+      "changed_manifest_rejected": true,
+      "changed_source_rejected": true,
+      "ignored_dependencies_excluded": true,
+      "mutable_modify_restore_passed": true,
+      "readonly_modify_restore_rejected": true,
+      "readonly_command_result": {
+        "name": "test",
+        "command": "python mutate_restore.py",
+        "exit": 1,
+        "passed": false,
+        "seconds": 0.9,
+        "output_tail": "\n[stderr]\nTraceback (most recent call last):\n  File \"/work/product/mutate_restore.py\", line 5, in <module>\n    p.write_text(\"print('forged pass')\\n\")\n  File \"/usr/lib/python3.12/pathlib.py\", line 1049, in write_text\n    with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1015, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nOSError: [Errno 30] Read-only file system: 'source.py'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/work/product/mutate_restore.py\", line 8, in <module>\n    p.write_bytes(original)\n  File \"/usr/lib/python3.12/pathlib.py\", line 1038, in write_bytes\n    with self.open(mode='wb') as f:\n         ^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1015, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nOSError: [Errno 30] Read-only file system: 'source.py'\n"
+      },
+      "source_preserved_for_fix_loop": true,
+      "azure_used": false,
+      "database_used": false
+    }
+  ],
+  "log_sha256": "bac07243a950291b2d1c1611880685a6d564cb75589bb875de05fef90eba27b4",
+  "passed": true
+}

@@ -1,0 +1,19 @@
+test_leased_review_never_sends_unledgered_provider_post (__main__.ContinuationReview.test_leased_review_never_sends_unledgered_provider_post) ... FAIL
+test_legacy_review_still_posts_advisory_comment_once (__main__.ContinuationReview.test_legacy_review_still_posts_advisory_comment_once) ... ok
+test_lost_fence_between_push_and_pr_create_stops_second_effect (__main__.ContinuationReview.test_lost_fence_between_push_and_pr_create_stops_second_effect) ... ok
+
+======================================================================
+FAIL: test_leased_review_never_sends_unledgered_provider_post (__main__.ContinuationReview.test_leased_review_never_sends_unledgered_provider_post)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\workflow\runs\feat-20260910-agentic-infrastructure\05-post-coding\continuation3-probes.py", line 24, in test_leased_review_never_sends_unledgered_provider_post
+    api.assert_not_called()
+  File "C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py", line 910, in assert_not_called
+    raise AssertionError(msg)
+AssertionError: Expected 'mock' to not have been called. Called 1 times.
+Calls: [call('POST', '/repos/owner/product/pulls/7/reviews', {'event': 'COMMENT', 'body': '**Lantern review � round 1: APPROVE** (0 must-fix, 0 finding(s))\n\nNo findings.\n\n_Posted by the Lantern review bot from `workflow/runs/run/03-coding/review/review.json`. Advisory: a human approves `code_complete` and a human merges._', 'comments': []})].
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+FAILED (failures=1)

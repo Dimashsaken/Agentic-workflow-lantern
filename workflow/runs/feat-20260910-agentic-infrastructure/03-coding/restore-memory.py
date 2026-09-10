@@ -25,7 +25,7 @@ PENDING = {
 }
 
 
-async def main():
+async def main(output_name="configured-postgres-restored.json"):
     if execution_runtime.enabled():
         raise RuntimeError("Manual engineering memory must not impersonate a leased stage")
     url = orchestrator.db_urls()[1]
@@ -55,7 +55,7 @@ async def main():
         after = {table: await conn.fetchval(f"SELECT count(*) FROM {table}") for table in before}
         approvals_after = await conn.fetchval("SELECT md5(coalesce(jsonb_agg(to_jsonb(a) ORDER BY id)::text,'')) FROM approvals a")
         record = {"recorded_at": datetime.now(timezone.utc).isoformat(), "environment": "existing configured local PostgreSQL; not disposable; not a production certification", "identity": identity, "counts_before": before, "counts_after": after, "approval_snapshot_unchanged": approvals_before == approvals_after, "memory": entries, "migration_applied": False, "new_cluster_created": False}
-        Path(__file__).with_name("configured-postgres-restored.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        Path(__file__).with_name(output_name).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(record, indent=2))
     finally:
         await conn.close()

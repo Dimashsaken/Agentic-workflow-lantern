@@ -122,3 +122,23 @@ inserting fixture receipts into its database. Snapshot run, execution and approv
 state before/after. Existing live story gates remain pending. Actual controller
 manifest generation, tamper refusal, lease recovery and Azure calls are covered
 by the integrator's separate evidence, not inferred from renderer fixtures.
+
+## Round 6 — continuation 3 UI regression
+
+Written before execution, 2026-09-10. Use the copied current application and
+preserved disposable Azure executions 16/17; require the launcher to reject the
+configured database and accept only the designated disposable endpoint. No new
+Azure call, execution row, receipt or approval may be manufactured for this test.
+
+- AC-10/11: record desktop and mobile authentication/evidence navigation, absent
+  provenance, reload and return to run. Compare protected DB state before/after.
+- Repeat separately labelled renderer fixtures: matching controller receipt,
+  forged writable mirror, stale attempt and cross-run receipt; Unicode/HTML names,
+  viewport geometry, back/refresh and theme switch. Keep positive controls.
+- Run existing drawer and route regressions. Decode every new video and inspect
+  representative frames, preserving timestamps, source/video hashes and traces.
+- Time-box exploration to the existing navigation/theme probes. No gate action,
+  retry, chat send, publication or authenticated non-GET request after login.
+- Publication reconciliation has no changed UI surface; these sessions cannot
+  prove provider reconciliation, maintenance fencing, external QA transport or
+  deployment-bound recording receipts. Those acceptance items remain separate.

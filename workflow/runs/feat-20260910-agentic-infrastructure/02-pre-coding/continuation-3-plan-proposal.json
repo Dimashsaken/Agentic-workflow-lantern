@@ -21,6 +21,8 @@
     {"id": "AC-12", "reason": "Measure context budgeting and structured outputs only after foundation acceptance and a separately approved experiment contract."}
   ],
   "write_scope": [
+    "lantern.toml",
+    "tools/azure-runner/test_execution_runtime.py",
     "tools/azure-runner/github_publication.py",
     "tools/azure-runner/test_github_publication.py",
     "tools/azure-runner/pipeline.py",

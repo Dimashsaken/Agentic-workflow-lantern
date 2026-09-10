@@ -59,6 +59,7 @@ import review   # noqa: E402  D19: review loop after publish + merge babysitter
 import intake  # noqa: E402  D20: the debug lifecycle — bug runs, their envelopes, the shepherd
 import execution_runtime as ownership
 import tool_execution
+import github_publication
 
 PIPELINE_VERSION = "3"  # v3 (D17): story stage + validation execution; v2: stage 1 diverge/design split
 POLL_SECONDS = 5
@@ -925,10 +926,14 @@ def _gh_api(method: str, path: str, data: dict | None = None) -> tuple[int, obje
                  "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
-            raw = resp.read()
+            raw = resp.read(4 * 1024 * 1024 + 1)
+            if len(raw) > 4 * 1024 * 1024:
+                raise RuntimeError("GitHub response exceeded the bounded observation size")
             return resp.status, (json.loads(raw) if raw else {})
     except urllib.error.HTTPError as e:
-        raw = e.read()
+        raw = e.read(4 * 1024 * 1024 + 1)
+        if len(raw) > 4 * 1024 * 1024:
+            raise RuntimeError("GitHub error response exceeded the bounded observation size")
         try:
             return e.code, (json.loads(raw) if raw else {})
         except ValueError:
@@ -964,28 +969,20 @@ def pr_body(run_id: str, handoff: dict, base: str) -> str:
     return "\n".join(lines)
 
 
-def _open_or_find_pr(owner: str, name: str, branch: str, base: str, title: str, body: str) -> dict:
-    status, found = _gh_api("GET", f"/repos/{owner}/{name}/pulls?state=open&head={owner}:{branch}")
-    if status == 200 and isinstance(found, list) and found:
-        pr = found[0]                     # a retry attempt updates the same PR
-        _gh_api("POST", f"/repos/{owner}/{name}/issues/{pr['number']}/comments",
-                {"body": "New attempt pushed by the Lantern pipeline.\n\n" + body})
-        return {"pr_url": pr["html_url"], "pr_number": pr["number"], "pr_reused": True}
-    status, pr = _gh_api("POST", f"/repos/{owner}/{name}/pulls",
-                         {"title": title, "head": branch, "base": base, "body": body})
-    if status not in (200, 201) or not isinstance(pr, dict) or "html_url" not in pr:
-        raise RuntimeError(f"GitHub refused to open the PR ({status}): "
-                           f"{_scrub(json.dumps(pr))[:400]}")
-    # Labels are best-effort: a repo without the label set still gets its PR.
-    _gh_api("POST", f"/repos/{owner}/{name}/labels",
-            {"name": "agent:coding", "color": "5319e7",
-             "description": "opened by Lantern's coding agent"})
-    _gh_api("POST", f"/repos/{owner}/{name}/issues/{pr['number']}/labels",
-            {"labels": ["agent:coding"]})
-    return {"pr_url": pr["html_url"], "pr_number": pr["number"], "pr_reused": False}
+def _open_or_find_pr(owner: str, name: str, branch: str, base: str, title: str, body: str,
+                     head: str) -> dict:
+    # Legacy mode keeps its branch-only fallback, but PR reuse is read-only and
+    # checks the same destination/revision identity as the leased publisher.
+    request = {"repo": f"https://github.com/{owner}/{name}", "branch": branch,
+               "base": base, "head_sha": head}
+    before = github_publication.observe(_gh_api, request)
+    if before.head != head:
+        raise github_publication.PublicationHeld("branch changed before PR publication")
+    return github_publication.publish(_gh_api, None, None, None, request, title, body, before)
 
 
-def _publish_branch(run_id: str, repo: str, base: str, work: str = "", expected_head: str = "") -> dict:
+def _publish_branch(run_id: str, repo: str, base: str, work: str = "", expected_head: str = "",
+                    publication_request: dict | None = None, check_current=None) -> dict:
     """Verify the coding handoff against the host mirror, land the branch in it, push it
     to the origin (https remotes; a local-path product repo is updated in place) and
     open or reuse the pull request. Returns the code_complete payload. Sync, testable."""
@@ -1000,6 +997,9 @@ def _publish_branch(run_id: str, repo: str, base: str, work: str = "", expected_
     expected = work_branch(run_id, work)
     if branch != expected:
         raise RuntimeError(f"handoff names branch '{branch}', expected '{expected}'")
+    # Inspect the destination before touching even the local mirror. Unavailable or
+    # conflicting provider state cannot authorize publication in lease mode.
+    before = github_publication.observe(_gh_api, publication_request) if publication_request else None
     mirror = sync_product_mirror(repo)
     problems = check_coding_handoff(run_id, "03-coding", verify_in=mirror)
     if problems:
@@ -1019,12 +1019,14 @@ def _publish_branch(run_id: str, repo: str, base: str, work: str = "", expected_
         "auto_committed": bool(handoff.get("auto_committed")),
         "bundle": handoff["bundle"], "pushed": False, "pr_url": None, "pr_number": None,
     }
-    if repo.startswith("https://"):
+    if publication_request:
+        payload.update(github_publication.publish(
+            _gh_api, _git, _authed(repo), mirror, publication_request,
+            f"{run_id}: {_run_title(run_id) or 'feature'}"[:250],
+            pr_body(run_id, handoff, base), before=before, check_current=check_current))
+    elif repo.startswith("https://"):
         r = _git("push", "--quiet", _authed(repo), f"refs/heads/{branch}:refs/heads/{branch}", cwd=mirror)
-        if r.returncode != 0 and ("non-fast-forward" in r.stderr or "rejected" in r.stderr):
-            # The branch belongs to this run: attempt N supersedes attempt N-1.
-            r = _git("push", "--quiet", "--force", _authed(repo),
-                     f"refs/heads/{branch}:refs/heads/{branch}", cwd=mirror)
+        # A rejection requires inspection; never overwrite a newer remote head.
         if r.returncode != 0:
             raise RuntimeError(f"push of {branch} failed: {_scrub(r.stderr)[-500:]}")
         payload["pushed"] = True
@@ -1035,7 +1037,7 @@ def _publish_branch(run_id: str, repo: str, base: str, work: str = "", expected_
                 title = f"{run_id}: {_run_title(run_id) or 'feature'}"[:250]
                 try:
                     payload.update(_open_or_find_pr(gh[0], gh[1], branch, base, title,
-                                                    pr_body(run_id, handoff, base)))
+                                                    pr_body(run_id, handoff, base), head))
                 except (RuntimeError, urllib.error.URLError, OSError, KeyError, TypeError) as e:
                     # The code is done and pushed; a PR-API refusal (a token without
                     # pull-request permission, an outage) must not fail the stage.
@@ -1069,28 +1071,69 @@ async def publish_coding_branch(conn, run_id: str) -> dict:
         if not head:
             raise RuntimeError("publication requires a committed coding handoff")
         lease = ownership.STAGE.get().lease
-        key = f"publish:{run_id}:{head}"
+        key = f"publish-v2:{run_id}:{head}"
         repo, base = await product_target(conn, run_id)
         work = await product_work_branch(conn, run_id)
-        request = {"run_id": run_id, "head_sha": head, "branch": handoff.get("branch"),
-                   "repo": repo, "base": base, "work": work}
-        effect = await ownership.leases.begin_effect(conn, lease, key, "publish_branch", request)
+        target = {"run_id": run_id, "head_sha": head, "branch": handoff.get("branch"),
+                  "repo": repo, "base": base, "work": work}
+        github_publication.destination(target)
+        legacy = await ownership.leases.read_effect(conn, lease, f"publish:{run_id}:{head}")
+        if legacy is not None:
+            raise github_publication.PublicationHeld("legacy publication intent requires operator inspection; refusing v2 replay")
+        existing = await ownership.leases.read_effect(conn, lease, key)
+        if existing is not None:
+            request = existing.result.get("publication_request") if isinstance(existing.result, dict) else None
+            if (not isinstance(request, dict) or request.get("version") != 2
+                    or any(request.get(field) != value for field, value in target.items())):
+                raise github_publication.PublicationHeld("publication request is unavailable or destination/revision changed")
+        else:
+            request = await asyncio.to_thread(github_publication.prepare_request, _gh_api, target)
+        effect = await ownership.leases.begin_effect(conn, lease, key, "publish_branch", request,
+                                                     initial_result={"publication_request": request})
         if not effect.created:
-            if effect.status != "confirmed":
-                raise RuntimeError("publication outcome needs reconciliation; refusing duplicate effect")
-            result = effect.result
+            # No duplicate may write GitHub, including a once-confirmed receipt:
+            # branch, PR destination and revision must still match provider state.
+            previous = effect.result if effect.status == "confirmed" else None
+            if effect.status == "confirmed" and previous is None:
+                raise github_publication.PublicationHeld("legacy publication receipt requires operator inspection")
+            observed = await asyncio.to_thread(github_publication.reconcile, _gh_api, request, previous)
+            result = {"bundle": handoff.get("bundle"), "base_sha": handoff.get("base_sha"),
+                      "commit_count": len(handoff.get("commits", [])),
+                      "commits": handoff.get("commits", [])[:40],
+                      "files_changed": len(handoff.get("files_changed", [])),
+                      "auto_committed": bool(handoff.get("auto_committed")),
+                      **(effect.result if isinstance(effect.result, dict) else {}), **observed}
+            async with ownership.mutation(conn, stage=True):
+                await _check_publication_target(conn, run_id, request)
+                await ownership.leases.reconcile_effect(conn, lease, key, request, result["pr_url"], result)
+                await _record_coding_publication(conn, run_id, result)
         else:
             try:
                 result = await _publish_coding_branch(conn, run_id, expected=request)
-                await ownership.leases.confirm_effect(conn, lease, key, result.get("pr_url"), result)
+                async with ownership.mutation(conn, stage=True):
+                    await _check_publication_target(conn, run_id, request)
+                    await ownership.leases.confirm_effect(conn, lease, key, result.get("pr_url"), result)
+                    await _record_coding_publication(conn, run_id, result)
             except ownership.leases.LeaseLost:
                 raise
             except Exception:
-                await ownership.leases.mark_effect_uncertain(conn, lease, key)
+                await ownership.leases.mark_effect_uncertain(conn, lease, key, {"publication_request": request})
                 raise
         async with ownership.mutation(conn, stage=True, finish=True):
+            await _check_publication_target(conn, run_id, request)
             await conn.execute("UPDATE stage_executions SET status='succeeded', finished_at=clock_timestamp() WHERE id=$1", execution[2])
         return result
+
+
+async def _check_publication_target(conn, run_id: str, expected: dict, stage: bool = True) -> None:
+    async with ownership.mutation(conn, stage=stage):
+        current_repo, current_base = await product_target(conn, run_id)
+        current_work = await product_work_branch(conn, run_id)
+        current_handoff = _read_handoff(run_id, "03-coding") or {}
+        if ((current_repo, current_base, current_work) != (expected["repo"], expected["base"], expected["work"])
+                or current_handoff.get("head_sha") != expected["head_sha"]
+                or current_handoff.get("branch") != expected["branch"]):
+            raise github_publication.PublicationHeld("publication target or handoff changed before effect acceptance")
 
 
 async def _publish_coding_branch(conn, run_id: str, expected: dict | None = None) -> dict:
@@ -1101,9 +1144,19 @@ async def _publish_coding_branch(conn, run_id: str, expected: dict | None = None
     if expected:
         if (repo, base, work) != (expected["repo"], expected["base"], expected["work"]):
             raise RuntimeError("publication target changed after recorded intent")
-        payload = await asyncio.to_thread(_publish_branch, run_id, repo, base, work, expected["head_sha"])
+        loop = asyncio.get_running_loop()
+        def check_current():
+            asyncio.run_coroutine_threadsafe(_check_publication_target(conn, run_id, expected), loop).result(timeout=30)
+        payload = await asyncio.to_thread(_publish_branch, run_id, repo, base, work,
+                                         expected["head_sha"], expected, check_current)
     else:
         payload = await asyncio.to_thread(_publish_branch, run_id, repo, base, work)
+    if not expected:
+        await _record_coding_publication(conn, run_id, payload)
+    return payload
+
+
+async def _record_coding_publication(conn, run_id: str, payload: dict) -> None:
     await insert_artifact(conn, run_id, "03-coding", "coding_branch", payload["bundle"],
                           {"branch": payload["branch"], "head_sha": payload["head_sha"],
                            "commits": payload["commit_count"]})
@@ -1120,7 +1173,6 @@ async def _publish_coding_branch(conn, run_id: str, expected: dict | None = None
               file=sys.stderr)
     print(f"[{run_id}] branch {payload['branch']} published"
           + (f" — PR {payload['pr_url']}" if payload.get("pr_url") else ""))
-    return payload
 
 
 def prepare_coding_checkout(checkout: Path, branch: str) -> str:
@@ -1318,7 +1370,15 @@ async def _step_run(conn, run_id: str, runner: str = "ec2") -> None:
             external_ref = extra.get("pr_url")
         else:  # human stage: nothing to execute — the gate IS the stage
             print(f"[{run_id}] {stage} is a human stage (the developer's own session).")
+        if ownership.enabled() and stage == "03-coding" and mode == "auto":
+            request = (extra or {}).get("publication_request")
+            if not isinstance(request, dict) or request.get("version") != 2:
+                raise github_publication.PublicationHeld("gate requires observed v2 publication evidence")
+            observed = await asyncio.to_thread(github_publication.reconcile, _gh_api, request, extra)
+            extra.update(observed)
         async with ownership.mutation(conn, finish=True):
+            if ownership.enabled() and stage == "03-coding" and mode == "auto":
+                await _check_publication_target(conn, run_id, request, stage=False)
             if intake.is_bug_run(run_id):   # D20: debug lifecycle contracts are unchanged
                 await intake.after_stage(conn, run_id, stage, gate, extra, external_ref)
             elif gate:

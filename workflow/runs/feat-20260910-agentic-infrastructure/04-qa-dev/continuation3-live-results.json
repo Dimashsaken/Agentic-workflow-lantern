@@ -1,0 +1,73 @@
+{
+  "kind": "authenticated_local_dev_integration",
+  "fleet_qa_execution": false,
+  "actual_application": true,
+  "database": "disposable_postgres",
+  "run_id": "feat-20260910-live-inprocess-ln2",
+  "recorded_at": "2026-09-10T15:37:06.635Z",
+  "source_sha256": {
+    "tools/mission-control/app.py": "87bf94dba0b42e3e89ab8a4fb2e09209a0cb83172f1174f9218ca606f08d601d",
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/drawer.py": "8efad548f5de7561e9e69b784a276ad6e45e23acfedddbb82dc6a6eba76cf084",
+    "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60"
+  },
+  "trace_starts_after_login": true,
+  "results": [
+    {
+      "name": "provenance-actual-desktop-continuation3",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 5.45,
+          "title": "Anonymous evidence request redirects to login"
+        },
+        {
+          "seconds": 6.66,
+          "title": "Authenticated through actual application login"
+        },
+        {
+          "seconds": 8.95,
+          "title": "Execution 16: absent controller provenance stated honestly"
+        },
+        {
+          "seconds": 13.95,
+          "title": "Execution 17: absent controller provenance stated honestly"
+        },
+        {
+          "seconds": 19.55,
+          "title": "Returned to existing run; no state-changing action requested"
+        }
+      ],
+      "errors": [],
+      "blocked_mutations": [],
+      "http_errors": [],
+      "video": "media/provenance-actual-desktop-continuation3.webm",
+      "trace": "media/provenance-actual-desktop-continuation3.zip",
+      "video_sha256": "918981a1b4ff09e7f8f7cf86f11e7197f32aa9d3ada83cf201761ab7b28c2138"
+    },
+    {
+      "name": "provenance-actual-mobile-continuation3",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 4.7,
+          "title": "Execution 16: absent controller provenance stated honestly"
+        },
+        {
+          "seconds": 12.7,
+          "title": "Execution 17: absent controller provenance stated honestly"
+        },
+        {
+          "seconds": 21.13,
+          "title": "Returned to existing run; no state-changing action requested"
+        }
+      ],
+      "errors": [],
+      "blocked_mutations": [],
+      "http_errors": [],
+      "video": "media/provenance-actual-mobile-continuation3.webm",
+      "trace": "media/provenance-actual-mobile-continuation3.zip",
+      "video_sha256": "6be5c5a8468d734c64f5fc448370890fe0cc7394a12806508fe1160a375c7b59"
+    }
+  ]
+}

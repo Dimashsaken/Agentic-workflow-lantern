@@ -204,7 +204,16 @@ def _effect(row, created):
     return Effect(created, row['status'], row['external_ref'], json.loads(result) if isinstance(result, str) else result)
 
 
-async def begin_effect(conn, lease, operation_key, kind, request):
+async def read_effect(conn, lease, operation_key):
+    """Read an existing intent under current ownership without authorizing replay."""
+    async with fenced_transaction(conn, lease):
+        row = await conn.fetchrow("SELECT * FROM execution_effects WHERE operation_key=$1 FOR UPDATE", operation_key)
+        if row and row['run_id'] != lease.run_id:
+            raise EffectConflict("operation does not belong to this run")
+        return _effect(row, False) if row else None
+
+
+async def begin_effect(conn, lease, operation_key, kind, request, initial_result=None):
     if lease.execution_id is None:
         raise ValueError("effects require an execution lease")
     if not operation_key or not kind:
@@ -213,9 +222,10 @@ async def begin_effect(conn, lease, operation_key, kind, request):
     async with fenced_transaction(conn, lease):
         row = await conn.fetchrow("""
           INSERT INTO execution_effects(operation_key, run_id, stage_execution_id,
-            lease_fence, kind, request_sha256, status)
-          VALUES($1,$2,$3,$4,$5,$6,'intended') ON CONFLICT DO NOTHING RETURNING *
-        """, operation_key, lease.run_id, lease.execution_id, lease.fence, kind, digest)
+            lease_fence, kind, request_sha256, status, result)
+          VALUES($1,$2,$3,$4,$5,$6,'intended',$7::jsonb) ON CONFLICT DO NOTHING RETURNING *
+        """, operation_key, lease.run_id, lease.execution_id, lease.fence, kind, digest,
+            json.dumps(initial_result, allow_nan=False) if initial_result is not None else None)
         created = row is not None
         if not created:
             row = await conn.fetchrow("SELECT * FROM execution_effects WHERE operation_key=$1 FOR UPDATE", operation_key)

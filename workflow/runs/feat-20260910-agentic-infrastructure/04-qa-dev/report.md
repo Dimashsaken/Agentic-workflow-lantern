@@ -405,3 +405,99 @@ and recovery/Azure integration remain the integrator's separately identified
 evidence. This round does not certify changed runtime source after its snapshot.
 
 Status: PASS-WITH-NOTES
+
+## Round 6 — continuation 3 independent UI regression, 2026-09-10
+
+Author: qa-dev. Inspected branch `codex/agentic-infrastructure`, HEAD
+`4dec57ab707c85970ab9798cd965e75e72bda81c` at QA start. Concurrent publication
+changes were present and preserved; no application UI source changed in this
+scope. Read the role contract and latest upstream handoffs, and extended the
+charter before execution. This local engineering record is not a registered
+QA execution, fleet stage approval, staging deployment or foundation signoff.
+
+Four new recorded contexts pass: two authenticated actual application sessions
+against the preserved disposable Azure run, plus two separately labelled fixture
+renderer sessions. Current-source Mission Control was copied to an isolated
+temporary harness. Credentials and targets were provided through process
+environment; no credential or environment URL is recorded here. The new wrapper
+rejects any database outside the specifically designated disposable endpoint.
+The restored configured database was not used for application startup/testing.
+Both owned application/fixture processes stopped after recording.
+
+### Executed results
+
+- Actual application: unauthenticated access requires login; executions 16/17 of
+  `feat-20260910-live-inprocess-ln2` display no verified manifest. The evidence
+  message fits desktop/mobile viewports after reload; return navigation works.
+  Zero JavaScript errors, HTTP errors or attempted post-login mutations occurred.
+- Fixture renderer: matching controller receipt renders commit/tree/image/digest
+  and requirement/test names; forged writable gate mirror, stale attempt and
+  cross-run receipt each stay unverified. Unicode/HTML-shaped names stay text;
+  back/refresh and narrow-screen theme/geometry checks pass. No fixture row was
+  inserted into any database. Positive provenance remains fixture evidence.
+- Python: 12 drawer tests in 0.069 seconds and 20 route tests in 0.092 seconds
+  pass (`continuation3-renderer-tests.log`, `continuation3-route-tests.log`). These
+  32 tests are local/injected controls, not new Azure/provider executions or a
+  whole-repository quality gate. An initial identical drawer run was not counted
+  twice. No product defect was found in the executed scope.
+- `continuation3-live-before.json` and `continuation3-live-after.json` have the
+  identical SHA-256 `33c7ef7d8b0dc09b01a14a145ab1bacf66955c45d4a6e988cf3bbbc08c09a830`.
+  Executions 16/17 remain succeeded, run remains `waiting_gate` at
+  `00-story.write`, and approval 6 remains pending `story_signoff` with no person
+  or decision time. Ordinary app startup was against disposable data; this does
+  not assert that startup itself performs no writes.
+
+### Recorded evidence
+
+All four WebMs fully decode, VP8 1280×720. Mobile browser viewport is 390×844,
+scaled within the standard video canvas. JSON event seconds are wall-clock
+offsets and do **not** equal video offsets; delayed capture initialization makes
+some exceed video duration (QA-E6). The offsets below were verified by extracting
+and visually inspecting actual frames. Traces start after login to exclude its
+credential payload. No upload or remote artifact URL is claimed.
+
+| Session | Video / trace | Verified video offset | Duration |
+|---|---|---|---|
+| 18, actual desktop | [video](media/provenance-actual-desktop-continuation3.webm) / [trace](media/provenance-actual-desktop-continuation3.zip) | 0:07 — execution 16, visible unverified evidence | 18.44 s |
+| 19, actual mobile | [video](media/provenance-actual-mobile-continuation3.webm) / [trace](media/provenance-actual-mobile-continuation3.zip) | 0:13.5 — execution 17, visible unverified evidence | 20.96 s |
+| 20, fixture desktop | [video](media/provenance-fixture-desktop-continuation3.webm) / [trace](media/provenance-fixture-desktop-continuation3.zip) | 0:02.8 — synthetic receipt refusal visible | 7.04 s |
+| 21, fixture mobile | [video](media/provenance-fixture-mobile-continuation3.webm) / [trace](media/provenance-fixture-mobile-continuation3.zip) | 0:01.8 — dark theme matching receipt and wrapped hashes | 4.08 s |
+
+Exact video hashes, decoding results and source hashes are in
+`continuation3-video-decode.json`, `continuation3-live-results.json` and
+`continuation3-fixture-results.json`. Visually inspected decoded frames are
+[desktop](media/continuation3-desktop-video-frame.png),
+[mobile](media/continuation3-mobile-video-frame.png),
+[fixture desktop](media/continuation3-fixture-desktop-video-frame.png) and
+[fixture mobile](media/continuation3-fixture-video-frame.png).
+
+| Tested UI source | SHA-256 |
+|---|---|
+| app.py | `87bf94dba0b42e3e89ab8a4fb2e09209a0cb83172f1174f9218ca606f08d601d` |
+| ui.py | `6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807` |
+| drawer.py | `8efad548f5de7561e9e69b784a276ad6e45e23acfedddbb82dc6a6eba76cf084` |
+| traceability.py | `90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60` |
+
+One long PowerShell fixture-launch command was rejected by automatic approval
+review with only “blocked by policy.” A scoped Python launcher owns and stops
+only its own child; that launch and its recordings succeeded. No approval or
+security control was disabled.
+
+### Limits and durable memory
+
+AC-10/11 UI regression passes for this snapshot. It does not prove observed GitHub
+reconciliation, fenced maintenance, constrained external QA transport, deployment
+revision/recording identity/requirement outcomes, or retention races. These are
+separate foundation acceptance items; a real positive execution receipt remains
+required. Staging remains NO-GO and pending architecture decisions remain human
+owned. No gate was advanced and no merge/publication was requested by QA.
+
+The integrator invoked the actual append_memory tool on restored configured
+Postgres for this QA learning, producing role_memory row **53**, evidenced by
+`../03-coding/continuation3-memory.json`: “2026-09-10: Verify scenario timestamps
+against decoded video frames because a Playwright context wall timer may start
+before captured media, producing offsets outside the final recording.” This is
+a manual engineering memory insertion, not a fleet QA execution. Prior row 49
+records the prior round's pending learning. No rendered memory was hand-edited.
+
+Status: PASS-WITH-NOTES (scoped local UI regression only)

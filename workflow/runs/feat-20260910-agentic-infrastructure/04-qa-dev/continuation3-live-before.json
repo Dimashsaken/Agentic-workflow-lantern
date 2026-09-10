@@ -1,0 +1,47 @@
+{
+  "run": {
+    "id": "feat-20260910-live-inprocess-ln2",
+    "status": "waiting_gate",
+    "current_stage": "00-story.write",
+    "updated_at": "2026-09-10 09:09:22.462949+00:00"
+  },
+  "approvals": [
+    {
+      "id": 6,
+      "gate": "story_signoff",
+      "status": "pending",
+      "decided_at": null,
+      "decided_by": null
+    }
+  ],
+  "executions": [
+    {
+      "id": 16,
+      "stage": "00-story.scout",
+      "status": "succeeded",
+      "attempt": 1,
+      "idempotency_key": "feat-20260910-live-inprocess-ln2:00-story.scout:1",
+      "input_tokens": 67800,
+      "output_tokens": 2460,
+      "total_tokens": 70260,
+      "output": "{\"report\": \"workflow/runs/feat-20260910-live-inprocess-ln2/00-story/report.md\", \"provenance\": null, \"diagnostics\": \"C:\\\\Users\\\\dimas\\\\AppData\\\\Local\\\\Temp\\\\lantern-ln2-diagnostics\\\\989a144acad3c71032991a326aa173296bbcf95dc9e8737a9c5bdb8d1a0de530.jsonl\", \"final_output\": \"Completed `00-story.scout` for `feat-20260910-live-inprocess-ln2`.\\n\\nArtifacts written:\\n- `00-story/research.md`\\n- `00-story/research.json`\\n- `00-story/report.md`\\n\\nStatus: **PASS-WITH-NOTES**. Durable researcher memory was recorded.\"}"
+    },
+    {
+      "id": 17,
+      "stage": "00-story.write",
+      "status": "succeeded",
+      "attempt": 1,
+      "idempotency_key": "feat-20260910-live-inprocess-ln2:00-story.write:1",
+      "input_tokens": 57103,
+      "output_tokens": 2081,
+      "total_tokens": 59184,
+      "output": "{\"report\": \"workflow/runs/feat-20260910-live-inprocess-ln2/00-story/report.md\", \"provenance\": null, \"diagnostics\": \"C:\\\\Users\\\\dimas\\\\AppData\\\\Local\\\\Temp\\\\lantern-ln2-diagnostics\\\\59ab3266fd3b5312f62b94daca4f5783d2e133754af9f0f77065c62710d05d87.jsonl\", \"final_output\": \"Completed `00-story.write` for `feat-20260910-live-inprocess-ln2`.\\n\\n- Status: **PASS-WITH-NOTES**\\n- Created `story.md`\\n- Created and verified `story.json` with 2 acceptance criteria\\n- Appended the Story phase to `report.md`\\n- Recorded a durable memory learning\\n- Ready for `story_signoff`\"}"
+    }
+  ],
+  "source_sha256": {
+    "tools/mission-control/app.py": "87bf94dba0b42e3e89ab8a4fb2e09209a0cb83172f1174f9218ca606f08d601d",
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/drawer.py": "8efad548f5de7561e9e69b784a276ad6e45e23acfedddbb82dc6a6eba76cf084",
+    "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60"
+  }
+}

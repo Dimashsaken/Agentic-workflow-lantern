@@ -1,0 +1,159 @@
+test_blank_value_counts_as_unset (__main__.DeploymentResolution.test_blank_value_counts_as_unset) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the reasoning deployment 'r'
+ok
+test_coding_falls_back_to_fast_before_reasoning (__main__.DeploymentResolution.test_coding_falls_back_to_fast_before_reasoning) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the fast deployment 'f'
+ok
+test_full_stack_routes_each_tier_to_its_own_deployment (__main__.DeploymentResolution.test_full_stack_routes_each_tier_to_its_own_deployment) ... ok
+test_reasoning_deployment_is_mandatory (__main__.DeploymentResolution.test_reasoning_deployment_is_mandatory) ... ok
+test_single_deployment_still_routes_everything (__main__.DeploymentResolution.test_single_deployment_still_routes_everything) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the reasoning deployment 'sol'
+[model-stack] LANTERN_MODEL_FAST unset — the fast tier uses the reasoning deployment 'sol'
+ok
+test_unknown_tier_rejected (__main__.DeploymentResolution.test_unknown_tier_rejected) ... ok
+test_chat_override_only_applies_to_chat (__main__.ReasoningEffort.test_chat_override_only_applies_to_chat) ... ok
+test_model_settings_carry_the_effort (__main__.ReasoningEffort.test_model_settings_carry_the_effort) ... ok
+test_override_off_and_bogus (__main__.ReasoningEffort.test_override_off_and_bogus) ... [model-stack] LANTERN_EFFORT_REASONING='bogus' is not one of minimal/low/medium/high/xhigh — using 'high'
+ok
+test_token_max_defaults (__main__.ReasoningEffort.test_token_max_defaults) ... ok
+test_coding_role_is_coding_tier (__main__.TierRouting.test_coding_role_is_coding_tier) ... ok
+test_every_pipeline_role_has_a_tier (__main__.TierRouting.test_every_pipeline_role_has_a_tier) ... ok
+test_judgement_roles_are_reasoning (__main__.TierRouting.test_judgement_roles_are_reasoning) ... ok
+test_volume_work_is_fast (__main__.TierRouting.test_volume_work_is_fast) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.006s
+
+OK
+test_checkpoint_is_reachable_by_ref (__main__.Checkpoints.test_checkpoint_is_reachable_by_ref) ... ok
+test_checkpoint_leaves_head_and_the_real_index_alone (__main__.Checkpoints.test_checkpoint_leaves_head_and_the_real_index_alone) ... ok
+test_gate_score_orders_green_above_red_and_fewer_failures_above_more (__main__.Checkpoints.test_gate_score_orders_green_above_red_and_fewer_failures_above_more) ... ok
+test_ignored_files_stay_out (__main__.Checkpoints.test_ignored_files_stay_out) ... ok
+test_never_raises_outside_a_repo (__main__.Checkpoints.test_never_raises_outside_a_repo) ... ok
+test_snapshot_includes_untracked_work_and_restores_it (__main__.Checkpoints.test_snapshot_includes_untracked_work_and_restores_it) ... ok
+test_a_better_final_round_ships_unchanged (__main__.CoherenceCollapse.test_a_better_final_round_ships_unchanged) ... FAIL
+test_a_worse_fix_round_does_not_ship (__main__.CoherenceCollapse.test_a_worse_fix_round_does_not_ship) ... FAIL
+test_checkpoints_can_be_switched_off (__main__.CoherenceCollapse.test_checkpoints_can_be_switched_off) ... ok
+test_kind_and_run_id_must_match (__main__.Envelopes.test_kind_and_run_id_must_match) ... ok
+test_missing_envelope_and_twin_are_named (__main__.Envelopes.test_missing_envelope_and_twin_are_named) ... ok
+test_plan_must_cover_or_defer_every_criterion (__main__.Envelopes.test_plan_must_cover_or_defer_every_criterion) ... ok
+test_plan_requires_write_scope_and_booleans (__main__.Envelopes.test_plan_requires_write_scope_and_booleans) ... ok
+test_plan_valid_with_story_cross_check (__main__.Envelopes.test_plan_valid_with_story_cross_check) ... ok
+test_plan_without_story_skips_cross_check (__main__.Envelopes.test_plan_without_story_skips_cross_check) ... ok
+test_research_paths_must_exist_when_checkout_given (__main__.Envelopes.test_research_paths_must_exist_when_checkout_given) ... ok
+test_research_requires_likely_files_and_risk_shape (__main__.Envelopes.test_research_requires_likely_files_and_risk_shape) ... ok
+test_story_rejects_bad_ids_duplicates_and_empty_text (__main__.Envelopes.test_story_rejects_bad_ids_duplicates_and_empty_text) ... ok
+test_story_valid (__main__.Envelopes.test_story_valid) ... ok
+test_unknown_stage_has_no_envelope (__main__.Envelopes.test_unknown_stage_has_no_envelope) ... ok
+test_validation_every_criterion_once_with_evidence (__main__.Envelopes.test_validation_every_criterion_once_with_evidence) ... ok
+test_validation_pass (__main__.Envelopes.test_validation_pass) ... ok
+test_validation_verdict_is_computed_not_chosen (__main__.Envelopes.test_validation_verdict_is_computed_not_chosen) ... ok
+test_bounded_then_honest_red (__main__.FixLoop.test_bounded_then_honest_red) ... ok
+test_failures_go_back_until_green_then_stop (__main__.FixLoop.test_failures_go_back_until_green_then_stop) ... FAIL
+test_fix_rounds_env (__main__.FixLoop.test_fix_rounds_env) ... ok
+test_zero_rounds_means_one_turn (__main__.FixLoop.test_zero_rounds_means_one_turn) ... ok
+test_bad_toml_is_a_red_gate (__main__.QualityGate.test_bad_toml_is_a_red_gate) ... ok
+test_failures_only_reach_the_brief (__main__.QualityGate.test_failures_only_reach_the_brief) ... FAIL
+test_gate_note_tells_the_builder_up_front (__main__.QualityGate.test_gate_note_tells_the_builder_up_front) ... ok
+test_harness_interpreter_is_passed_through (__main__.QualityGate.test_harness_interpreter_is_passed_through) ... FAIL
+test_no_config_cannot_be_green (__main__.QualityGate.test_no_config_cannot_be_green) ... ok
+test_postcondition_reads_only_this_executions_gate (__main__.QualityGate.test_postcondition_reads_only_this_executions_gate) ... FAIL
+test_timeout_is_a_failure_not_a_hang (__main__.QualityGate.test_timeout_is_a_failure_not_a_hang) ... FAIL
+test_write_scope_is_part_of_the_gate (__main__.QualityGate.test_write_scope_is_part_of_the_gate) ... FAIL
+test_agent_budget_and_refusals_stay_terminal (__main__.Retry.test_agent_budget_and_refusals_stay_terminal) ... ok
+test_backoff_is_capped (__main__.Retry.test_backoff_is_capped) ... ok
+test_gives_up_and_reraises_the_last_error (__main__.Retry.test_gives_up_and_reraises_the_last_error) ... ok
+test_retries_a_throttle_then_succeeds (__main__.Retry.test_retries_a_throttle_then_succeeds) ... ok
+test_retries_env (__main__.Retry.test_retries_env) ... ok
+test_status_code_outranks_the_name (__main__.Retry.test_status_code_outranks_the_name) ... ok
+test_terminal_errors_are_not_retried (__main__.Retry.test_terminal_errors_are_not_retried) ... ok
+test_transport_names_are_retryable (__main__.Retry.test_transport_names_are_retryable) ... ok
+test_unknown_errors_are_terminal (__main__.Retry.test_unknown_errors_are_terminal) ... ok
+test_merge_sums_the_ledgers (__main__.Usage.test_merge_sums_the_ledgers) ... ok
+test_check_write_scope_reads_the_plan (__main__.WriteScope.test_check_write_scope_reads_the_plan) ... ok
+test_glob_semantics (__main__.WriteScope.test_glob_semantics) ... ok
+
+======================================================================
+FAIL: test_a_better_final_round_ships_unchanged (__main__.CoherenceCollapse.test_a_better_final_round_ships_unchanged)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_factory.py", line 582, in test_a_better_final_round_ships_unchanged
+    self.assertTrue(gate["passed"])
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_a_worse_fix_round_does_not_ship (__main__.CoherenceCollapse.test_a_worse_fix_round_does_not_ship)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_factory.py", line 562, in test_a_worse_fix_round_does_not_ship
+    self.assertEqual(gate.get("restored_from_round"), 0)
+AssertionError: None != 0
+
+======================================================================
+FAIL: test_failures_go_back_until_green_then_stop (__main__.FixLoop.test_failures_go_back_until_green_then_stop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_factory.py", line 350, in test_failures_go_back_until_green_then_stop
+    self.assertEqual(len(results), 2)
+AssertionError: 4 != 2
+
+======================================================================
+FAIL: test_failures_only_reach_the_brief (__main__.QualityGate.test_failures_only_reach_the_brief)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_factory.py", line 268, in test_failures_only_reach_the_brief
+    self.assertEqual([r["name"] for r in gate["results"] if not r["passed"]], ["lint"])
+AssertionError: Lists differ: ['test', 'lint'] != ['lint']
+
+First differing element 0:
+'test'
+'lint'
+
+First list contains 1 additional elements.
+First extra element 1:
+'lint'
+
+- ['test', 'lint']
++ ['lint']
+
+======================================================================
+FAIL: test_harness_interpreter_is_passed_through (__main__.QualityGate.test_harness_interpreter_is_passed_through)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_factory.py", line 282, in test_harness_interpreter_is_passed_through
+    self.assertTrue(gate["passed"], gate["results"])
+AssertionError: False is not true : [{'name': 'test', 'command': '$LANTERN_PYTHON -c "import sys; print(sys.version_info[0])"', 'exit': 1, 'passed': False, 'seconds': 0.1, 'output_tail': '\n[stderr]\n<3>WSL (17472 - Relay) ERROR: CreateProcessCommon:818: execvpe(/bin/bash) failed: No such file or directory\n'}]
+
+======================================================================
+FAIL: test_postcondition_reads_only_this_executions_gate (__main__.QualityGate.test_postcondition_reads_only_this_executions_gate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_factory.py", line 322, in test_postcondition_reads_only_this_executions_gate
+    self.assertEqual(f.check_quality_gate(RUN, "03-coding", "k1"), [])
+AssertionError: Lists differ: ["quality gate RED after 0 fix round(s): t[90 chars]ass"] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+"quality gate RED after 0 fix round(s): test — see 03-coding/gate.md; the branch is not handed off until the product's own checks pass"
+
++ []
+- ['quality gate RED after 0 fix round(s): test — see 03-coding/gate.md; the '
+-  "branch is not handed off until the product's own checks pass"]
+
+======================================================================
+FAIL: test_timeout_is_a_failure_not_a_hang (__main__.QualityGate.test_timeout_is_a_failure_not_a_hang)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_factory.py", line 289, in test_timeout_is_a_failure_not_a_hang
+    self.assertEqual(gate["results"][0]["exit"], 124)
+AssertionError: 1 != 124
+
+======================================================================
+FAIL: test_write_scope_is_part_of_the_gate (__main__.QualityGate.test_write_scope_is_part_of_the_gate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_factory.py", line 306, in test_write_scope_is_part_of_the_gate
+    self.assertTrue(gate["passed"], gate["results"])
+AssertionError: False is not true : [{'name': 'test', 'command': 'test -f README.md', 'exit': 1, 'passed': False, 'seconds': 0.1, 'output_tail': '\n[stderr]\n<3>WSL (17485 - Relay) ERROR: CreateProcessCommon:818: execvpe(/bin/bash) failed: No such file or directory\n'}, {'name': 'write-scope', 'command': "changed paths ⊆ ['src/api/**']", 'exit': 0, 'passed': True, 'seconds': 0.0, 'output_tail': '1 changed path(s), all in scope'}]
+
+----------------------------------------------------------------------
+Ran 47 tests in 11.831s
+
+FAILED (failures=8)

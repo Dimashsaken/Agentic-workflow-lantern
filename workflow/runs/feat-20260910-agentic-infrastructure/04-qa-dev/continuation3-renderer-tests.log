@@ -1,0 +1,17 @@
+test_actions_follow_the_pipeline_rules (__main__.ProvenanceIdentityTests.test_actions_follow_the_pipeline_rules) ... ok
+test_cross_run_receipt_never_shows_verified_label (__main__.ProvenanceIdentityTests.test_cross_run_receipt_never_shows_verified_label) ... ok
+test_envelope_valid_and_invalid (__main__.ProvenanceIdentityTests.test_envelope_valid_and_invalid) ... ok
+test_execution_without_a_trace_says_so (__main__.ProvenanceIdentityTests.test_execution_without_a_trace_says_so) ... ok
+test_gate_json_belongs_to_this_execution_or_not (__main__.ProvenanceIdentityTests.test_gate_json_belongs_to_this_execution_or_not) ... ok
+test_malformed_output_string_is_unverified (__main__.ProvenanceIdentityTests.test_malformed_output_string_is_unverified) ... ok
+test_memory_entries_are_listed (__main__.ProvenanceIdentityTests.test_memory_entries_are_listed) ... ok
+test_never_decides_a_gate (__main__.ProvenanceIdentityTests.test_never_decides_a_gate) ... ok
+test_prompt_tool_calls_and_usage_from_the_trace (__main__.ProvenanceIdentityTests.test_prompt_tool_calls_and_usage_from_the_trace) ... ok
+test_provenance_comes_from_execution_row_not_gate_mirror (__main__.ProvenanceIdentityTests.test_provenance_comes_from_execution_row_not_gate_mirror) ... ok
+test_rendered_drawer_never_shows_the_qa_password (__main__.ProvenanceIdentityTests.test_rendered_drawer_never_shows_the_qa_password) ... ok
+test_test_link_names_are_literal_text (__main__.ProvenanceIdentityTests.test_test_link_names_are_literal_text) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.069s
+
+OK

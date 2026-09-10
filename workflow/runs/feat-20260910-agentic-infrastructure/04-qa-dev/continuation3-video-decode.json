@@ -1,0 +1,54 @@
+[
+  {
+    "full_decode_exit": 0,
+    "video": "media/provenance-actual-desktop-continuation3.webm",
+    "sha256": "918981a1b4ff09e7f8f7cf86f11e7197f32aa9d3ada83cf201761ab7b28c2138",
+    "duration": 18.44,
+    "streams": [
+      {
+        "codec_name": "vp8",
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  },
+  {
+    "full_decode_exit": 0,
+    "video": "media/provenance-actual-mobile-continuation3.webm",
+    "sha256": "6be5c5a8468d734c64f5fc448370890fe0cc7394a12806508fe1160a375c7b59",
+    "duration": 20.96,
+    "streams": [
+      {
+        "codec_name": "vp8",
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  },
+  {
+    "full_decode_exit": 0,
+    "video": "media/provenance-fixture-desktop-continuation3.webm",
+    "sha256": "b54e5330880036f5af9b11d46d938a4428fcdfd1047c34625e260abe5b843e42",
+    "duration": 7.04,
+    "streams": [
+      {
+        "codec_name": "vp8",
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  },
+  {
+    "full_decode_exit": 0,
+    "video": "media/provenance-fixture-mobile-continuation3.webm",
+    "sha256": "323b33957d372af8a6224b0f8aa48c527da362d86b32a2c91cf46e98b7c9e025",
+    "duration": 4.08,
+    "streams": [
+      {
+        "codec_name": "vp8",
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  }
+]

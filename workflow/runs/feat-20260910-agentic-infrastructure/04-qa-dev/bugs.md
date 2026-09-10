@@ -131,3 +131,18 @@ and valid-envelope badges. Before/after snapshots retain pending approval 4 and
 unchanged execution/run state. No product bug, gate decision or deployment was
 introduced. Verified-receipt display remains explicitly fixture-tested because
 these real story stages did not produce a coding manifest.
+
+## Round 6 — continuation 3 UI regression
+
+No new product defect found in four recorded contexts and 32 scoped Python tests.
+Matching/forged/stale/cross-run renderer controls pass; actual application
+executions 16/17 remain honestly unverified, and approval 6 remains pending.
+
+Evidence limitation QA-E6: recorder event seconds use a wall timer, while video
+capture starts later; actual desktop/mobile events can exceed video duration.
+This is a recorder timestamp limitation, not an application failure. Round 6's
+report uses decoded, visually checked video offsets for all four recordings;
+raw wall-event data remains preserved and explicitly labelled. See desktop
+actual video at 0:07, mobile actual at 0:13.5, fixture desktop at 0:02.8, fixture
+mobile at 0:01.8. Deployment-bound recording receipt acceptance remains separate;
+these local videos cannot satisfy that unfinished foundation gate.

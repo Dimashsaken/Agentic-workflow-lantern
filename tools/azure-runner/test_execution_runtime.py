@@ -268,14 +268,22 @@ class Publication(unittest.IsolatedAsyncioTestCase):
         finally:
             runtime.STAGE.reset(token)
 
-    async def publish(self, effect, publish_result=None, publish_error=None):
+    async def publish(self, effect, publish_result=None, publish_error=None, observation_error=None, legacy=None):
         from contextlib import ExitStack
         with ExitStack() as stack:
             stack.enter_context(patch.object(runtime, 'stage_scope', self.stage_scope))
             stack.enter_context(patch.object(runtime, 'mutation', open_transaction))
             stack.enter_context(patch.object(self.pipeline, '_read_handoff', return_value=self.handoff))
-            stack.enter_context(patch.object(self.pipeline, 'product_target', AsyncMock(return_value=('https://example.invalid/repo', 'main'))))
+            stack.enter_context(patch.object(self.pipeline, 'product_target', AsyncMock(return_value=('https://github.com/owner/product.git', 'main'))))
             stack.enter_context(patch.object(self.pipeline, 'product_work_branch', AsyncMock(return_value='feat/example')))
+            stack.enter_context(patch.object(leases, 'read_effect', AsyncMock(side_effect=[legacy, None if effect.created else effect])))
+            request = {'run_id': 'run-a', 'head_sha': 'a'*40, 'branch': 'feat/example',
+                       'repo': 'https://github.com/owner/product.git', 'base': 'main', 'work': 'feat/example',
+                       'version': 2, 'repository_id': 123, 'base_sha': 'c'*40, 'expected_remote_sha': None}
+            stack.enter_context(patch.object(self.pipeline.github_publication, 'prepare_request', return_value=request))
+            stack.enter_context(patch.object(self.pipeline.github_publication, 'reconcile', return_value=publish_result, side_effect=observation_error))
+            stack.enter_context(patch.object(leases, 'reconcile_effect', AsyncMock()))
+            self.record = stack.enter_context(patch.object(self.pipeline, '_record_coding_publication', AsyncMock()))
             begin = stack.enter_context(patch.object(leases, 'begin_effect', AsyncMock(return_value=effect)))
             perform = stack.enter_context(patch.object(self.pipeline, '_publish_coding_branch', AsyncMock(return_value=publish_result, side_effect=publish_error)))
             confirm = stack.enter_context(patch.object(leases, 'confirm_effect', AsyncMock()))
@@ -293,14 +301,19 @@ class Publication(unittest.IsolatedAsyncioTestCase):
         perform.assert_awaited_once()
         confirm.assert_awaited_once()
         uncertain.assert_not_awaited()
-        self.assertEqual(begin.await_args.args[2], 'publish:run-a:' + 'a'*40)
-        self.assertEqual(begin.await_args.args[4]['repo'], 'https://example.invalid/repo')
+        self.assertEqual(begin.await_args.args[2], 'publish-v2:run-a:' + 'a'*40)
+        self.assertEqual(begin.await_args.args[4]['repo'], 'https://github.com/owner/product.git')
         self.assertEqual(perform.await_args.kwargs['expected'], begin.await_args.args[4])
 
-    async def test_confirmed_duplicate_uses_record_without_reinvocation(self):
-        payload = {'pr_url': 'local-test-ref'}
-        result, _, perform, confirm, uncertain = await self.publish(leases.Effect(False, 'confirmed', 'local-test-ref', payload))
-        self.assertEqual(result, payload)
+    def recorded_request(self):
+        return {'run_id': 'run-a', 'head_sha': 'a'*40, 'branch': 'feat/example',
+                'repo': 'https://github.com/owner/product.git', 'base': 'main', 'work': 'feat/example',
+                'version': 2, 'repository_id': 123, 'base_sha': 'c'*40, 'expected_remote_sha': None}
+
+    async def test_confirmed_duplicate_observes_without_reinvocation(self):
+        payload = {'pr_url': 'local-test-ref', 'publication_request': self.recorded_request()}
+        result, _, perform, confirm, uncertain = await self.publish(leases.Effect(False, 'confirmed', 'local-test-ref', payload), payload)
+        self.assertEqual(result['pr_url'], payload['pr_url'])
         perform.assert_not_awaited()
         confirm.assert_not_awaited()
         uncertain.assert_not_awaited()
@@ -310,10 +323,63 @@ class Publication(unittest.IsolatedAsyncioTestCase):
             with self.subTest(status=status):
                 result, _, perform, confirm, uncertain = await self.publish(leases.Effect(False, status, None, None))
                 self.assertIsInstance(result, RuntimeError)
-                self.assertIn('reconciliation', str(result))
+                self.assertIn('request is unavailable', str(result))
                 perform.assert_not_awaited()
                 confirm.assert_not_awaited()
                 uncertain.assert_not_awaited()
+
+    async def test_legacy_intent_blocks_v2_replay(self):
+        result, begin, perform, confirm, uncertain = await self.publish(
+            leases.Effect(True, 'intended', None, None), legacy=leases.Effect(False, 'uncertain', None, None))
+        self.assertIn('legacy publication intent', str(result))
+        begin.assert_not_awaited()
+        perform.assert_not_awaited()
+
+    async def test_interrupted_v2_complete_effect_reconciles_without_reinvocation(self):
+        payload = {'publication_request': self.recorded_request(), 'pr_url': 'observed-pr'}
+        for status in ('intended', 'uncertain'):
+            result, _, perform, confirm, _ = await self.publish(leases.Effect(False, status, None, payload), payload)
+            self.assertEqual(result['pr_url'], 'observed-pr')
+            perform.assert_not_awaited()
+            confirm.assert_not_awaited()
+
+    async def test_confirmed_duplicate_observation_failure_holds(self):
+        payload = {'publication_request': self.recorded_request(), 'pr_url': 'old-pr'}
+        result, _, perform, confirm, uncertain = await self.publish(
+            leases.Effect(False, 'confirmed', 'old-pr', payload), observation_error=RuntimeError('provider head changed'))
+        self.assertIn('provider head changed', str(result))
+        perform.assert_not_awaited()
+        confirm.assert_not_awaited()
+        uncertain.assert_not_awaited()
+
+    async def test_handoff_changes_during_provider_call_emit_no_authoritative_artifacts(self):
+        def changed(*args, **kwargs):
+            self.handoff['head_sha'] = 'b' * 40
+            return {'pr_url': 'observed-pr'}
+        result, _, perform, confirm, uncertain = await self.publish(
+            leases.Effect(True, 'intended', None, None), publish_error=changed)
+        self.assertIn('target or handoff changed', str(result))
+        perform.assert_awaited_once()
+        confirm.assert_not_awaited()
+        self.record.assert_not_awaited()
+        uncertain.assert_awaited_once()
+
+    async def test_gate_reobserves_after_review_and_holds_changed_provider(self):
+        from contextlib import ExitStack
+        payload = {'publication_request': self.recorded_request(), 'pr_url': 'observed-pr'}
+        self.conn.fetchrow.return_value = {'current_stage': '03-coding', 'coding_mode': 'auto'}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(runtime, 'mutation', open_transaction))
+            stack.enter_context(patch.object(self.pipeline.builders, 'run_coding', AsyncMock(return_value=None)))
+            stack.enter_context(patch.object(self.pipeline, 'publish_coding_branch', AsyncMock(return_value=payload)))
+            stack.enter_context(patch.object(self.pipeline.review, 'after_publish', AsyncMock(return_value=payload)))
+            observe = stack.enter_context(patch.object(self.pipeline.github_publication, 'reconcile', side_effect=RuntimeError('provider moved during review')))
+            gate = stack.enter_context(patch.object(self.pipeline, 'open_gate', AsyncMock()))
+            stack.enter_context(patch.object(self.pipeline, 'log_event', AsyncMock()))
+            stack.enter_context(patch.object(self.pipeline, 'render_runboard', AsyncMock()))
+            await self.pipeline._step_run(self.conn, 'run-a')
+        observe.assert_called_once()
+        gate.assert_not_awaited()
 
     async def test_provider_failure_records_uncertainty(self):
         result, _, perform, confirm, uncertain = await self.publish(leases.Effect(True, 'intended', None, None), publish_error=OSError('provider disconnected'))

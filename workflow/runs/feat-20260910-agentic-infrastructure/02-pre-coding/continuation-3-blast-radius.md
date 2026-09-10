@@ -56,6 +56,15 @@ different extraction must be recorded before implementation. Shared pipeline,
 review, ownership and evidence files make parallel builders inappropriate here.
 Independent QA and security/review roles should inspect a stable snapshot.
 
+Integration amendment: `lantern.toml` is modified only to add the new publication
+regression suite to the configured test command; all previous commands/timeouts
+remain. `tools/azure-runner/test_execution_runtime.py` updates publication wrapper
+fixtures to verify observed receipts rather than stale ledger reuse. The new
+publication module is added to `tools/evals/check_pr.py`'s fingerprint inventory.
+These are separately visible test-policy additions, not a builder weakening its
+captured gate during an execution. The root integration session owns the policy
+and eval inventory edits; the publication coder owns wrapper tests.
+
 ## Findings that affect sequencing
 
 1. `_open_or_find_pr` selects the first open head match without complete base,

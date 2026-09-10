@@ -1,0 +1,627 @@
+test_blank_value_counts_as_unset (__main__.DeploymentResolution.test_blank_value_counts_as_unset) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the reasoning deployment 'r'
+ok
+test_coding_falls_back_to_fast_before_reasoning (__main__.DeploymentResolution.test_coding_falls_back_to_fast_before_reasoning) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the fast deployment 'f'
+ok
+test_full_stack_routes_each_tier_to_its_own_deployment (__main__.DeploymentResolution.test_full_stack_routes_each_tier_to_its_own_deployment) ... ok
+test_reasoning_deployment_is_mandatory (__main__.DeploymentResolution.test_reasoning_deployment_is_mandatory) ... ok
+test_single_deployment_still_routes_everything (__main__.DeploymentResolution.test_single_deployment_still_routes_everything) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the reasoning deployment 'sol'
+[model-stack] LANTERN_MODEL_FAST unset — the fast tier uses the reasoning deployment 'sol'
+ok
+test_unknown_tier_rejected (__main__.DeploymentResolution.test_unknown_tier_rejected) ... ok
+test_chat_override_only_applies_to_chat (__main__.ReasoningEffort.test_chat_override_only_applies_to_chat) ... ok
+test_model_settings_carry_the_effort (__main__.ReasoningEffort.test_model_settings_carry_the_effort) ... ok
+test_override_off_and_bogus (__main__.ReasoningEffort.test_override_off_and_bogus) ... [model-stack] LANTERN_EFFORT_REASONING='bogus' is not one of minimal/low/medium/high/xhigh — using 'high'
+ok
+test_token_max_defaults (__main__.ReasoningEffort.test_token_max_defaults) ... ok
+test_coding_role_is_coding_tier (__main__.TierRouting.test_coding_role_is_coding_tier) ... ok
+test_every_pipeline_role_has_a_tier (__main__.TierRouting.test_every_pipeline_role_has_a_tier) ... ok
+test_judgement_roles_are_reasoning (__main__.TierRouting.test_judgement_roles_are_reasoning) ... ok
+test_volume_work_is_fast (__main__.TierRouting.test_volume_work_is_fast) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.009s
+
+OK
+test_checkpoint_is_reachable_by_ref (__main__.Checkpoints.test_checkpoint_is_reachable_by_ref) ... ok
+test_checkpoint_leaves_head_and_the_real_index_alone (__main__.Checkpoints.test_checkpoint_leaves_head_and_the_real_index_alone) ... ok
+test_gate_score_orders_green_above_red_and_fewer_failures_above_more (__main__.Checkpoints.test_gate_score_orders_green_above_red_and_fewer_failures_above_more) ... ok
+test_ignored_files_stay_out (__main__.Checkpoints.test_ignored_files_stay_out) ... ok
+test_never_raises_outside_a_repo (__main__.Checkpoints.test_never_raises_outside_a_repo) ... ok
+test_snapshot_includes_untracked_work_and_restores_it (__main__.Checkpoints.test_snapshot_includes_untracked_work_and_restores_it) ... ok
+test_a_better_final_round_ships_unchanged (__main__.CoherenceCollapse.test_a_better_final_round_ships_unchanged) ... ok
+test_a_worse_fix_round_does_not_ship (__main__.CoherenceCollapse.test_a_worse_fix_round_does_not_ship) ... ok
+test_checkpoints_can_be_switched_off (__main__.CoherenceCollapse.test_checkpoints_can_be_switched_off) ... ok
+test_kind_and_run_id_must_match (__main__.Envelopes.test_kind_and_run_id_must_match) ... ok
+test_missing_envelope_and_twin_are_named (__main__.Envelopes.test_missing_envelope_and_twin_are_named) ... ok
+test_plan_must_cover_or_defer_every_criterion (__main__.Envelopes.test_plan_must_cover_or_defer_every_criterion) ... ok
+test_plan_requires_write_scope_and_booleans (__main__.Envelopes.test_plan_requires_write_scope_and_booleans) ... ok
+test_plan_valid_with_story_cross_check (__main__.Envelopes.test_plan_valid_with_story_cross_check) ... ok
+test_plan_without_story_skips_cross_check (__main__.Envelopes.test_plan_without_story_skips_cross_check) ... ok
+test_research_paths_must_exist_when_checkout_given (__main__.Envelopes.test_research_paths_must_exist_when_checkout_given) ... ok
+test_research_requires_likely_files_and_risk_shape (__main__.Envelopes.test_research_requires_likely_files_and_risk_shape) ... ok
+test_story_rejects_bad_ids_duplicates_and_empty_text (__main__.Envelopes.test_story_rejects_bad_ids_duplicates_and_empty_text) ... ok
+test_story_valid (__main__.Envelopes.test_story_valid) ... ok
+test_unknown_stage_has_no_envelope (__main__.Envelopes.test_unknown_stage_has_no_envelope) ... ok
+test_validation_every_criterion_once_with_evidence (__main__.Envelopes.test_validation_every_criterion_once_with_evidence) ... ok
+test_validation_pass (__main__.Envelopes.test_validation_pass) ... ok
+test_validation_verdict_is_computed_not_chosen (__main__.Envelopes.test_validation_verdict_is_computed_not_chosen) ... ok
+test_bounded_then_honest_red (__main__.FixLoop.test_bounded_then_honest_red) ... ok
+test_failures_go_back_until_green_then_stop (__main__.FixLoop.test_failures_go_back_until_green_then_stop) ... ok
+test_fix_rounds_env (__main__.FixLoop.test_fix_rounds_env) ... ok
+test_zero_rounds_means_one_turn (__main__.FixLoop.test_zero_rounds_means_one_turn) ... ok
+test_bad_toml_is_a_red_gate (__main__.QualityGate.test_bad_toml_is_a_red_gate) ... ok
+test_failures_only_reach_the_brief (__main__.QualityGate.test_failures_only_reach_the_brief) ... ok
+test_gate_note_tells_the_builder_up_front (__main__.QualityGate.test_gate_note_tells_the_builder_up_front) ... ok
+test_harness_interpreter_is_passed_through (__main__.QualityGate.test_harness_interpreter_is_passed_through) ... ok
+test_no_config_cannot_be_green (__main__.QualityGate.test_no_config_cannot_be_green) ... ok
+test_postcondition_reads_only_this_executions_gate (__main__.QualityGate.test_postcondition_reads_only_this_executions_gate) ... ok
+test_timeout_is_a_failure_not_a_hang (__main__.QualityGate.test_timeout_is_a_failure_not_a_hang) ... ok
+test_write_scope_is_part_of_the_gate (__main__.QualityGate.test_write_scope_is_part_of_the_gate) ... ok
+test_agent_budget_and_refusals_stay_terminal (__main__.Retry.test_agent_budget_and_refusals_stay_terminal) ... ok
+test_backoff_is_capped (__main__.Retry.test_backoff_is_capped) ... ok
+test_gives_up_and_reraises_the_last_error (__main__.Retry.test_gives_up_and_reraises_the_last_error) ... ok
+test_retries_a_throttle_then_succeeds (__main__.Retry.test_retries_a_throttle_then_succeeds) ... ok
+test_retries_env (__main__.Retry.test_retries_env) ... ok
+test_status_code_outranks_the_name (__main__.Retry.test_status_code_outranks_the_name) ... ok
+test_terminal_errors_are_not_retried (__main__.Retry.test_terminal_errors_are_not_retried) ... ok
+test_transport_names_are_retryable (__main__.Retry.test_transport_names_are_retryable) ... ok
+test_unknown_errors_are_terminal (__main__.Retry.test_unknown_errors_are_terminal) ... ok
+test_merge_sums_the_ledgers (__main__.Usage.test_merge_sums_the_ledgers) ... ok
+test_check_write_scope_reads_the_plan (__main__.WriteScope.test_check_write_scope_reads_the_plan) ... ok
+test_glob_semantics (__main__.WriteScope.test_glob_semantics) ... ok
+
+----------------------------------------------------------------------
+Ran 47 tests in 14.464s
+
+OK
+test_batches_split_in_plan_order (__main__.Batching.test_batches_split_in_plan_order) ... ok
+test_fan_out_never_exceeds_the_cap (__main__.Batching.test_fan_out_never_exceeds_the_cap) ... ok
+test_inprocess_concurrency_is_one_because_env_is_shared (__main__.Batching.test_inprocess_concurrency_is_one_because_env_is_shared) ... ok
+test_one_failed_builder_fails_the_stage (__main__.Batching.test_one_failed_builder_fails_the_stage) ... ok
+test_parallelism_defaults_to_two_and_never_exceeds_the_cap (__main__.Batching.test_parallelism_defaults_to_two_and_never_exceeds_the_cap) ... ok
+test_a_run_without_builders_is_unaffected_by_the_env (__main__.BuilderScope.test_a_run_without_builders_is_unaffected_by_the_env) ... ok
+test_no_builder_brief_without_a_split (__main__.BuilderScope.test_no_builder_brief_without_a_split) ... ok
+test_scope_resolves_per_builder_and_falls_back_to_the_plan (__main__.BuilderScope.test_scope_resolves_per_builder_and_falls_back_to_the_plan) ... ok
+test_the_integrator_gets_the_union_of_every_builders_scope (__main__.BuilderScope.test_the_integrator_gets_the_union_of_every_builders_scope) ... ok
+test_the_prompt_tells_a_builder_who_it_is (__main__.BuilderScope.test_the_prompt_tells_a_builder_who_it_is) ... ok
+test_a_directory_that_survives_is_named_not_swallowed (__main__.CheckoutReuse.test_a_directory_that_survives_is_named_not_swallowed) ... ok
+test_force_rmtree_removes_a_read_only_git_checkout (__main__.CheckoutReuse.test_force_rmtree_removes_a_read_only_git_checkout) ... ok
+test_a_builder_writing_outside_its_scope_is_refused (__main__.Merge.test_a_builder_writing_outside_its_scope_is_refused) ... ok
+test_a_conflict_fails_the_stage_with_the_file_list (__main__.Merge.test_a_conflict_fails_the_stage_with_the_file_list) ... ok
+test_a_head_the_repo_cannot_see_is_not_reported_as_a_dropped_builder (__main__.Merge.test_a_head_the_repo_cannot_see_is_not_reported_as_a_dropped_builder)
+'I cannot see that commit' is not 'that commit is wrong'. ... ok
+test_the_merge_refuses_a_handoff_that_is_not_the_builders_branch (__main__.Merge.test_the_merge_refuses_a_handoff_that_is_not_the_builders_branch) ... ok
+test_the_published_branch_must_contain_every_builder (__main__.Merge.test_the_published_branch_must_contain_every_builder) ... ok
+test_the_whole_per_builder_path_works_with_no_environment (__main__.Merge.test_the_whole_per_builder_path_works_with_no_environment)
+The postcondition path, exactly as the host runs it: env cleared first. ... ok
+test_two_builders_merge_into_one_run_branch (__main__.Merge.test_two_builders_merge_into_one_run_branch) ... ok
+test_builder_branches_stay_in_the_pushable_namespace (__main__.Naming.test_builder_branches_stay_in_the_pushable_namespace) ... ok
+test_every_builder_stage_key_routes_to_the_coding_role (__main__.Naming.test_every_builder_stage_key_routes_to_the_coding_role) ... ok
+test_stage_keys_map_to_names_and_branches (__main__.Naming.test_stage_keys_map_to_names_and_branches) ... ok
+test_the_builder_comes_from_the_stage_key_not_the_environment (__main__.Naming.test_the_builder_comes_from_the_stage_key_not_the_environment) ... ok
+test_the_integrator_works_on_the_run_branch_itself (__main__.Naming.test_the_integrator_works_on_the_run_branch_itself) ... ok
+test_no_plan_at_all_is_also_a_pass_through (__main__.PassThrough.test_no_plan_at_all_is_also_a_pass_through) ... ok
+test_run_coding_without_builders_calls_execute_once (__main__.PassThrough.test_run_coding_without_builders_calls_execute_once) ... ok
+test_a_builder_needs_a_scope_and_tasks (__main__.PlanValidation.test_a_builder_needs_a_scope_and_tasks) ... ok
+test_a_good_split_validates (__main__.PlanValidation.test_a_good_split_validates) ... ok
+test_a_task_built_twice_is_refused (__main__.PlanValidation.test_a_task_built_twice_is_refused) ... ok
+test_a_task_nobody_builds_is_refused (__main__.PlanValidation.test_a_task_nobody_builds_is_refused) ... ok
+test_an_overlapping_glob_is_refused (__main__.PlanValidation.test_an_overlapping_glob_is_refused) ... ok
+test_an_unknown_task_id_is_refused (__main__.PlanValidation.test_an_unknown_task_id_is_refused) ... ok
+test_criteria_are_checked_against_the_story (__main__.PlanValidation.test_criteria_are_checked_against_the_story) ... ok
+test_duplicate_and_unsafe_names_are_refused (__main__.PlanValidation.test_duplicate_and_unsafe_names_are_refused) ... ok
+test_no_builders_key_is_still_valid (__main__.PlanValidation.test_no_builders_key_is_still_valid) ... ok
+test_the_integrator_name_is_reserved (__main__.PlanValidation.test_the_integrator_name_is_reserved) ... ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 14.346s
+
+OK
+1. writability is opt-in per execution:
+  ok    read-only by default
+  ok    write to product/ refused when read-only
+  ok    product_shell refuses when read-only
+  ok    stage_tools has no shell when read-only
+  ok    check_stage_inputs wants the approved plan for 03-coding
+  ok    ...and refuses without it
+  ok    checkout is on the run's branch
+  ok    commit identity is the bot
+  ok    writable once the execution says so
+  ok    stage_tools adds the shell when writable
+  ok    product/ write resolves inside the checkout
+  ok    product/.. escape refused
+  ok    product/.git refused
+  ok    product root itself refused
+  ok    Lantern-side rendered views still refused
+2. the shell is scoped:
+  ok    runs in the product root
+  ok    secrets stripped from the shell env
+  ok    long output is truncated, not dumped
+  ok    exit code is reported
+  ok    empty command refused
+3. the handoff is evidence:
+  ok    empty branch fails the stage
+  ok    ...and writes no handoff
+  ok    agent can commit through the shell
+  ok    commit carries the Lantern-Agent trailer (hook, D6)
+  ok    commit is authored by the bot identity
+  ok    finalize succeeds with commits
+  ok    handoff names the run's branch and base
+  ok    two commits: the task and the auto-committed leftover
+  ok    task commit comes first (oldest first)
+  ok    files_changed lists both files
+  ok    bundle exists and is non-empty
+  ok    handoff verifies against the checkout
+  ok    handoff verifies against the origin (has the base)
+  ok    postconditions include the handoff check for the coding role
+4. only the run's branch can ride along:
+  ok    extra ref in the bundle is rejected
+  ok    a non-feat/fix branch is rejected
+5. publishing without a network:
+  ok    publish lands the branch in a local-path product repo
+  ok    origin now has the branch at the handoff head
+  ok    payload carries branch/base/commits
+  ok    pr.md written into the run folder (D4)
+  ok    publish refuses a branch that is not the run's
+  ok    PR body is the evidence pack
+6. parsing:
+  ok    feat run -> feat/ branch
+  ok    bug run -> fix/ branch
+  ok    brief: auto
+  ok    brief: backticked, mixed case
+  ok    brief: nonsense reads as unset
+  ok    brief: missing reads as unset
+  ok    github url parsed
+  ok    non-github url is not a PR target
+7. base + working branch (D15):
+  ok    no working branch -> derived from the run id
+  ok    bug run, no working branch -> fix/
+  ok    a chosen working branch wins
+  ok    whitespace-only reads as unset
+  ok    product_checkout lands on an existing working branch
+  ok    prepare_coding_checkout is a no-op when HEAD is already there
+  ok    ...and returns the sha the stage starts from
+  ok    a missing working branch leaves the checkout on the base
+  ok    WITHOUT a start sha the vacuous check passes an idle stage
+  ok    WITH a start sha an idle stage is caught
+  ok    ...and real work passes
+  ok    handoff records the start sha
+  ok    the bundle still spans base..HEAD, so the PR shows the whole branch
+  ok    _publish_branch accepts the run's chosen working branch
+  ok    ...and still rejects a handoff naming a different branch
+8. the flag does not leak:
+  ok    read-only again once the execution env is gone
+
+all auto-coding properties hold
+test_base_moves_ahead_branch_is_updated_and_regated (__main__.Babysitter.test_base_moves_ahead_branch_is_updated_and_regated) ... ok
+test_conflict_stops_with_the_file_list_and_an_alarm (__main__.Babysitter.test_conflict_stops_with_the_file_list_and_an_alarm) ... ok
+test_github_merge_detection_prefers_the_api (__main__.Babysitter.test_github_merge_detection_prefers_the_api) ... ok
+test_merged_branch_is_recorded_and_left_alone (__main__.Babysitter.test_merged_branch_is_recorded_and_left_alone) ... ok
+test_red_regate_spends_one_fix_execution (__main__.Babysitter.test_red_regate_spends_one_fix_execution) ... ok
+test_red_regate_with_a_failing_fix_alarms_and_waits (__main__.Babysitter.test_red_regate_with_a_failing_fix_alarms_and_waits) ... ok
+test_regate_local_and_the_docker_command (__main__.Babysitter.test_regate_local_and_the_docker_command) ... ok
+test_up_to_date_does_nothing (__main__.Babysitter.test_up_to_date_does_nothing) ... ok
+test_force_rmtree_removes_read_only_files (__main__.CheckoutReuse.test_force_rmtree_removes_read_only_files) ... ok
+test_product_checkout_can_be_recreated_after_a_commit (__main__.CheckoutReuse.test_product_checkout_can_be_recreated_after_a_commit) ... ok
+test_every_blocker_or_major_is_must_fix (__main__.Envelope.test_every_blocker_or_major_is_must_fix) ... ok
+test_ids_unique_and_must_fix_subset (__main__.Envelope.test_ids_unique_and_must_fix_subset) ... ok
+test_kind_and_run_id_still_checked (__main__.Envelope.test_kind_and_run_id_still_checked) ... ok
+test_registered_and_valid_approve (__main__.Envelope.test_registered_and_valid_approve) ... ok
+test_round_twin_must_exist (__main__.Envelope.test_round_twin_must_exist) ... ok
+test_shape_rules (__main__.Envelope.test_shape_rules) ... ok
+test_valid_request_changes (__main__.Envelope.test_valid_request_changes) ... ok
+test_verdict_is_computed (__main__.Envelope.test_verdict_is_computed) ... ok
+test_babysit_due_once_per_interval (__main__.Knobs.test_babysit_due_once_per_interval) ... ok
+test_rounds_and_cadence_env (__main__.Knobs.test_rounds_and_cadence_env) ... ok
+test_approve_on_round_two_means_one_fix (__main__.Loop.test_approve_on_round_two_means_one_fix) ... ok
+test_failed_fix_keeps_the_review (__main__.Loop.test_failed_fix_keeps_the_review) ... [feat-20260908-review-proof] fix execution after round 1 FAILED — the gate opens with the review: coding handoff failed: added no commits
+ok
+test_failed_review_execution_opens_the_gate_without_it (__main__.Loop.test_failed_review_execution_opens_the_gate_without_it) ... [feat-20260908-review-proof] review round 1 FAILED — the gate opens without it: postconditions failed: review.json invalid
+ok
+test_never_approve_is_capped_with_the_last_review_attached (__main__.Loop.test_never_approve_is_capped_with_the_last_review_attached) ... ok
+test_one_round_never_fixes_and_zero_skips (__main__.Loop.test_one_round_never_fixes_and_zero_skips) ... ok
+test_pr_review_is_posted_per_round_when_a_pr_exists (__main__.Loop.test_pr_review_is_posted_per_round_when_a_pr_exists) ... ok
+test_review_block_carries_round_context (__main__.Loop.test_review_block_carries_round_context) ... ok
+test_wrong_round_in_review_json_is_an_error (__main__.Loop.test_wrong_round_in_review_json_is_an_error) ... [feat-20260908-review-proof] review round 1 FAILED — the gate opens without it: 03-coding/review/review.json missing or not round 1 after the review execution
+ok
+test_a_plan_cannot_claim_them (__main__.NotBuilders.test_a_plan_cannot_claim_them) ... ok
+test_review_sub_stages_are_not_builder_names (__main__.NotBuilders.test_review_sub_stages_are_not_builder_names) ... ok
+test_422_falls_back_to_body_only (__main__.PullRequestReview.test_422_falls_back_to_body_only) ... ok
+test_api_trouble_is_never_a_failure (__main__.PullRequestReview.test_api_trouble_is_never_a_failure) ... ok
+test_leased_review_posting_is_omitted_before_provider_call (__main__.PullRequestReview.test_leased_review_posting_is_omitted_before_provider_call) ... ok
+test_no_token_means_run_folder_only (__main__.PullRequestReview.test_no_token_means_run_folder_only) ... ok
+test_request_body_is_one_comment_review_with_inline_findings (__main__.PullRequestReview.test_request_body_is_one_comment_review_with_inline_findings) ... ok
+test_stage_maps_and_the_task_block_hook (__main__.Wiring.test_stage_maps_and_the_task_block_hook) ... ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 11.528s
+
+OK
+[feat-20260908-review-proof] feat/20260908-review-proof updated with main (8656eefd26d0) — gate green
+[feat-20260908-review-proof] feat/20260908-review-proof is merged into main (git) — babysitting ends
+[feat-20260908-review-proof] feat/20260908-review-proof updated with main and fixed — head cccccccccccc
+[feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review round 2/2: approve (0 finding(s), must-fix 0)
+[feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review round 2/2: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review rounds exhausted with request_changes — a human decides
+[feat-20260908-review-proof] review round 1/1: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review rounds exhausted with request_changes — a human decides
+[feat-20260908-review-proof] review round 1/2: approve (0 finding(s), must-fix 0)
+[feat-20260908-review-proof] review round 1/2: approve (0 finding(s), must-fix 0)
+test_a_turn_without_a_signed_in_human_gets_no_write_tools (__main__.AgentWiring.test_a_turn_without_a_signed_in_human_gets_no_write_tools) ... ok
+test_only_the_orchestrator_is_given_write_tools (__main__.AgentWiring.test_only_the_orchestrator_is_given_write_tools) ... ok
+test_the_protocol_is_in_the_prompt_when_the_tools_are (__main__.AgentWiring.test_the_protocol_is_in_the_prompt_when_the_tools_are) ... ok
+test_the_tools_close_over_this_turns_text (__main__.AgentWiring.test_the_tools_close_over_this_turns_text) ... ok
+test_a_blank_working_branch_stays_blank (__main__.BriefComposer.test_a_blank_working_branch_stays_blank) ... ok
+test_a_composed_brief_parses_back (__main__.BriefComposer.test_a_composed_brief_parses_back) ... ok
+test_a_hand_written_brief_is_never_overwritten (__main__.BriefComposer.test_a_hand_written_brief_is_never_overwritten) ... ok
+test_a_long_title_is_cut_at_a_word_not_mid_word (__main__.BriefComposer.test_a_long_title_is_cut_at_a_word_not_mid_word) ... ok
+test_a_slug_cannot_escape_the_briefs_directory (__main__.BriefComposer.test_a_slug_cannot_escape_the_briefs_directory) ... ok
+test_auto_mode_without_a_repo_is_a_problem (__main__.BriefComposer.test_auto_mode_without_a_repo_is_a_problem) ... ok
+test_missing_required_fields_are_reported_not_invented (__main__.BriefComposer.test_missing_required_fields_are_reported_not_invented) ... ok
+test_near_misses_are_not_confirmations (__main__.ConfirmationMatching.test_near_misses_are_not_confirmations) ... ok
+test_phrase_is_found_regardless_of_case_and_punctuation (__main__.ConfirmationMatching.test_phrase_is_found_regardless_of_case_and_punctuation) ... ok
+test_a_gate_that_is_not_pending_is_refused (__main__.GuardsBeforeTheCard.test_a_gate_that_is_not_pending_is_refused) ... ok
+test_decision_must_be_approve_or_reject (__main__.GuardsBeforeTheCard.test_decision_must_be_approve_or_reject) ... ok
+test_rework_target_is_checked_against_the_pipeline_list (__main__.GuardsBeforeTheCard.test_rework_target_is_checked_against_the_pipeline_list) ... ok
+test_unknown_run_is_named_not_carded (__main__.GuardsBeforeTheCard.test_unknown_run_is_named_not_carded) ... ok
+test_retry_runs_on_the_first_call (__main__.ReversibleToolsActDirectly.test_retry_runs_on_the_first_call) ... ok
+test_set_product_runs_on_the_first_call_and_needs_a_repo (__main__.ReversibleToolsActDirectly.test_set_product_runs_on_the_first_call_and_needs_a_repo) ... ok
+test_a_phrase_from_an_older_turn_does_not_carry_over (__main__.ServerSideConfirmation.test_a_phrase_from_an_older_turn_does_not_carry_over) ... ok
+test_a_pipeline_refusal_is_reported_as_a_refusal (__main__.ServerSideConfirmation.test_a_pipeline_refusal_is_reported_as_a_refusal) ... ok
+test_confirmed_gate_decision_reaches_the_pipeline_as_the_human (__main__.ServerSideConfirmation.test_confirmed_gate_decision_reaches_the_pipeline_as_the_human) ... ok
+test_decide_gate_without_a_phrase_does_not_decide (__main__.ServerSideConfirmation.test_decide_gate_without_a_phrase_does_not_decide) ... ok
+test_rejection_is_its_own_phrase (__main__.ServerSideConfirmation.test_rejection_is_its_own_phrase) ... ok
+test_rework_needs_its_own_confirmation (__main__.ServerSideConfirmation.test_rework_needs_its_own_confirmation) ... ok
+test_the_model_cannot_confirm_on_the_humans_behalf (__main__.ServerSideConfirmation.test_the_model_cannot_confirm_on_the_humans_behalf) ... ok
+test_a_brief_path_that_does_not_exist_is_named (__main__.StartRunComposition.test_a_brief_path_that_does_not_exist_is_named) ... ok
+test_a_complete_idea_cards_first_then_creates_the_run (__main__.StartRunComposition.test_a_complete_idea_cards_first_then_creates_the_run) ... ok
+test_an_idea_without_a_coding_mode_asks_for_one (__main__.StartRunComposition.test_an_idea_without_a_coding_mode_asks_for_one) ... ok
+test_an_idea_without_a_repo_asks_instead_of_guessing (__main__.StartRunComposition.test_an_idea_without_a_repo_asks_instead_of_guessing) ... ok
+test_exactly_one_of_idea_or_brief_path (__main__.StartRunComposition.test_exactly_one_of_idea_or_brief_path) ... ok
+
+----------------------------------------------------------------------
+Ran 31 tests in 0.078s
+
+OK
+test_a_missing_directory_is_an_error_not_a_traceback (__main__.CommandLine.test_a_missing_directory_is_an_error_not_a_traceback) ... C:\Users\dimas\AppData\Local\Temp\no-such-repo-xyz is not a directory
+ok
+test_main_returns_zero_on_a_known_stack_and_one_on_an_unknown_one (__main__.CommandLine.test_main_returns_zero_on_a_known_stack_and_one_on_an_unknown_one) ... ok
+test_pipeline_dispatches_it_without_a_database (__main__.CommandLine.test_pipeline_dispatches_it_without_a_database) ... ok
+test_a_polyglot_repo_runs_every_stack_and_one_red_fails_the_gate (__main__.Detection.test_a_polyglot_repo_runs_every_stack_and_one_red_fails_the_gate) ... ok
+test_an_unknown_stack_is_said_out_loud (__main__.Detection.test_an_unknown_stack_is_said_out_loud) ... ok
+test_go_and_rust (__main__.Detection.test_go_and_rust) ... ok
+test_node_repo_gets_npm_commands (__main__.Detection.test_node_repo_gets_npm_commands) ... ok
+test_node_without_scripts_still_gets_a_test_and_a_warning (__main__.Detection.test_node_without_scripts_still_gets_a_test_and_a_warning) ... ok
+test_python_repo_gets_pytest_and_the_tools_it_configures (__main__.Detection.test_python_repo_gets_pytest_and_the_tools_it_configures) ... ok
+test_setup_py_alone_is_a_python_repo (__main__.Detection.test_setup_py_alone_is_a_python_repo) ... ok
+test_the_npm_placeholder_test_script_is_not_treated_as_a_real_one (__main__.Detection.test_the_npm_placeholder_test_script_is_not_treated_as_a_real_one) ... ok
+test_agents_md_is_created_when_absent (__main__.WhatItWrites.test_agents_md_is_created_when_absent) ... ok
+test_an_existing_lantern_toml_is_kept_unless_forced (__main__.WhatItWrites.test_an_existing_lantern_toml_is_kept_unless_forced) ... ok
+test_dry_run_writes_nothing (__main__.WhatItWrites.test_dry_run_writes_nothing) ... ok
+test_existing_agents_md_text_is_never_touched (__main__.WhatItWrites.test_existing_agents_md_text_is_never_touched) ... ok
+test_it_says_how_to_point_a_run_at_the_repo (__main__.WhatItWrites.test_it_says_how_to_point_a_run_at_the_repo) ... ok
+test_lantern_toml_is_readable_by_the_gate_that_will_run_it (__main__.WhatItWrites.test_lantern_toml_is_readable_by_the_gate_that_will_run_it) ... ok
+test_optional_commands_the_repo_lacks_stay_commented_examples (__main__.WhatItWrites.test_optional_commands_the_repo_lacks_stay_commented_examples) ... ok
+test_running_twice_changes_nothing_the_second_time (__main__.WhatItWrites.test_running_twice_changes_nothing_the_second_time) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 0.031s
+
+OK
+Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmp1bridgv_  (dry run)
+  stack rust    (Cargo.toml): test=cargo test, typecheck=cargo check
+  lantern.toml: created
+  AGENTS.md:    created
+
+Point a run at this repo:
+  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmp1bridgv_
+  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmp1bridgv_" [--coding-mode auto]
+  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmp1bridgv_" --branch main
+  - from Chat:    ask Lantern to start a run and name this path as the product repo
+  - in Mission Control: /run/<run-id>/repo (the picker offers repos under LANTERN_WORKSPACE_ROOTS)
+
+--- lantern.toml ---
+# lantern.toml — what the software factory runs AS CODE against a product repo.
+# Copy to the product repository's root. Every command runs from that root, through
+# bash, after the coding agent's turn (tools/azure-runner/factory.py); red output goes
+# back to the agent (failures only) for a bounded number of fix rounds, then the stage
+# fails honestly. $LANTERN_PYTHON is the harness interpreter (use it when the product is
+# Lantern itself; other stacks ignore it).
+
+# Every bug run lands its regression test under lantern/regressions/ (D20). The test
+# command MUST discover that directory so every past repro re-runs on every future run:
+# pytest and jest do by default; unittest needs
+#   && python -m unittest discover -s lantern/regressions -p 'test_*.py'
+# Playwright needs the directory in its testDir / spec pattern.
+
+[quality]
+test = "cargo test"
+# lint = "..."                     # optional
+typecheck = "cargo check"
+# build = "..."                     # optional
+timeout_s = 900                            # per command
+
+Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmpboi6bk4p  (dry run)
+  stack: none detected
+  lantern.toml: created
+  AGENTS.md:    created
+  note: no known stack detected (package.json, pyproject.toml/setup.py, go.mod, Cargo.toml) — lantern.toml carries a TODO test command
+
+Point a run at this repo:
+  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmpboi6bk4p
+  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmpboi6bk4p" [--coding-mode auto]
+  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmpboi6bk4p" --branch main
+  - from Chat:    ask Lantern to start a run and name this path as the product repo
+  - in Mission Control: /run/<run-id>/repo (the picker offers repos under LANTERN_WORKSPACE_ROOTS)
+
+--- lantern.toml ---
+# lantern.toml — what the software factory runs AS CODE against a product repo.
+# Copy to the product repository's root. Every command runs from that root, through
+# bash, after the coding agent's turn (tools/azure-runner/factory.py); red output goes
+# back to the agent (failures only) for a bounded number of fix rounds, then the stage
+# fails honestly. $LANTERN_PYTHON is the harness interpreter (use it when the product is
+# Lantern itself; other stacks ignore it).
+
+# Every bug run lands its regression test under lantern/regressions/ (D20). The test
+# command MUST discover that directory so every past repro re-runs on every future run:
+# pytest and jest do by default; unittest needs
+#   && python -m unittest discover -s lantern/regressions -p 'test_*.py'
+# Playwright needs the directory in its testDir / spec pattern.
+
+[quality]
+test = "echo TODO: set a real test command - the gate is red until you do && exit 1"
+# lint = "..."                     # optional
+# typecheck = "..."                     # optional
+# build = "..."                     # optional
+timeout_s = 900                            # per command
+
+test_a_slow_pipeline_call_does_not_delay_the_ack (__main__.AckTiming.test_a_slow_pipeline_call_does_not_delay_the_ack) ... ok
+test_ack_happens_before_the_pipeline_is_touched (__main__.AckTiming.test_ack_happens_before_the_pipeline_is_touched) ... ok
+test_slash_commands_ack_first_too (__main__.AckTiming.test_slash_commands_ack_first_too) ... ok
+test_a_non_approver_click_changes_nothing (__main__.Allowlists.test_a_non_approver_click_changes_nothing) ... ok
+test_a_non_operator_cannot_start_a_run (__main__.Allowlists.test_a_non_operator_cannot_start_a_run) ... ok
+test_a_refused_click_is_logged_with_the_slack_identity (__main__.Allowlists.test_a_refused_click_is_logged_with_the_slack_identity) ... ok
+test_an_empty_approver_list_means_nobody (__main__.Allowlists.test_an_empty_approver_list_means_nobody) ... ok
+test_an_operator_who_is_not_an_approver_cannot_decide_a_gate (__main__.Allowlists.test_an_operator_who_is_not_an_approver_cannot_decide_a_gate) ... ok
+test_slash_commands_check_the_operator_list (__main__.Allowlists.test_slash_commands_check_the_operator_list) ... ok
+test_the_app_ignores_channels_it_was_not_pointed_at (__main__.Allowlists.test_the_app_ignores_channels_it_was_not_pointed_at) ... ok
+test_a_pipeline_refusal_is_said_in_the_thread_not_swallowed (__main__.ApprovalsCarryTheHuman.test_a_pipeline_refusal_is_said_in_the_thread_not_swallowed) ... ok
+test_a_rejection_is_carried_as_a_rejection (__main__.ApprovalsCarryTheHuman.test_a_rejection_is_carried_as_a_rejection) ... ok
+test_an_approval_reaches_the_pipeline_as_slack_user (__main__.ApprovalsCarryTheHuman.test_an_approval_reaches_the_pipeline_as_slack_user) ... ok
+test_the_message_is_rewritten_so_the_buttons_cannot_be_clicked_twice (__main__.ApprovalsCarryTheHuman.test_the_message_is_rewritten_so_the_buttons_cannot_be_clicked_twice) ... ok
+test_the_two_highest_stakes_gates_are_not_decidable_from_slack (__main__.ApprovalsCarryTheHuman.test_the_two_highest_stakes_gates_are_not_decidable_from_slack) ... ok
+test_an_unknown_gate_name_in_the_env_is_dropped (__main__.ConfigParsing.test_an_unknown_gate_name_in_the_env_is_dropped) ... ok
+test_operators_default_to_the_approvers (__main__.ConfigParsing.test_operators_default_to_the_approvers) ... ok
+test_the_bridge_never_imports_slack_outside_build_app (__main__.ConfigParsing.test_the_bridge_never_imports_slack_outside_build_app) ... ok
+test_the_default_gate_set_excludes_the_two_high_stakes_gates (__main__.ConfigParsing.test_the_default_gate_set_excludes_the_two_high_stakes_gates) ... ok
+test_user_lists_accept_the_shapes_people_paste (__main__.ConfigParsing.test_user_lists_accept_the_shapes_people_paste) ... ok
+test_a_json_encoded_data_column_is_handled (__main__.EventRelay.test_a_json_encoded_data_column_is_handled) ... ok
+test_only_runs_with_a_thread_are_relayed_and_the_watermark_advances (__main__.EventRelay.test_only_runs_with_a_thread_are_relayed_and_the_watermark_advances) ... ok
+test_a_pending_gate_posts_once_into_the_runs_thread (__main__.GateCards.test_a_pending_gate_posts_once_into_the_runs_thread) ... ok
+test_a_run_with_no_thread_gets_one_before_the_gate_card (__main__.GateCards.test_a_run_with_no_thread_gets_one_before_the_gate_card) ... ok
+test_a_slack_carried_gate_gets_buttons_and_the_others_do_not (__main__.GateCards.test_a_slack_carried_gate_gets_buttons_and_the_others_do_not) ... ok
+test_button_values_round_trip (__main__.GateCards.test_button_values_round_trip) ... ok
+test_the_card_carries_what_is_being_decided (__main__.GateCards.test_the_card_carries_what_is_being_decided) ... ok
+test_a_failed_start_says_why (__main__.Mentions.test_a_failed_start_says_why) ... ok
+test_an_idea_opens_a_run_and_a_thread (__main__.Mentions.test_an_idea_opens_a_run_and_a_thread) ... ok
+test_help_needs_no_rights_and_starts_nothing (__main__.Mentions.test_help_needs_no_rights_and_starts_nothing) ... ok
+test_no_repo_anywhere_is_a_question_not_a_run (__main__.Mentions.test_no_repo_anywhere_is_a_question_not_a_run) ... ok
+test_options_are_parsed_out_of_the_idea_text (__main__.Mentions.test_options_are_parsed_out_of_the_idea_text) ... ok
+test_run_takes_an_existing_brief (__main__.Mentions.test_run_takes_an_existing_brief) ... ok
+test_a_bad_rework_target_is_refused_with_the_usage (__main__.SlashCommands.test_a_bad_rework_target_is_refused_with_the_usage) ... ok
+test_retry_reaches_the_pipeline (__main__.SlashCommands.test_retry_reaches_the_pipeline) ... ok
+test_rework_reaches_the_pipeline_with_the_note (__main__.SlashCommands.test_rework_reaches_the_pipeline_with_the_note) ... ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 0.354s
+
+OK
+.........................................
+----------------------------------------------------------------------
+Ran 41 tests in 0.258s
+
+OK
+[bug-20260908-export-to-csv-times-out-for-large-candid] sent to planning (02-pre-coding): re-classified small -> large: the fix changed 200 lines; a small fix may change at most 60. The branch fix/x keeps the work; plan it properly, then the coding stage continues on the same branch.
+[bug-20260908-export-to-csv-times-out-for-large-candid] DONE - bug closed: repro on the branch, fix reviewed, regression green, postmortem written.
+confinement:
+  ok    product/ resolves into the product tree
+  ok    product root itself lists
+  ok    product/../ escape is refused
+  ok    repo paths cannot reach the product tree
+  ok    repo paths still resolve in the repo
+read-only:
+  ok    _writable refuses 'product/src/app.ts'
+  ok    _writable refuses 'product'
+  ok    _writable refuses '/product/x'
+  ok    _writable refuses 'product\\src\\app.ts'
+git tool allowlist:
+  ok    push/fetch/config/remote/clone are not allowlisted
+  ok    refuses `push`
+  ok    refuses `config`
+  ok    refuses `-c` injection
+  ok    refuses `--output=`
+  ok    refuses `--upload-pack`
+no credential leak:
+  ok    host fetch URL carries the token
+  ok    _scrub removes it from any message
+  ok    a local path is never credentialed
+  ok    an already-credentialed URL is not double-stuffed
+  ok    no product target = no mount, no env
+brief parsing:
+  ok    parse '- **Product repo:** https://github.com/org/rep'
+  ok    parse '- **Product repo:** <https://github.com/org/re'
+  ok    parse '- **Product repo:** —'
+  ok    parse '- **Product repo:** `https://github.com/org/re'
+  ok    parse '# Feature Brief: nothing here'
+  ok    parse '- **Product repo:** https://github.com/org/rep'
+  ok    parse '- **Product repo:** https://github.com/org/rep'
+orientation blocks (D15):
+  ok    env block survives a non-git directory
+  ok    …and says so rather than claiming a repo
+  ok    no docs -> an explicit 'discover them yourself'
+  ok    docs block respects the total budget
+  ok    truncation is announced
+  ok    untrusted-data fences are present
+  ok    …and labelled as reference material, not instructions
+  ok    AGENTS.md is loaded before README (priority order)
+  ok    task block survives a missing run folder
+  ok    …and still names this stage's deliverable
+  ok    read-only note carries the read-only contract
+  ok    read-only note does not offer product_shell
+
+all product-access properties hold
+No active span; trace error was not attached
+No active span; trace error was not attached
+........No active span; trace error was not attached
+No active span; trace error was not attached
+No active span; trace error was not attached
+No active span; trace error was not attached
+No active span; trace error was not attached
+No active span; trace error was not attached
+..No active span; trace error was not attached
+.s.........
+----------------------------------------------------------------------
+Ran 21 tests in 3.709s
+
+OK (skipped=1)
+........
+----------------------------------------------------------------------
+Ran 8 tests in 1.916s
+
+OK
+...........
+----------------------------------------------------------------------
+Ran 11 tests in 3.078s
+
+OK
+.................
+----------------------------------------------------------------------
+Ran 17 tests in 3.439s
+
+OK
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.116s
+
+OK
+Executing <Task pending name='Task-2' coro=<Builders.test_host_seed_and_merge_have_before_and_after_fences() running at C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_execution_runtime.py:467> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 1.703 seconds
+......[run-a] 03-coding FAILED: provider moved during review
+  rework, then: python pipeline.py retry run-a
+...........................
+----------------------------------------------------------------------
+Ran 33 tests in 2.532s
+
+OK
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] merged 2 builder branch(es) into feat/test @ bbbbbbbbbbbb — integrating
+.....................
+----------------------------------------------------------------------
+Ran 21 tests in 1.196s
+
+OK
+..No active span; trace error was not attached
+No active span; trace error was not attached
+......
+----------------------------------------------------------------------
+Ran 8 tests in 0.588s
+
+OK
+....
+----------------------------------------------------------------------
+Ran 4 tests in 1.797s
+
+OK
+..................
+----------------------------------------------------------------------
+Ran 18 tests in 0.083s
+
+OK
+...............
+----------------------------------------------------------------------
+Ran 15 tests in 0.037s
+
+OK
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 19.230s
+
+OK
+....s....................
+----------------------------------------------------------------------
+Ran 25 tests in 23.376s
+
+OK (skipped=1)
+test_a_dictionary_word_password_does_not_scrub_the_whole_trace (__main__.TraceTests.test_a_dictionary_word_password_does_not_scrub_the_whole_trace)
+The local dev database password is literally "lantern". Masking it wherever it ... ok
+test_a_failing_disk_only_prints (__main__.TraceTests.test_a_failing_disk_only_prints) ... ok
+test_args_and_outputs_are_truncated_with_full_lengths_kept (__main__.TraceTests.test_args_and_outputs_are_truncated_with_full_lengths_kept) ... ok
+test_calls_keep_order_and_pair_outputs_by_id_or_position (__main__.TraceTests.test_calls_keep_order_and_pair_outputs_by_id_or_position) ... ok
+test_dict_arguments_and_non_string_outputs_are_serialised (__main__.TraceTests.test_dict_arguments_and_non_string_outputs_are_serialised) ... ok
+test_file_lands_in_the_stage_trace_dir_with_a_safe_name (__main__.TraceTests.test_file_lands_in_the_stage_trace_dir_with_a_safe_name) ... ok
+test_garbage_never_raises (__main__.TraceTests.test_garbage_never_raises) ... ok
+test_known_env_secret_values_are_scrubbed_even_without_a_keyword (__main__.TraceTests.test_known_env_secret_values_are_scrubbed_even_without_a_keyword) ... ok
+test_long_windows_trace_path_uses_shared_short_lookup (__main__.TraceTests.test_long_windows_trace_path_uses_shared_short_lookup) ... [trace] C:/Users/dimas/AppData/Local/Temp/lantern-trace-m2zf10ya/workspace-xxxxxxxxxxxxxxxxxxxxxxxxxxxx/workflow/runs/feat-20260910-infrastructure-infrastructure-infrastructure-/00-story/trace/6b413697c4465cde46667880.json (0 tool calls, 1 turn(s))
+ok
+test_password_in_a_tool_output_or_args_is_masked (__main__.TraceTests.test_password_in_a_tool_output_or_args_is_masked) ... ok
+test_prose_mentioning_tokens_stays_readable (__main__.TraceTests.test_prose_mentioning_tokens_stays_readable) ... ok
+test_qa_target_section_is_dropped_and_the_password_never_lands (__main__.TraceTests.test_qa_target_section_is_dropped_and_the_password_never_lands) ... ok
+test_read_trace_finds_it_by_key (__main__.TraceTests.test_read_trace_finds_it_by_key) ... ok
+test_redact_handles_absent_qa_section (__main__.TraceTests.test_redact_handles_absent_qa_section) ... ok
+test_turn_numbers_and_usage_merge_across_fix_rounds (__main__.TraceTests.test_turn_numbers_and_usage_merge_across_fix_rounds) ... ok
+test_url_credentials_and_short_values (__main__.TraceTests.test_url_credentials_and_short_values) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.043s
+
+OK
+test_builder_handoffs_are_read_too (__main__.MatrixTests.test_builder_handoffs_are_read_too) ... ok
+test_charter_sections_split_on_headings (__main__.MatrixTests.test_charter_sections_split_on_headings) ... ok
+test_every_stage_present_and_rows_traced_by_identifier (__main__.MatrixTests.test_every_stage_present_and_rows_traced_by_identifier) ... ok
+test_no_story_means_no_matrix (__main__.MatrixTests.test_no_story_means_no_matrix) ... ok
+test_notes_name_what_traces_to_nothing (__main__.MatrixTests.test_notes_name_what_traces_to_nothing) ... ok
+test_partial_run_marks_later_stages_pending (__main__.MatrixTests.test_partial_run_marks_later_stages_pending) ... ok
+test_render_shows_chips_headers_and_summary (__main__.MatrixTests.test_render_shows_chips_headers_and_summary) ... ok
+test_structured_evidence_locations_render_and_escape (__main__.MatrixTests.test_structured_evidence_locations_render_and_escape) ... ok
+test_unplanned_and_untraced_are_gaps_once_the_stage_ran (__main__.MatrixTests.test_unplanned_and_untraced_are_gaps_once_the_stage_ran) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.031s
+
+OK
+test_actions_follow_the_pipeline_rules (__main__.DrawerTests.test_actions_follow_the_pipeline_rules) ... ok
+test_envelope_valid_and_invalid (__main__.DrawerTests.test_envelope_valid_and_invalid) ... ok
+test_execution_without_a_trace_says_so (__main__.DrawerTests.test_execution_without_a_trace_says_so) ... ok
+test_gate_json_belongs_to_this_execution_or_not (__main__.DrawerTests.test_gate_json_belongs_to_this_execution_or_not) ... ok
+test_memory_entries_are_listed (__main__.DrawerTests.test_memory_entries_are_listed) ... ok
+test_never_decides_a_gate (__main__.DrawerTests.test_never_decides_a_gate) ... ok
+test_prompt_tool_calls_and_usage_from_the_trace (__main__.DrawerTests.test_prompt_tool_calls_and_usage_from_the_trace) ... ok
+test_provenance_comes_from_execution_row_not_gate_mirror (__main__.DrawerTests.test_provenance_comes_from_execution_row_not_gate_mirror) ... ok
+test_rendered_drawer_never_shows_the_qa_password (__main__.DrawerTests.test_rendered_drawer_never_shows_the_qa_password) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.060s
+
+OK
+...............
+----------------------------------------------------------------------
+Ran 15 tests in 2.306s
+
+OK
+----------------------------------------------------------------------
+Ran 5 tests in 0.002s
+
+OK
+gate latency query failed: aggregate blew up
+----------------------------------------------------------------------
+Ran 35 tests in 0.015s
+
+OK
+----------------------------------------------------------------------
+Ran 0 tests in 0.000s
+
+NO TESTS RAN

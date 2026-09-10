@@ -1,0 +1,76 @@
+test_base_moves_ahead_branch_is_updated_and_regated (__main__.Babysitter.test_base_moves_ahead_branch_is_updated_and_regated) ... FAIL
+test_conflict_stops_with_the_file_list_and_an_alarm (__main__.Babysitter.test_conflict_stops_with_the_file_list_and_an_alarm) ... ok
+test_github_merge_detection_prefers_the_api (__main__.Babysitter.test_github_merge_detection_prefers_the_api) ... ok
+test_merged_branch_is_recorded_and_left_alone (__main__.Babysitter.test_merged_branch_is_recorded_and_left_alone) ... ok
+test_red_regate_spends_one_fix_execution (__main__.Babysitter.test_red_regate_spends_one_fix_execution) ... ok
+test_red_regate_with_a_failing_fix_alarms_and_waits (__main__.Babysitter.test_red_regate_with_a_failing_fix_alarms_and_waits) ... ok
+test_regate_local_and_the_docker_command (__main__.Babysitter.test_regate_local_and_the_docker_command) ... FAIL
+test_up_to_date_does_nothing (__main__.Babysitter.test_up_to_date_does_nothing) ... ok
+test_force_rmtree_removes_read_only_files (__main__.CheckoutReuse.test_force_rmtree_removes_read_only_files) ... ok
+test_product_checkout_can_be_recreated_after_a_commit (__main__.CheckoutReuse.test_product_checkout_can_be_recreated_after_a_commit) ... ok
+test_every_blocker_or_major_is_must_fix (__main__.Envelope.test_every_blocker_or_major_is_must_fix) ... ok
+test_ids_unique_and_must_fix_subset (__main__.Envelope.test_ids_unique_and_must_fix_subset) ... ok
+test_kind_and_run_id_still_checked (__main__.Envelope.test_kind_and_run_id_still_checked) ... ok
+test_registered_and_valid_approve (__main__.Envelope.test_registered_and_valid_approve) ... ok
+test_round_twin_must_exist (__main__.Envelope.test_round_twin_must_exist) ... ok
+test_shape_rules (__main__.Envelope.test_shape_rules) ... ok
+test_valid_request_changes (__main__.Envelope.test_valid_request_changes) ... ok
+test_verdict_is_computed (__main__.Envelope.test_verdict_is_computed) ... ok
+test_babysit_due_once_per_interval (__main__.Knobs.test_babysit_due_once_per_interval) ... ok
+test_rounds_and_cadence_env (__main__.Knobs.test_rounds_and_cadence_env) ... ok
+test_approve_on_round_two_means_one_fix (__main__.Loop.test_approve_on_round_two_means_one_fix) ... ok
+test_failed_fix_keeps_the_review (__main__.Loop.test_failed_fix_keeps_the_review) ... [feat-20260908-review-proof] fix execution after round 1 FAILED � the gate opens with the review: coding handoff failed: added no commits
+ok
+test_failed_review_execution_opens_the_gate_without_it (__main__.Loop.test_failed_review_execution_opens_the_gate_without_it) ... [feat-20260908-review-proof] review round 1 FAILED � the gate opens without it: postconditions failed: review.json invalid
+ok
+test_never_approve_is_capped_with_the_last_review_attached (__main__.Loop.test_never_approve_is_capped_with_the_last_review_attached) ... ok
+test_one_round_never_fixes_and_zero_skips (__main__.Loop.test_one_round_never_fixes_and_zero_skips) ... ok
+test_pr_review_is_posted_per_round_when_a_pr_exists (__main__.Loop.test_pr_review_is_posted_per_round_when_a_pr_exists) ... ok
+test_review_block_carries_round_context (__main__.Loop.test_review_block_carries_round_context) ... ok
+test_wrong_round_in_review_json_is_an_error (__main__.Loop.test_wrong_round_in_review_json_is_an_error) ... [feat-20260908-review-proof] review round 1 FAILED � the gate opens without it: 03-coding/review/review.json missing or not round 1 after the review execution
+ok
+test_a_plan_cannot_claim_them (__main__.NotBuilders.test_a_plan_cannot_claim_them) ... ok
+test_review_sub_stages_are_not_builder_names (__main__.NotBuilders.test_review_sub_stages_are_not_builder_names) ... ok
+test_422_falls_back_to_body_only (__main__.PullRequestReview.test_422_falls_back_to_body_only) ... ok
+test_api_trouble_is_never_a_failure (__main__.PullRequestReview.test_api_trouble_is_never_a_failure) ... ok
+test_leased_review_posting_is_omitted_before_provider_call (__main__.PullRequestReview.test_leased_review_posting_is_omitted_before_provider_call) ... ok
+test_no_token_means_run_folder_only (__main__.PullRequestReview.test_no_token_means_run_folder_only) ... ok
+test_request_body_is_one_comment_review_with_inline_findings (__main__.PullRequestReview.test_request_body_is_one_comment_review_with_inline_findings) ... ok
+test_stage_maps_and_the_task_block_hook (__main__.Wiring.test_stage_maps_and_the_task_block_hook) ... ok
+
+======================================================================
+FAIL: test_base_moves_ahead_branch_is_updated_and_regated (__main__.Babysitter.test_base_moves_ahead_branch_is_updated_and_regated)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_review.py", line 466, in test_base_moves_ahead_branch_is_updated_and_regated
+    self.assertEqual(res["outcome"], "updated", res)
+AssertionError: 'fixed' != 'updated'
+- fixed
++ updated
+ : {'outcome': 'fixed', 'branch': 'feat/20260908-review-proof', 'base': 'main', 'base_sha': '7faa3e27494534a16e6b04688a77c43d2cab07ca', 'merge_sha': '45a96d2566cedaa2958a526b3c8dbea66fd091c8', 'gate': 'fixed', 'head_sha': 'cccccccccccccccccccccccccccccccccccccccc', 'commits': 2}
+
+======================================================================
+FAIL: test_regate_local_and_the_docker_command (__main__.Babysitter.test_regate_local_and_the_docker_command)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_review.py", line 592, in test_regate_local_and_the_docker_command
+    self.assertTrue(gate["passed"])
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 36 tests in 12.809s
+
+FAILED (failures=2)
+[feat-20260908-review-proof] feat/20260908-review-proof updated with main and fixed � head cccccccccccc
+[feat-20260908-review-proof] feat/20260908-review-proof is merged into main (git) � babysitting ends
+[feat-20260908-review-proof] feat/20260908-review-proof updated with main and fixed � head cccccccccccc
+[feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review round 2/2: approve (0 finding(s), must-fix 0)
+[feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review round 2/2: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review rounds exhausted with request_changes � a human decides
+[feat-20260908-review-proof] review round 1/1: request_changes (1 finding(s), must-fix 1)
+[feat-20260908-review-proof] review rounds exhausted with request_changes � a human decides
+[feat-20260908-review-proof] review round 1/2: approve (0 finding(s), must-fix 0)
+[feat-20260908-review-proof] review round 1/2: approve (0 finding(s), must-fix 0)

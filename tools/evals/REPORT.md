@@ -1,8 +1,8 @@
 # Factory evals — REPORT
 
-Generated 2026-09-10 09:07 UTC at commit `7f01faad1c9c` from frozen data: 11 briefs, 5 stories, 2 plans, 3 validations, 1 repros.
+Generated 2026-09-10 15:53 UTC at commit `a5d5a8465927` from frozen data: 11 briefs, 5 stories, 2 plans, 3 validations, 1 repros.
 
-<!-- lantern-evals-fingerprint: db0dc3392d72a704c8fcb949e7b31ea8e4b536d3ac34a9c2fe869a01e4bbed6f -->
+<!-- lantern-evals-fingerprint: 276d628e6f69b95a8acd12a982c9ebcdd6da3da91b176fa1dfeadbdda46d5555 -->
 
 **The rule (D20):** a diff that touches `agents/**`, `factory.py`, `intake.py`, the scorers, or the orchestrator's prompt builders / gate functions must regenerate this file (`pipeline.py evals build && pipeline.py evals report`) in the same change. `tools/evals/check_pr.py` enforces it from this repo's `lantern.toml` lint command. A number that moved is the review conversation; unchanged frozen scores only describe the existing corpus and do not establish runtime safety. `evals run --suite <name> --live` replays the role on the real model for a before/after — opt-in, costs cents per row.
 

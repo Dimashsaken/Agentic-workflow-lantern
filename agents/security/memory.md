@@ -17,3 +17,4 @@ Target: under ~200 lines after consolidation.
 
 - 2026-08-26 [manual · -] 2026-08-25: For authentication features, an unidentified release branch is itself a no-go condition because endpoint authorization, dependency provenance, staging secrets, and rollback behavior cannot be inferred from feature intent.
 - 2026-09-10 [feat-20260910-agentic-infrastructure · manual-engineering-continuation] 2026-09-10: Before/after source hashes cannot establish what a test executed when that source remains writable; use a separate read-only committed snapshot and separately fence every future-authoritative write, including role memory.
+- 2026-09-10 [feat-20260910-agentic-infrastructure · manual-engineering-continuation] 2026-09-10: A cleanup eligibility check is not a concurrency boundary; worker allocation, launch and retirement must share an exclusion lock and irreversible tombstone, because a delayed start can mount a path after cleanup has inspected it.

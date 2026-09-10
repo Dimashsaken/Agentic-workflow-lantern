@@ -206,3 +206,107 @@ Reviewed boundary source hashes at this cutoff:
 Memory candidate remains the dated learning above. The actual durable `append_memory` insertion is still blocked by the configured database; rendered memory was not edited and no success is claimed.
 
 Status: BLOCKED (formal stage / staging); bounded local pilot GO with conditions
+
+## Continuation 3 defensive architecture pre-review — 2026-09-10
+
+- **Agent/author:** security, independent reviewer
+- **Scope:** continuation-3 contracts B–D; initial working branch `codex/agentic-infrastructure`, HEAD `4dec57a`, preserved concurrent publication/QA changes and unrelated `.codex/`.
+- **Recommendation:** GO with conditions for continuing the previously authorized bounded local pilot; **NO-GO for staging**. This pre-review supplies constraints, not a human architecture approval or a completed implementation review.
+
+Read the role charter/skills/memory, AGENTS, runboard, execution-isolation and continuation documents, upstream coding/QA/post-coding/security evidence, and all continuation-3 planning artifacts. The concrete B–D proposal is suitable for implementation after the pending human decision, subject to the constraints below. At this cutoff the dependent maintenance, external QA gateway/capture and retirement implementations do not exist; their acceptance cannot be inferred from this plan.
+
+| ID | Severity / status | Evidence | Required mitigation / verification |
+|---|---|---|---|
+| S3-P1 | High, required implementation constraint | `02-pre-coding/continuation-3-task-plan.md`, B, proposes a maintenance lease independent of the stage-dispatch lease. A separate acquisition check without shared dispatcher/rework exclusion would still permit two owners. | Serialize all three paths under the same run-row lock, bind the latest applicable human decision and publication target, and revalidate before each authoritative write. Do not change run status/stage/approval to obtain maintenance authority. Test both CLI and daemon, superseded approval, competing owner and expired child with real disposable PostgreSQL. |
+| S3-P2 | High, required implementation constraint | The same plan, C, proposes an internal browser network and a CONNECT gateway. A tunnel destination allowlist alone does not inspect encrypted HTTP Host; on shared infrastructure the tunnel endpoint can serve another logical origin. | Specify the enforced boundary explicitly. Validate/pin DNS answers per connection, reject private/reserved and alternative-address forms, constrain TLS destinations or document narrower IP-level trust, prevent worker direct egress, and cover redirects, subresources, service workers and cross-execution traffic. Prove direct sockets, DNS rebinding and shared-endpoint behavior on the actual image. Browser request hooks alone do not provide containment. |
+| S3-P3 | High, required implementation constraint | The same plan, D, correctly identifies delayed worker launch as a race after a terminal-row/mount inspection. Prior debt LANTERN-DEBT-EXECUTION-GC does not by itself define an exclusion protocol. | Require the same controller-owned OS lock around allocation/launch/mount and retirement, an irreversible tombstone, complete relevant Docker mount inspection rather than labels alone, and same-filesystem identity-checked quarantine. Hold on unknown owner, DB/Docker failure or linked/aliased paths. Exercise simultaneous launch/deletion and interrupted quarantine only inside owned temporary roots. |
+| S3-P4 | Medium, acceptance incomplete | The same plan, C/D, distinguishes a checkout SHA from deployment identity, recorder ownership from a filename, and evidence retention from disposable checkout cleanup. Current upstream reports explicitly lack full normal external QA capture provenance. | Obtain trusted deployment observations at recording start/end, controller-created recording identity, sealed media and observed requirement results. Preserve positive and negative verifier controls. Retain evidence indefinitely by default; no media deletion without separate policy and verified durable retrieval. |
+
+These are pre-implementation hazards with proposed mitigations, not claims of reproduced exploitable production defects. No external mutation, migration, gate decision, deployment or destructive cleanup was performed by this reviewer.
+
+### Evidence and memory update
+
+`03-coding/configured-postgres-restored.json` records the existing configured PostgreSQL 16.9 database `lantern`, existing data directory `C:/Users/dimas/.lantern/pgdata`, unchanged 12 runs / 23 executions / 8 approvals, and five actual `append_memory` insertions. Security's previously pending learning is row **51**, execution key `manual:feat-20260910-agentic-infrastructure:security:pending-95f74faa9e13`. This is supplied configured-database evidence, not a restoration independently repeated by this reviewer, and not production certification. It closes the old durable-memory connectivity condition. No new cluster, DDL, fake stage or approval was introduced.
+
+New memory candidate sent to the integrator for the actual tool: “2026-09-10: A cleanup eligibility check is not a concurrency boundary; worker allocation, launch and retirement must share an exclusion lock and irreversible tombstone, because a delayed start can mount a path after cleanup has inspected it.” The rendered memory file was not edited.
+
+### Deploy-day checklist
+
+- [ ] Obtain the pending local B–D architecture decision before dependent implementation; record it honestly without manufacturing fleet approval rows.
+- [ ] Complete publication observation/fencing review and B–D implementation with the independent controls above. Preserve human approval and merge ownership.
+- [ ] Freeze reviewed source/image identity; run configured quality checks/evals and recorded browser QA at that snapshot.
+- [ ] Establish actual target GitHub/deployment/network evidence and image/dependency/configuration inventory; distinguish all simulations and disposable integrations.
+- [ ] Drain dispatchers/workers before any human-approved live migration or activation; inventory uncertain effects, recovery holds and retained source/evidence first.
+- [ ] Stop activation on stale write acceptance, wrong-target publication, failed isolation or cleanup. Preserve ledger/diagnostics and reconcile provider state before retry or rollback.
+- [ ] Keep staging and production human gates pending until the full acceptance and release prerequisites are met.
+
+**Open question:** Do you approve the schema-free local contracts B–D in `02-pre-coding/continuation-3-task-plan.md`, preserving the existing live rollout and evidence-deletion gates?
+
+Status: BLOCKED (pending B–D architecture decision and incomplete foundation/staging acceptance)
+
+## Continuation 3 publication security verification — 2026-09-10
+
+**GO with conditions for the bounded local pilot; NO-GO for staging.** The reviewed publication increment now fails closed on stale or conflicting observed state. No confirmed unmitigated high finding remains in this bounded scope. It does not complete the continuation: split-effect repair, fenced maintenance, external QA capture and retention remain outstanding, with B–D awaiting the explicit local architecture decision.
+
+Reviewed the complete current publication/runtime delta from `a64c229`, the entire new `github_publication.py`, lease helpers and tests, additive configured test command, and eval fingerprint change. The legacy PR helper no longer emits retry comments or labels; unconditional force-push fallback is removed. There are no dependency manifest or lockfile changes in this continuation, so no new package advisory/install-script assessment is applicable. This is not a fresh advisory audit of the existing image or installed packages.
+
+### Severity-ranked findings and dispositions
+
+| ID | Severity / disposition | Evidence | Mitigation and verified result |
+|---|---|---|---|
+| S3-1 | High, fixed before acceptance | Initial draft recorded branch/PR artifacts before the post-provider target/handoff recheck. Final `pipeline.py:1097` and `:1104` place target validation, effect acceptance and artifact/event writes in the same fenced transaction; `_publish_coding_branch` defers strict recording. | Regression `test_handoff_changes_during_provider_call_emit_no_authoritative_artifacts` passes: a changed handoff after provider work prevents effect confirmation and every publication artifact/event write, and preserves uncertainty. |
+| S3-2 | High, fixed before acceptance | Initial draft reused publication output after `review.after_publish` without fresh observation. Final `pipeline.py:1373` re-observes repository/base/head/PR after review; final parent-fenced gate transaction rechecks current target/handoff. | Regression `test_gate_reobserves_after_review_and_holds_changed_provider` passes: provider movement during review opens no gate. This is a timestamped observation plus conditional branch update, not an atomic transaction spanning PostgreSQL and GitHub. |
+| S3-3 | Medium, fixed for v2 intents | Initial draft bound names/head only and omitted durable expected-old/base/repository identities. Final `github_publication.py:58`, `:96`, `:161`; `execution_leases.py:207`, `:216`; `pipeline.py:1076` persist a v2 request before mutation, bind immutable repository ID/base SHA/expected old remote SHA, and hold legacy intents. | Independent controls reject repository replacement, moved base, mismatched PR repository/base, changed expected old head and destination changes. CAS pushes the immutable commit SHA with exact expected remote ref and no unconditional fallback. Duplicate effects perform reads only. Each response is capped at 4 MiB and pagination at 20 pages. |
+| S3-4 | Medium, open acceptance limitation | `pipeline.py:1073` still uses one aggregate `publish-v2` effect. `github_publication.py:151` holds absent or partial effects; a push completed without a PR is not automatically repaired. This is narrower than continuation-3 contract A's split effect proposal. | Keep partial/legacy effects explicitly held and inspect provider state; do not delete/reset intent records to force a retry. Complete separately journaled branch and PR effects plus safe partial-repair/operator flow and integration controls before claiming full AC-9a or broader publication recovery acceptance. |
+| S3-5 | Medium, open rollout limitation | B–D are plans, not implementations; current strict transport remains offline, leased babysitting remains held, and checkout retention debt persists. Recorded UI positive provenance is fixture evidence rather than a normal external deployment-bound recorder receipt. | Preserve the existing local-pilot restrictions and apply S3-P1–P4 after architecture approval. Finish real target validation, image/config inventory and human release gates before staging. Context/output experiments remain behind foundation acceptance. |
+
+The destination/ref parser permits only explicit GitHub HTTPS destinations and separate `feat/`, `fix/` or `proto/` branch names. Observations reject malformed/conflicting data, pagination exhaustion, duplicate or closed PRs, mismatched head/base repositories, canonical URL mismatch and branch/PR disagreement. Every mutation checks current ownership/target; acceptance checks again. An API call already in flight cannot be revoked by a database lease, so loss of ownership or inconclusive observations must continue to hold. No exactly-once external effect guarantee is claimed.
+
+### Independent checks at the reviewed cutoff
+
+Executed using local Python 3.12.10:
+
+- `python tools/azure-runner/test_github_publication.py`: **21 passed in 1.035 seconds**. Provider calls are mocked; the CAS test uses actual disposable local Git repositories and proves both concurrent update and unexpected creation refusal.
+- `python tools/azure-runner/test_execution_runtime.py`: **33 passed in 2.743 seconds**, including both acceptance-order regressions above. Database/provider boundaries are injected.
+- `python tools/azure-runner/test_recovery_acceptance.py`: **8 passed in 0.516 seconds**; existing memory/source/checkout/media/unsupported-mode controls remain intact.
+- `python tools/azure-runner/test_execution_leases.py`: **8 passed in 0.113 seconds**, injected lease controls.
+- Additional independent v2 fresh-publication/duplicate probe: prepared canonical request, observed exactly one mocked push and one mocked POST, then re-observed using GET only. Passed; no network or remote mutation.
+- `git diff --check`: passed. The configured gate adds the publication suite and preserves every prior test/lint command and timeout. `github_publication.py` is included in D20 fingerprint inputs; the parent owns final full-gate/eval evidence.
+
+An initial `publication-postgres-proof.json` was inspected: it records real disposable PostgreSQL and an actual killed subprocess, with simulated durable-file GitHub responses and unchanged approval data. Its hashes predate v2 finalization; it must be superseded by the integration owner's final-source rerun before serving as v2 acceptance. This reviewer did not repeat PostgreSQL, Azure, Docker, S3 or live GitHub operations in this round. Actual read-only GitHub observation, if supplied separately, is not publication/interrupt recovery proof.
+
+Reviewed source SHA-256:
+
+| File | SHA-256 |
+|---|---|
+| `tools/azure-runner/github_publication.py` | `2374ac01e3f862102eb77514011c53974bd28f23820335a27af6e6d75cdfdeb8` |
+| `tools/azure-runner/pipeline.py` | `2713cbdfd8449c02e79e2b9783bece1154e8f6ccafa66beefc8c3ec7d5629284` |
+| `tools/azure-runner/execution_leases.py` | `8693d056fd6daa506808bef6425ea9727fa09d40be30eddbb2bc4ac1c4825afd` |
+| `tools/azure-runner/test_github_publication.py` | `ee7eebe937a833c9ce26735945e6daeb7c474031e0f0b2074ec15a180be7a2c6` |
+| `tools/azure-runner/test_execution_runtime.py` | `10aa3e3dadfcf7295939d0e7c702ca7ba71e205b16b033ab4a6182aae67bca42` |
+
+### Durable learning and release conditions
+
+The new cleanup learning above was inserted through actual `append_memory`, configured database row **54**, key `manual:feat-20260910-agentic-infrastructure:security:pending-56e281d3530d`; receipt `03-coding/continuation3-memory.json` preserves unchanged run/execution/approval counts and approval snapshot, no migration and no new cluster. The parent performed this actual tool invocation with an honest manual identity. The previous pending row **51** and this row complete the security memory requirements; no rendered view was hand-edited by this reviewer.
+
+The earlier deploy-day checklist remains mandatory. In addition, freeze the final v2 source/evals and rerun the disposable PostgreSQL proof; retain v1/aggregate ambiguous effects during code rollback; do not enable external publication or remove ledger records merely to escape a hold. Keep the existing offline pilot restrictions, staging NO-GO, and all human merge/approval/deployment ownership. This engineering review is not a registered fleet stage signoff.
+
+**Open question:** Do you approve the schema-free local contracts B–D in `02-pre-coding/continuation-3-task-plan.md`, preserving existing live rollout and evidence-deletion gates?
+
+Status: BLOCKED (full continuation / staging); bounded local pilot GO with conditions
+
+### Final narrow hardening and evidence supplement — 2026-09-10
+
+Independently verified the final PR parser refinement: nested repository IDs require exact integer type, and an open PR with a non-null `merged_at` is rejected as contradictory. The complete publication suite now passes **22 tests in 1.036 seconds**; this supersedes the earlier 21-test cutoff. The matching final module hash is `eea9c811e2d8db858b2174eb6608ee02b569d45151914331a2e95e97a9ec6a12`, and test hash is `5de4e58f8157aaf4b92845674694e769564acdbc09dee176a71b027598d30c5a`. Pipeline and lease source hashes remain unchanged from the table above.
+
+Also reviewed `review._post_review_for`: lease mode now keeps the bot review in the run folder and returns before any provider review API call, because this side effect has no reconciled intent yet. Local review execution and human approval ownership remain intact. Independent `test_review.py` ran **36 passing tests in 12.204 seconds** with the established Windows test environment (`C:/Program Files/Git/bin` prepended to PATH, UTF-8 enabled). A prior plain-Windows-shell invocation failed two existing POSIX `test -f` fixture cases; both passed in the established Git Bash environment without code changes. Review source hash: `3d99e488fd1c5c4f90c4e8a0dc74a3b0f54fe638d8f07b1267a872bf6526a12b`; review test hash: `c42287d9697495584fd7672e5dd9c07d65a68ef1f7ed061dfab828b4423c4f7a`.
+
+The integration owner reran `publication-postgres-proof.json` at these exact final module/pipeline/lease hashes: all **six controls pass**, database `lantern_publication_proof_b9910d8fd59c`, 12 simulated provider GETs, unchanged validation approval snapshot. This supersedes the stale proof limitation above. It remains actual disposable PostgreSQL and subprocess death with a simulated durable-file GitHub boundary, not live publication.
+
+Inspected `github-readonly-validation.json`: actual configured bot credential receives repository/base GET 200, intended branch GET 404 and pull-request-list GET **403** (`Resource not accessible by personal access token`). The observer correctly holds; **zero provider mutations** occurred. This is actual read-only negative validation and identifies a real credential/target prerequisite for a future authorized publication test. It is not positive live GitHub publication, duplicate-effect, or recovery proof, and no credential scope was changed.
+
+Recommendation unchanged: **GO with conditions for the bounded local pilot; NO-GO for staging**. S3-4/S3-5 and S3-P1–P4 remain open as described. The parent owns the final full configured gate/evals and frozen-source Docker rerun; their outcomes must be reported from their actual evidence. No additional high security defect was found at this final scoped cutoff.
+
+**Open question:** Do you approve the schema-free local contracts B–D in `02-pre-coding/continuation-3-task-plan.md`, preserving existing live rollout and evidence-deletion gates?
+
+Status: BLOCKED (full continuation / staging); bounded local pilot GO with conditions

@@ -39,6 +39,7 @@ WATCHED_PATHS = (
     "tools/azure-runner/trusted_evidence.py",
     "tools/azure-runner/execution_leases.py",
     "tools/azure-runner/execution_runtime.py",
+    "tools/azure-runner/github_publication.py",
     "tools/azure-runner/durable_execution.py",
     "tools/azure-runner/isolated_tools.py",
     "tools/azure-runner/tool_execution.py",

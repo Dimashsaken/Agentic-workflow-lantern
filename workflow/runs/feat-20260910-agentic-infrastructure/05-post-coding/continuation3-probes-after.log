@@ -1,0 +1,8 @@
+test_leased_review_never_sends_unledgered_provider_post (__main__.ContinuationReview.test_leased_review_never_sends_unledgered_provider_post) ... ok
+test_legacy_review_still_posts_advisory_comment_once (__main__.ContinuationReview.test_legacy_review_still_posts_advisory_comment_once) ... ok
+test_lost_fence_between_push_and_pr_create_stops_second_effect (__main__.ContinuationReview.test_lost_fence_between_push_and_pr_create_stops_second_effect) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.001s
+
+OK

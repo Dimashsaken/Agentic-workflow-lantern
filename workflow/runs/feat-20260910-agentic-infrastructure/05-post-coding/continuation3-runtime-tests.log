@@ -1,0 +1,12 @@
+Executing <Task pending name='Task-2' coro=<Builders.test_host_seed_and_merge_have_before_and_after_fences() running at C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_execution_runtime.py:467> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 2.094 seconds
+......[run-a] 03-coding FAILED: provider moved during review
+  rework, then: python pipeline.py retry run-a
+...........................
+----------------------------------------------------------------------
+Ran 33 tests in 2.774s
+
+OK
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] merged 2 builder branch(es) into feat/test @ bbbbbbbbbbbb � integrating

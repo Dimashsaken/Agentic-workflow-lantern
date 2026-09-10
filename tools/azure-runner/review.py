@@ -486,6 +486,10 @@ def post_pr_review(owner: str, name: str, pr_number: int, review: dict, *, run_i
 
 
 def _post_review_for(payload: dict, review: dict, run_id: str, deps: Deps) -> dict:
+    import execution_runtime as ownership
+    if ownership.enabled():
+        return {"posted": False, "reason": "leased execution keeps the review in the run folder; "
+                                           "provider review publication has no reconciled effect intent"}
     m = PR_URL.match(str(payload.get("pr_url") or ""))
     if not m:
         return {"posted": False, "reason": "no GitHub pull request for this branch"}

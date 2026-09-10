@@ -373,6 +373,16 @@ class PullRequestReview(unittest.TestCase):
         self.assertFalse(res["posted"])
         self.assertIn("GITHUB_LANTERN_BOT_TOKEN", res["reason"])
 
+    def test_leased_review_posting_is_omitted_before_provider_call(self):
+        deps = mock.Mock(gh_api=mock.Mock())
+        with mock.patch.dict(os.environ, {"LANTERN_EXECUTION_LEASES": "1"}), \
+                mock.patch.object(r, "post_pr_review") as publish:
+            result = r._post_review_for({"pr_url": "https://github.com/o/n/pull/7"}, review_doc(), RUN, deps)
+        self.assertFalse(result["posted"])
+        self.assertIn("no reconciled effect intent", result["reason"])
+        publish.assert_not_called()
+        deps.gh_api.assert_not_called()
+
     def test_422_falls_back_to_body_only(self):
         calls = []
 

@@ -1,0 +1,40 @@
+{
+  "recorded_at": "2026-09-10T15:39:47.254015+00:00",
+  "environment": "existing configured local PostgreSQL; not disposable; not a production certification",
+  "identity": {
+    "database": "lantern",
+    "version": "16.9",
+    "data_directory": "C:/Users/dimas/.lantern/pgdata"
+  },
+  "counts_before": {
+    "runs": 12,
+    "stage_executions": 23,
+    "approvals": 8,
+    "role_memory": 30
+  },
+  "counts_after": {
+    "runs": 12,
+    "stage_executions": 23,
+    "approvals": 8,
+    "role_memory": 32
+  },
+  "approval_snapshot_unchanged": true,
+  "memory": [
+    {
+      "role": "qa-dev",
+      "id": 53,
+      "execution_key": "manual:feat-20260910-agentic-infrastructure:qa-dev:pending-091c45eba440",
+      "tool": "append_memory",
+      "fleet_stage": false
+    },
+    {
+      "role": "security",
+      "id": 54,
+      "execution_key": "manual:feat-20260910-agentic-infrastructure:security:pending-56e281d3530d",
+      "tool": "append_memory",
+      "fleet_stage": false
+    }
+  ],
+  "migration_applied": false,
+  "new_cluster_created": false
+}

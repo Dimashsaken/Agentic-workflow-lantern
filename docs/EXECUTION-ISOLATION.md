@@ -59,12 +59,27 @@ An already running host Git command or external request cannot be revoked by
 heartbeat cancellation. Partial mirror refs or ambiguous provider effects require
 explicit reconciliation; they are not automatically replayed.
 
-Publication records a durable intent including run, head, branch and destination
-repo/base/work. A confirmed duplicate reuses the recorded result. An intended or
-uncertain duplicate holds. The reconciliation primitive requires observed provider
-state; this increment does not provide a complete GitHub reconciliation operator
-flow. Babysitting is centrally held in lease mode until its own fenced operation
-and effect handling exist. Legacy behavior remains available with flags disabled.
+Strict GitHub publication records a version-2 durable intent including run,
+repository ID, destination URL/base/work, desired commit, observed base commit and
+expected old remote commit. Repository/ref reads and bounded PR pagination verify
+the exact head/base repository, refs, revisions, PR identity and open state.
+Interrupted and confirmed duplicates reobserve the provider without replaying
+writes. A moved base/head, changed repository ID, contradictory PR, unavailable API
+or ambiguous outcome holds. Old unbound aggregate intents stay held; they are not
+silently upgraded. Conditional Git pushes use the immutable desired commit and
+exact expected remote value, with no unconditional-force fallback. Publication
+receipts/artifacts share target and ownership checks; the provider is observed
+again after review before opening the human gate. These are observations at a
+point in time, not a distributed atomic transaction with GitHub.
+
+The current aggregate branch-plus-PR effect intentionally holds partial success:
+a pushed branch without its matching PR is not automatically repaired. Separate
+versioned branch/PR intents are still needed for safe partial repair. Strict mode
+omits optional external review posts, comments and labels without their own effect
+handling. Local review artifacts and human review ownership remain. Babysitting
+is centrally held in lease mode until dedicated maintenance ownership is approved
+and implemented. Legacy behavior remains available with flags disabled; it does
+not acquire these guarantees.
 
 ## Trusted evidence
 
@@ -114,6 +129,12 @@ restore the previous host/image as a coordinated rollback. Failed/held work stil
 needs an explicit human retry rather than an automatic startup requeue.
 
 The disposable PostgreSQL proof measures migration/rollback and row preservation;
-it is not production lock-duration evidence. No schema change was applied to the
-unreachable configured database. Azure stays the sole model provider and the
-fixed pipeline and human gate decisions remain unchanged.
+it is not production lock-duration evidence. The original configured local
+PostgreSQL cluster was restored non-destructively in continuation 3, and pending
+learnings were appended through the actual memory tool. No schema change was
+applied to it. Actual GitHub repository/ref reads succeeded, but PR inspection
+returned 403 with the configured bot token; positive live publication acceptance
+remains unverified. The process-kill publication proof uses real disposable
+Postgres with simulated GitHub observations, separately from that live read-only
+check. Azure stays the sole model provider and the fixed pipeline and human gate
+decisions remain unchanged.

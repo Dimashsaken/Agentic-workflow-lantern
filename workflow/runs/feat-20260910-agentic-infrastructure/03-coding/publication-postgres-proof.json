@@ -1,0 +1,21 @@
+{
+  "environment": "actual disposable PostgreSQL16 at loopback55432; actual controller subprocess kill; simulated GitHub GET responses from durable local file",
+  "live_github": false,
+  "database": "lantern_publication_proof_b9910d8fd59c",
+  "controls": [
+    "actual killed controller left effect uncertain; run held; no gate created",
+    "uncertain then confirmed duplicates re-observed; one durable simulated provider effect; zero replay writes",
+    "changed destination rejected by persisted request hash",
+    "stale pre-kill owner cannot confirm effects",
+    "moved provider revision invalidates confirmed receipt reuse",
+    "existing validation approval rows unchanged; fixture created no approvals"
+  ],
+  "provider_get_calls": 12,
+  "validation_approvals_unchanged": true,
+  "source_sha256": {
+    "github_publication.py": "eea9c811e2d8db858b2174eb6608ee02b569d45151914331a2e95e97a9ec6a12",
+    "execution_leases.py": "8693d056fd6daa506808bef6425ea9727fa09d40be30eddbb2bc4ac1c4825afd",
+    "pipeline.py": "2713cbdfd8449c02e79e2b9783bece1154e8f6ccafa66beefc8c3ec7d5629284"
+  },
+  "passed": true
+}
