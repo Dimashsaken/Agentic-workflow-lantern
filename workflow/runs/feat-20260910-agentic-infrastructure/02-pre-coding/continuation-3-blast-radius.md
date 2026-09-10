@@ -48,6 +48,8 @@ session. New files below are proposed creations, not claims about existing code:
 | `tools/azure-runner/maintenance_runtime.py` | Runtime owner: maintenance lease eligibility, fencing and expiration |
 | `tools/azure-runner/qa_transport.py` | Runtime owner: per-execution gateway policy and lifecycle |
 | `tools/azure-runner/qa_provenance.py` | Runtime owner: controller capture/deployment observations and receipt validation |
+| `infra/qa-gateway/Dockerfile`, `requirements.lock`, `policy.py`, `entrypoint.py` | Runtime owner: proposed separate TLS-intercept gateway image, locked dependency environment and destination policy; approval required before installation |
+| `infra/qa-recorder/Dockerfile`, `tools/azure-runner/qa_recorder_worker.py` | Runtime owner: proposed dedicated recorder image and narrow browser/recording API; ephemeral CA trust only in its per-attempt browser store |
 | `tools/azure-runner/execution_retention.py` | Runtime owner: root inventory, exclusion locks, retirement and dry-run/apply |
 | `tools/azure-runner/test_github_publication.py`, `test_maintenance_runtime.py`, `test_qa_transport.py`, `test_qa_provenance.py`, `test_execution_retention.py` | Same owner as implementation; adversarial behavior tests |
 
@@ -87,8 +89,12 @@ and eval inventory edits; the publication coder owns wrapper tests.
    row plus a Docker inspection is necessary but insufficient unless worker launch
    and retirement participate in the same lock and retirement protocol.
 
-No new dependency is proposed: use Python stdlib, existing asyncpg, existing
-Playwright/Docker/image tooling and current SDK bounds. Any added image/package
-dependency needs developer signoff before installation. Principles most exposed:
+September 11 proposal refinement: contract C now proposes a separate mitmproxy
+gateway image with its locked transitive dependencies, and libnss3-tools for the
+dedicated recorder's ephemeral browser certificate store. These additions and
+TLS trust are pending human approval; none has been installed. Exact package
+versions, base/image digests and vulnerability review must be recorded before
+activation. Existing coding/quality images and SDK bounds stay unchanged.
+Principles most exposed:
 keep authority checks simple, keep new modes off by default, and test observed
 behavior rather than a worker-authored claim.

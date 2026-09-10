@@ -149,3 +149,31 @@ gateway with deployment-bound recording receipts, and lock-protected checkout
 retirement, while preserving all live rollout and human approval gates?
 
 Status: BLOCKED
+
+### September 11 concrete QA transport amendment
+
+Security pre-review refined contract C to a dedicated per-execution TLS-intercept
+gateway using mitmdump and a fail-closed destination policy, with an ephemeral CA
+trusted only by the dedicated recorder. The amended task plan specifies upstream
+certificate verification, pinned numeric destination addresses, protocol limits,
+trust destruction and actual-image negative controls. A tunnel hostname alone is
+not accepted as proof of the HTTPS application destination.
+
+This supersedes the earlier dependency-free proposal: a separate gateway image,
+locked mitmproxy transitive dependencies and recorder libnss3-tools are proposed,
+not installed or approved. Exact dependency/image pinning and security review are
+required before activation. No new database DDL is proposed; all configured
+database migration and deployment permissions remain separate. The fixed Azure
+pipeline and human approval/merge ownership are unchanged.
+
+Publication v3 is now committed at `d14919f`; its independent tests and reviews
+close the local partial-repair implementation debt. Positive live GitHub remains
+blocked by the configured bot's PR-read 403. Other B–D work remains dependent on
+the decision below. The prior real pre-coding memory receipt at row 52 remains
+applicable; this amendment is a planning record, not a fabricated fleet stage.
+
+Do you approve local implementation of contracts B–D in the revised
+`continuation-3-task-plan.md`, including its proposed gateway/recorder dependencies
+and ephemeral TLS trust, with all existing human gates preserved?
+
+Status: BLOCKED (architecture/dependency decision pending)

@@ -1,8 +1,10 @@
 # Continuation 3 work order proposal
 
 Date: 2026-09-10. Baseline `a64c229`. **HITL: required** for the new architecture
-contracts B–D below. No new schema or package is proposed. This is an amendment
-to local tasks 9–14, not a new registered story or an approval row.
+contracts B–D below. No new schema is proposed. Section C now explicitly proposes
+new isolated gateway/recorder images, dependencies and ephemeral certificate trust
+for approval; nothing has been installed or activated. This is an amendment to
+local tasks 9–14, not a new registered story or an approval row.
 
 ## Authorization and acceptance scope
 
@@ -105,61 +107,172 @@ and daemon entry points. Activation remains default off until independent review
 
 ## C. External QA and sealed capture — architecture decision
 
-Propose a separate per-execution internal Docker network connecting only a
-dedicated browser worker to a minimal gateway. The browser worker has no ordinary
-egress route. The gateway is the only component with an outbound network; it has
-no controller credentials, Docker socket, harness/authority mounts or product
-checkout. A proxy setting or Playwright request hook alone is not containment.
-The offline worker and all coding/quality workers keep `--network=none`.
+**Concrete proposal updated 2026-09-11; HITL: required, not implemented.** Choose
+one per-execution TLS-terminating `mitmdump` gateway with a controller-owned policy
+addon, and one dedicated Chromium recorder on that execution's internal Docker
+network. This makes decrypted application destinations inspectable. A CONNECT
+allowlist alone is insufficient on shared endpoints. The gateway becomes a trusted
+processor of QA cookies and plaintext traffic; approve that trust explicitly.
 
-Gateway policy comes from controller-owned configuration: exact HTTPS origins
-and ports, no wildcards or URL userinfo, bounded connections/body/response/time,
-and DNS/IP validation at connection time. Reject loopback, link-local/metadata,
-multicast, private and reserved addresses by default, including IPv6 and rebinding.
-Any private test target requires an explicit exact operator-owned IP/origin
-exception in isolated integration configuration; it cannot silently carry into
-external policy. CONNECT permits only declared origin/port; disable alternative
-direct protocols and QUIC. Every redirect/subresource/WebSocket destination must
-pass the same policy, including popup/service-worker traffic. No gateway listener
-or arbitrary control API is exposed to another execution. Reap gateway/network
-only by exact execution IDs after worker shutdown. Prove direct-socket and
-cross-execution denials on the actual image, not only browser-route unit tests.
+### Components, dependencies and compatibility
 
-Security pre-review refinement: CONNECT hostname checks alone do not prove the
-HTTPS Host/SNI within an encrypted tunnel; shared addresses and domain fronting
-can violate an exact-origin claim. Before implementation, define and test a
-gateway that enforces the actual TLS/application destination, or narrow the
-accepted guarantee explicitly to approved endpoint addresses. Do not advertise
-exact HTTPS-origin enforcement from tunnel names or proxy variables alone. A
-TLS-terminating design and any new certificate trust/dependencies require their
-own concrete review before being introduced.
+Proposed creations: `infra/qa-gateway/Dockerfile`, `requirements.lock`, `policy.py`
+and `entrypoint.py` in that directory; `infra/qa-recorder/Dockerfile`; and
+`tools/azure-runner/qa_recorder_worker.py`. Previously proposed `qa_transport.py`
+owns controller policy/network/lifecycle, and `qa_provenance.py` owns receipts.
+The gateway image contains mitmproxy's `mitmdump`, its fully locked transitive
+Python/TLS dependencies, OpenSSL tooling and an upstream CA bundle. The recorder
+image derives from the approved sandbox image and adds `libnss3-tools` for its
+isolated Chromium trust store. It runs only the narrow browser/recording API;
+no product checkout, coding shell API or arbitrary writer to the recording root.
 
-The controller creates the recording ID before browser start and owns its
-execution-bound capture directory and lifecycle. Prefer a dedicated recorder
-worker with no coding shell/file writer and narrow browser-operation API. Arbitrary
-product shell access to its video directory is not a trusted capture boundary.
-Close all page/context writers before hashing, full decode and sealing. Retain
-trace links; redact/avoid secrets without using a worker-authored claim as proof.
+Inspected baseline `infra/sandbox/Dockerfile`: Ubuntu 24.04, Python 3.12,
+Playwright 1.62.1/MCP 0.0.79 and `ca-certificates`; no explicit mitmproxy or
+`libnss3-tools` installation. These are **proposed additions**, not pre-existing
+capabilities. Leave that image, coding/quality workers, Azure controller and SDK
+requirements unchanged. A separate gateway environment avoids dependency conflicts.
+Before activation, review an exact direct/transitive lock with hashes, OS-package
+inventory, licenses/advisories, build provenance and both image identities. Resolve
+and record actual immutable image digests; no invented version, image digest or
+compatibility claim appears in this proposal. No download occurs at execution
+start. Dependency or protocol changes outside this proposal return for review.
 
-Deployment identity is a separate observation from checkout HEAD. Require a
-controller-observed deployment descriptor supplied by the deploy system or a
-trusted revision endpoint, matched to the approved target/revision at session
-start and finish. Record descriptor digest, deployment revision, target-policy
-digest, recording ID, recorder image, execution ID/key/attempt/fence, timestamps,
-test IDs and observed outcomes, requirement links and video/trace digests. An
-application self-reported SHA is explicitly weaker evidence and cannot silently
-replace a trusted deployment descriptor. Revision drift/absence fails strict
-deployment verification rather than labeling the recording verified.
+### Network and protocol boundary
 
-Version the QA receipt independently of the existing quality manifest. The
-controller computes outcomes from observed assertions/command results, and maps
-requirements from the approved plan/charter. Hashes prove correspondence, not
-semantic coverage. Store receipt identity in fenced execution output and artifact
-metadata. Mirror files remain display only. Preserve wrong execution/revision,
-recording swap, forged worker JSON, altered bytes, decode failure, missing/failing
-requirement, deployment drift and always-rejecting verifier controls. Recorded
-desktop/mobile QA must exercise valid, invalid and legacy presentation. Unknown
-external target configuration blocks live validation, not local implementation.
+Only the gateway has a controlled outbound route. The recorder has no ordinary
+egress and can reach only its own proxy IP/port. Controller-installed network
+rules also deny direct DNS, Docker's embedded-DNS forwarding, UDP/QUIC, direct
+TCP, host/metadata access and other executions; proxy variables are supplemental.
+The gateway cannot route packets between interfaces. Neither container receives
+Docker socket, controller credentials, harness/authority mounts or host networking;
+keep nonroot UID, dropped capabilities, read-only root and bounded tmpfs/resources.
+No proxy port is published on the host; no web UI, onboarding app, SOCKS listener
+or control API is exposed. If the Docker host cannot enforce the required rules,
+including Docker Desktop where used, external mode fails before browser launch.
+Coding/quality workers retain `--network=none`.
+
+Initial transport is HTTPS over HTTP/1.1 only. Reject HTTP/2, HTTP/3, raw TCP,
+CONNECT nesting, TLS passthrough, missing/uninspectable SNI/ECH, WebSockets and
+other upgrades. Targets requiring them are unsupported until a separately tested
+extension; never silently switch to a tunnel or certificate-error bypass.
+Controller-owned options explicitly select lazy upstream connection, disable
+upstream certificate sniffing and generic TCP/HTTP2/HTTP3/WebSocket forwarding,
+retain inbound-header and upstream-certificate validation, and disable onboarding,
+replay, flow dumps and interactive configuration. Validate effective options at
+startup against the selected package; documentation alone is not version proof.
+These controls correspond to documented [mitmproxy options](https://docs.mitmproxy.org/stable/concepts/options/).
+
+### Exact destination enforcement
+
+1. The controller freezes a versioned policy of canonical ASCII DNS HTTPS origins
+   and explicit ports. No wildcard, userinfo, IP-literal URL, ambiguous encoding or
+   implicit alternate port is permitted. Resolve approved names with a trusted
+   resolver, validate every answer/CNAME outcome and reject loopback, link-local,
+   metadata, private, multicast, reserved and IPv4-mapped IPv6 forms. Freeze the
+   numeric destinations for a bounded session, expiring no later than the recorded
+   DNS validity bound. No worker DNS result or automatic fallback can change them.
+   A private integration endpoint requires a separate exact origin/IP policy marked
+   test-only; that exception cannot enter external configuration.
+2. The gateway accepts CONNECT only for a listed canonical origin. At ClientHello,
+   require SNI to equal that CONNECT name. Terminate TLS locally, then require
+   each decrypted request's scheme, Host and port to equal the approved tunnel
+   origin. Reject missing/duplicate/conflicting Host, absolute-target disagreement,
+   malformed framing and unsupported ALPN; recheck every keep-alive request.
+   A mismatch must cause zero upstream application bytes. Redirects, subresources,
+   popups and service-worker requests independently traverse the same checks.
+3. Before every upstream socket, a mandatory permit binds the approved origin,
+   numeric address/port, execution and live policy expiry. Connect to that numeric
+   address without another hostname lookup, retain the original hostname as SNI,
+   and verify the upstream certificate chain and original hostname. Check the
+   observed peer address against the permit; connection reuse stays bound to the
+   same origin. Host egress rules allow only the frozen destinations/ports. DNS
+   changes, permit expiry or a certificate failure stop the session rather than
+   refreshing policy inside it.
+4. Implement CONNECT, ClientHello, request-header and pre-server-connect checks
+   through the documented [event hooks](https://docs.mitmproxy.org/stable/api/events.html).
+   Pin address/SNI using the selected version's verified
+   [connection API](https://docs.mitmproxy.org/stable/api/mitmproxy/connection.html).
+   Require a positive per-request permit before forwarding; addon load/config errors,
+   hook exceptions and missing permits kill the flow/session. Do not rely on the
+   proxy's default exception logging to stop forwarding. Actual tests must prove
+   the core neither connects early nor overwrites the pinned destination.
+
+An allowed endpoint can itself relay data or contain application vulnerabilities.
+This policy constrains the network/application destination, not the semantics of
+an approved service or what that service does server-side. Use scoped QA accounts;
+do not add a general-purpose relay, DNS-over-HTTPS endpoint or broad login/CDN
+wildcard to make a failing test pass. Required login/assets need explicit origins.
+
+### Ephemeral CA and recording lifecycle
+
+The controller allocates a new execution/recording ID and gateway-private tmpfs.
+Generate a fresh CA there per attempt, with at most 24-hour CA validity and a
+maximum 30-minute pilot session; the policy/lease may expire earlier. Only the
+public certificate and its fingerprint cross to the recorder. The private CA key
+and issued private keys never enter browser mounts, controller evidence, logs,
+image layers or durable artifacts. Mitmproxy supports a custom CA/config directory;
+this design uses that mechanism, not a shared installed CA.
+[Certificate documentation](https://docs.mitmproxy.org/stable/concepts/certificates/).
+
+Before browser launch, import the public CA into a fresh NSS database in that
+container's ephemeral home; identify the actual trust-store location used by the
+pinned Chromium build. Chromium documents its Linux NSS store and certificate
+import tooling in [Linux certificate management](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/linux/cert_management.md).
+Never import into the host/user OS, controller, another worker or gateway upstream
+trust bundle. Do not set `ignoreHTTPSErrors`, `--ignore-certificate-errors` or
+passthrough exceptions. Certificate-pinned/mTLS targets are unsupported initially.
+A missing, wrong or prior-execution CA must fail the positive TLS probe.
+
+Start recording only after the gateway's policy/addon/TLS readiness and a scoped
+positive probe succeed. The controller owns recorder commands, session identity,
+capture directory and close/seal lifecycle. On lease loss, policy expiry, gateway
+failure or cancellation, close recorder writers/connections, stop both containers,
+then retire exact network/temporary trust resources. Never reuse the profile or
+CA on retry. Persist only public fingerprints, policy digest and redacted diagnostic
+codes; no URL queries, headers, cookies, bodies, TLS key logs or mitmproxy flow dumps.
+The gateway necessarily handles QA plaintext in memory; CA deletion is not a claim
+of cryptographic memory erasure. Failure to confirm cleanup holds the attempt.
+
+Initial bounded policy: at most 32 simultaneous connections, 64 KiB headers,
+8 MiB request/response body, 256 MiB aggregate session traffic, 10-second connect,
+30-second request and 30-minute session limits. Disable unbounded streaming;
+limit decoded content as well as wire bytes. These are pilot constraints to test,
+not measured capacity claims. Larger fixtures require explicit policy review.
+
+### Required real negative controls and provenance
+
+Before acceptance, run the actual candidate images with an instrumented allowed
+HTTPS fixture and independent forbidden endpoint/packet observations. Require:
+
+- A valid page, explicit allowed asset and normal request succeed with both TLS
+  legs verified; disallowed redirects/assets/popups/service workers cannot reach
+  the forbidden endpoint. Include a permissive fixture to prove the test harness
+  would observe a forbidden connection if the boundary were removed.
+- On the same destination IP, CONNECT/SNI/Host disagreement, changed Host on a
+  reused connection, malformed/duplicate headers and alternate port are refused.
+  Prove DNS rebinding, private/mapped addresses, hostname-check mismatch, expired
+  certificate and untrusted upstream CA fail; no insecure fallback exists.
+- Direct sockets, Docker DNS, QUIC/HTTP3, HTTP2, ECH/no-SNI, raw tunnels and WebSocket
+  upgrades fail. Another execution cannot reach the gateway, steal its CA key or
+  use its trust profile. Missing/wrong/old CA fails even for the allowed fixture.
+- Inject addon exceptions, failed policy load, worker/gateway/controller death,
+  expiry, oversized/compressed bodies and interrupted cleanup. Require no
+  unauthorized upstream bytes, no continued capture claim and no live resource
+  deletion. Unit hooks alone do not satisfy these controls.
+
+Deployment identity remains separate from checkout HEAD: obtain a controller-
+observed trusted deploy descriptor/revision at start and finish, matched to the
+approved target, and hold on absence/drift. An app's self-reported SHA is weaker
+and cannot silently replace that descriptor. Close all media writers, fully decode,
+hash and seal with execution ID/key/attempt/fence, recording ID, gateway/recorder
+image identities, CA fingerprint, policy/deployment digests, times, observed test
+outcomes, requirement mappings and video/trace digests. Use a separately versioned
+QA receipt in fenced execution output/artifact metadata; mirrors remain display only.
+Hashes establish correspondence, not semantic coverage. Preserve wrong execution/
+revision, recording swap, forged worker JSON, byte tampering, decode failure,
+missing/failing requirement, deployment drift and always-rejecting-verifier controls.
+Record desktop/mobile valid, invalid and legacy display. Unknown live target or
+credentials block external validation, not preparation of this approved design.
 
 ## D. Retention — architecture decision and security pre-review
 
@@ -241,7 +354,8 @@ the required separate experiment approval before live experimental changes.
 
 ## Decision requested
 
-Do you approve the schema-free local contracts B–D for dedicated fenced
-babysitting, an allowlisted QA gateway with deployment-bound recording receipts,
-and lock-protected checkout retirement, keeping live rollout and evidence deletion
-subject to their existing human gates?
+Do you approve local implementation of contracts B–D for dedicated fenced
+babysitting, the TLS-inspecting QA gateway and deployment-bound recorder
+(including their proposed images/dependencies and ephemeral CA trust), and
+lock-protected checkout retirement, preserving all existing human gates and
+excluding configured-database migration, deployment and evidence deletion?
