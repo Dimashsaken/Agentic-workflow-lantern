@@ -336,3 +336,39 @@ passed in 164.3 seconds; lint/evals passed in 2.6 seconds. Full logs, source has
 and the quality-policy hash are in local-quality.json. Frozen eval plan coverage
 remains 1.00 on two examples; insufficient validator/QA paired data stays n/a.
 These frozen scores are not live model-quality measurements.
+
+## Continuation 3 — configured database recovery (2026-09-10)
+
+Inspected the actual checkout: branch `codex/agentic-infrastructure`, HEAD
+`a64c229`, no tracked edits and only unrelated untracked `.codex/`. No reset,
+replacement checkout or modification of `.codex/` was performed.
+
+The configured database was a stopped standalone PostgreSQL installation, not a
+Windows service or the disposable Docker validation database. The existing
+`C:/Users/dimas/.lantern/pg.log` records a backend and startup-process failure
+with Windows exception `0xC0000142` at 2026-09-09 13:23:31 CST. The log establishes
+the shutdown sequence, not the underlying Windows cause. The original PostgreSQL
+16 installation and `pgdata` remained present, with cluster system identifier
+`7678204476830612652`. Starting that same cluster with its existing `pg_ctl.exe`
+and data directory performed WAL recovery and reached ready at
+2026-09-10 23:29:39 CST on loopback port 5432. No initialization, data replacement,
+schema migration or disposable-database substitution occurred.
+
+`configured-postgres-restored.json` records the authenticated identity: database
+`lantern`, PostgreSQL 16.9, original data directory. Counts before/after remain
+12 runs, 23 stage executions and 8 approvals; the full approval-row snapshot hash
+is unchanged. `restore-memory.py` invoked the actual `make_append_memory` SDK tool
+via `ToolContext` with explicit manual-engineering identities, inserting pending
+coding, QA, post-coding and security learnings plus the new planner learning as
+role_memory rows **48–52**. Memory count changed from 25 to 30. These are durable
+configured-database rows, not fleet execution completion. The tool regenerated
+its role memory views; none was hand-edited. An initial invocation used the old
+SDK context type and failed before any insertion; the corrected ToolContext path
+succeeded. No schema, execution, gate or approval row was created.
+
+This closes the configured-database/durable-learning blocker. It does not certify
+production readiness or close the outstanding foundation criteria. Publication,
+maintenance ownership, constrained external QA, evidence and retention work follow
+the existing local authorization and the concrete continuation-3 planning review.
+
+Status: IN PROGRESS

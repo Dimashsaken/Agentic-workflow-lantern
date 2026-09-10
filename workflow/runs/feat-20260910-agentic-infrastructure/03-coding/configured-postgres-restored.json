@@ -1,0 +1,61 @@
+{
+  "recorded_at": "2026-09-10T15:31:23.502989+00:00",
+  "environment": "existing configured local PostgreSQL; not disposable; not a production certification",
+  "identity": {
+    "database": "lantern",
+    "version": "16.9",
+    "data_directory": "C:/Users/dimas/.lantern/pgdata"
+  },
+  "counts_before": {
+    "runs": 12,
+    "stage_executions": 23,
+    "approvals": 8,
+    "role_memory": 25
+  },
+  "counts_after": {
+    "runs": 12,
+    "stage_executions": 23,
+    "approvals": 8,
+    "role_memory": 30
+  },
+  "approval_snapshot_unchanged": true,
+  "memory": [
+    {
+      "role": "coding",
+      "id": 48,
+      "execution_key": "manual:feat-20260910-agentic-infrastructure:coding:pending-4c49f25c0be0",
+      "tool": "append_memory",
+      "fleet_stage": false
+    },
+    {
+      "role": "qa-dev",
+      "id": 49,
+      "execution_key": "manual:feat-20260910-agentic-infrastructure:qa-dev:pending-79388c88a991",
+      "tool": "append_memory",
+      "fleet_stage": false
+    },
+    {
+      "role": "post-coding",
+      "id": 50,
+      "execution_key": "manual:feat-20260910-agentic-infrastructure:post-coding:pending-59b4be8b5276",
+      "tool": "append_memory",
+      "fleet_stage": false
+    },
+    {
+      "role": "security",
+      "id": 51,
+      "execution_key": "manual:feat-20260910-agentic-infrastructure:security:pending-95f74faa9e13",
+      "tool": "append_memory",
+      "fleet_stage": false
+    },
+    {
+      "role": "pre-coding",
+      "id": 52,
+      "execution_key": "manual:feat-20260910-agentic-infrastructure:pre-coding:pending-b31116864f6c",
+      "tool": "append_memory",
+      "fleet_stage": false
+    }
+  ],
+  "migration_applied": false,
+  "new_cluster_created": false
+}

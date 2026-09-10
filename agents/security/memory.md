@@ -16,4 +16,4 @@ Target: under ~200 lines after consolidation.
 <!-- ENTRIES BELOW ARE RENDERED FROM THE role_memory TABLE — do not edit here; agents use append_memory, humans consolidate upward and re-run `pipeline.py render-memory` -->
 
 - 2026-08-26 [manual · -] 2026-08-25: For authentication features, an unidentified release branch is itself a no-go condition because endpoint authorization, dependency provenance, staging secrets, and rollback behavior cannot be inferred from feature intent.
-- 2026-09-07 [feat-20260907-pipeline-smoke · 06-security] 2026-09-07: For read-only dashboard aggregates, security review must include the shared-route query cost and failure isolation even when there is no input injection surface, because authenticated polling can turn table growth into an availability risk.
+- 2026-09-10 [feat-20260910-agentic-infrastructure · manual-engineering-continuation] 2026-09-10: Before/after source hashes cannot establish what a test executed when that source remains writable; use a separate read-only committed snapshot and separately fence every future-authoritative write, including role memory.
