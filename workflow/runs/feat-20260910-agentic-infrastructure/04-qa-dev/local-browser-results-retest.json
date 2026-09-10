@@ -1,0 +1,73 @@
+{
+  "kind": "local_fixture_renderer_regression",
+  "fleet_execution": false,
+  "live_dev": false,
+  "recorded_at": "2026-09-10T07:10:39.564Z",
+  "source_sha256": {
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60",
+    "tools/mission-control/app.py": "9276a78a60d9f486a188dd12be2be855f1492f40c8ffd680e4e2702a99f0c365"
+  },
+  "results": [
+    {
+      "name": "local-renderer-desktop-retest",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.3,
+          "title": "Structured evidence, HTML-shaped text and Unicode visible"
+        },
+        {
+          "seconds": 1.31,
+          "title": "Refresh preserves structured references"
+        },
+        {
+          "seconds": 1.43,
+          "title": "Legacy prose and back navigation"
+        },
+        {
+          "seconds": 2.35,
+          "title": "Empty story is explicit"
+        },
+        {
+          "seconds": 3.21,
+          "title": "Gate validation renderer structured references"
+        },
+        {
+          "seconds": 4.12,
+          "title": "Exploratory theme switch"
+        }
+      ],
+      "errors": [],
+      "video": "media/local-renderer-desktop-retest.webm",
+      "trace": "media/local-renderer-desktop-retest.zip",
+      "video_sha256": "ae03434cf322f4d69ce7624fbcd8d73ffcac74b1772082837b2aa9b5ab7391c1"
+    },
+    {
+      "name": "local-renderer-mobile-retest",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.09,
+          "title": "Mobile layout and horizontal matrix scroll"
+        },
+        {
+          "seconds": 1.18,
+          "title": "Evidence column reachable after horizontal scroll"
+        }
+      ],
+      "errors": [],
+      "video": "media/local-renderer-mobile-retest.webm",
+      "trace": "media/local-renderer-mobile-retest.zip",
+      "video_sha256": "e18d323035fb4cbae80d54f1c867420a98f2287c28f21eb3e4a640ece1f52920"
+    }
+  ]
+}

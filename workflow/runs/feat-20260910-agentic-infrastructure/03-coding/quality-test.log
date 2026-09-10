@@ -74,33 +74,33 @@
   ok    read-only again once the execution env is gone
 
 all auto-coding properties hold
-[feat-20260908-review-proof] feat/20260908-review-proof updated with main (e8ca89c0dbb7) â€” gate green
-[feat-20260908-review-proof] feat/20260908-review-proof is merged into main (git) â€” babysitting ends
-[feat-20260908-review-proof] feat/20260908-review-proof updated with main and fixed â€” head cccccccccccc
+[feat-20260908-review-proof] feat/20260908-review-proof updated with main (15ebfd9ed3dc) — gate green
+[feat-20260908-review-proof] feat/20260908-review-proof is merged into main (git) — babysitting ends
+[feat-20260908-review-proof] feat/20260908-review-proof updated with main and fixed — head cccccccccccc
 [feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
 [feat-20260908-review-proof] review round 2/2: approve (0 finding(s), must-fix 0)
 [feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
 [feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
 [feat-20260908-review-proof] review round 2/2: request_changes (1 finding(s), must-fix 1)
-[feat-20260908-review-proof] review rounds exhausted with request_changes â€” a human decides
+[feat-20260908-review-proof] review rounds exhausted with request_changes — a human decides
 [feat-20260908-review-proof] review round 1/1: request_changes (1 finding(s), must-fix 1)
-[feat-20260908-review-proof] review rounds exhausted with request_changes â€” a human decides
+[feat-20260908-review-proof] review rounds exhausted with request_changes — a human decides
 [feat-20260908-review-proof] review round 1/2: approve (0 finding(s), must-fix 0)
 [feat-20260908-review-proof] review round 1/2: approve (0 finding(s), must-fix 0)
-Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmp82oxu79_  (dry run)
+Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmpm7nrxmh9  (dry run)
   stack rust    (Cargo.toml): test=cargo test, typecheck=cargo check
   lantern.toml: created
   AGENTS.md:    created
 
 Point a run at this repo:
-  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmp82oxu79_
-  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmp82oxu79_" [--coding-mode auto]
-  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmp82oxu79_" --branch main
+  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmpm7nrxmh9
+  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmpm7nrxmh9" [--coding-mode auto]
+  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmpm7nrxmh9" --branch main
   - from Chat:    ask Lantern to start a run and name this path as the product repo
   - in Mission Control: /run/<run-id>/repo (the picker offers repos under LANTERN_WORKSPACE_ROOTS)
 
 --- lantern.toml ---
-# lantern.toml â€” what the software factory runs AS CODE against a product repo.
+# lantern.toml — what the software factory runs AS CODE against a product repo.
 # Copy to the product repository's root. Every command runs from that root, through
 # bash, after the coding agent's turn (tools/azure-runner/factory.py); red output goes
 # back to the agent (failures only) for a bounded number of fix rounds, then the stage
@@ -120,21 +120,21 @@ typecheck = "cargo check"
 # build = "..."                     # optional
 timeout_s = 900                            # per command
 
-Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmpjsx52sap  (dry run)
+Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmpu_4g6341  (dry run)
   stack: none detected
   lantern.toml: created
   AGENTS.md:    created
-  note: no known stack detected (package.json, pyproject.toml/setup.py, go.mod, Cargo.toml) â€” lantern.toml carries a TODO test command
+  note: no known stack detected (package.json, pyproject.toml/setup.py, go.mod, Cargo.toml) — lantern.toml carries a TODO test command
 
 Point a run at this repo:
-  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmpjsx52sap
-  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmpjsx52sap" [--coding-mode auto]
-  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmpjsx52sap" --branch main
+  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmpu_4g6341
+  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmpu_4g6341" [--coding-mode auto]
+  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmpu_4g6341" --branch main
   - from Chat:    ask Lantern to start a run and name this path as the product repo
   - in Mission Control: /run/<run-id>/repo (the picker offers repos under LANTERN_WORKSPACE_ROOTS)
 
 --- lantern.toml ---
-# lantern.toml â€” what the software factory runs AS CODE against a product repo.
+# lantern.toml — what the software factory runs AS CODE against a product repo.
 # Copy to the product repository's root. Every command runs from that root, through
 # bash, after the coding agent's turn (tools/azure-runner/factory.py); red output goes
 # back to the agent (failures only) for a bounded number of fix rounds, then the stage
@@ -183,41 +183,41 @@ no credential leak:
 brief parsing:
   ok    parse '- **Product repo:** https://github.com/org/rep'
   ok    parse '- **Product repo:** <https://github.com/org/re'
-  ok    parse '- **Product repo:** â€”'
+  ok    parse '- **Product repo:** —'
   ok    parse '- **Product repo:** `https://github.com/org/re'
   ok    parse '# Feature Brief: nothing here'
   ok    parse '- **Product repo:** https://github.com/org/rep'
   ok    parse '- **Product repo:** https://github.com/org/rep'
 orientation blocks (D15):
   ok    env block survives a non-git directory
-  ok    â€¦and says so rather than claiming a repo
+  ok    …and says so rather than claiming a repo
   ok    no docs -> an explicit 'discover them yourself'
   ok    docs block respects the total budget
   ok    truncation is announced
   ok    untrusted-data fences are present
-  ok    â€¦and labelled as reference material, not instructions
+  ok    …and labelled as reference material, not instructions
   ok    AGENTS.md is loaded before README (priority order)
   ok    task block survives a missing run folder
-  ok    â€¦and still names this stage's deliverable
+  ok    …and still names this stage's deliverable
   ok    read-only note carries the read-only contract
   ok    read-only note does not offer product_shell
 
 all product-access properties hold
 
 [stderr]
-test_blank_value_counts_as_unset (__main__.DeploymentResolution.test_blank_value_counts_as_unset) ... [model-stack] LANTERN_MODEL_CODING unset â€” the coding tier uses the reasoning deployment 'r'
+test_blank_value_counts_as_unset (__main__.DeploymentResolution.test_blank_value_counts_as_unset) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the reasoning deployment 'r'
 ok
-test_coding_falls_back_to_fast_before_reasoning (__main__.DeploymentResolution.test_coding_falls_back_to_fast_before_reasoning) ... [model-stack] LANTERN_MODEL_CODING unset â€” the coding tier uses the fast deployment 'f'
+test_coding_falls_back_to_fast_before_reasoning (__main__.DeploymentResolution.test_coding_falls_back_to_fast_before_reasoning) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the fast deployment 'f'
 ok
 test_full_stack_routes_each_tier_to_its_own_deployment (__main__.DeploymentResolution.test_full_stack_routes_each_tier_to_its_own_deployment) ... ok
 test_reasoning_deployment_is_mandatory (__main__.DeploymentResolution.test_reasoning_deployment_is_mandatory) ... ok
-test_single_deployment_still_routes_everything (__main__.DeploymentResolution.test_single_deployment_still_routes_everything) ... [model-stack] LANTERN_MODEL_CODING unset â€” the coding tier uses the reasoning deployment 'sol'
-[model-stack] LANTERN_MODEL_FAST unset â€” the fast tier uses the reasoning deployment 'sol'
+test_single_deployment_still_routes_everything (__main__.DeploymentResolution.test_single_deployment_still_routes_everything) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the reasoning deployment 'sol'
+[model-stack] LANTERN_MODEL_FAST unset — the fast tier uses the reasoning deployment 'sol'
 ok
 test_unknown_tier_rejected (__main__.DeploymentResolution.test_unknown_tier_rejected) ... ok
 test_chat_override_only_applies_to_chat (__main__.ReasoningEffort.test_chat_override_only_applies_to_chat) ... ok
 test_model_settings_carry_the_effort (__main__.ReasoningEffort.test_model_settings_carry_the_effort) ... ok
-test_override_off_and_bogus (__main__.ReasoningEffort.test_override_off_and_bogus) ... [model-stack] LANTERN_EFFORT_REASONING='bogus' is not one of minimal/low/medium/high/xhigh â€” using 'high'
+test_override_off_and_bogus (__main__.ReasoningEffort.test_override_off_and_bogus) ... [model-stack] LANTERN_EFFORT_REASONING='bogus' is not one of minimal/low/medium/high/xhigh — using 'high'
 ok
 test_token_max_defaults (__main__.ReasoningEffort.test_token_max_defaults) ... ok
 test_coding_role_is_coding_tier (__main__.TierRouting.test_coding_role_is_coding_tier) ... ok
@@ -278,7 +278,7 @@ test_check_write_scope_reads_the_plan (__main__.WriteScope.test_check_write_scop
 test_glob_semantics (__main__.WriteScope.test_glob_semantics) ... ok
 
 ----------------------------------------------------------------------
-Ran 47 tests in 18.423s
+Ran 47 tests in 14.357s
 
 OK
 test_batches_split_in_plan_order (__main__.Batching.test_batches_split_in_plan_order) ... ok
@@ -321,7 +321,7 @@ test_no_builders_key_is_still_valid (__main__.PlanValidation.test_no_builders_ke
 test_the_integrator_name_is_reserved (__main__.PlanValidation.test_the_integrator_name_is_reserved) ... ok
 
 ----------------------------------------------------------------------
-Ran 36 tests in 20.536s
+Ran 36 tests in 15.343s
 
 OK
 test_base_moves_ahead_branch_is_updated_and_regated (__main__.Babysitter.test_base_moves_ahead_branch_is_updated_and_regated) ... ok
@@ -345,15 +345,15 @@ test_verdict_is_computed (__main__.Envelope.test_verdict_is_computed) ... ok
 test_babysit_due_once_per_interval (__main__.Knobs.test_babysit_due_once_per_interval) ... ok
 test_rounds_and_cadence_env (__main__.Knobs.test_rounds_and_cadence_env) ... ok
 test_approve_on_round_two_means_one_fix (__main__.Loop.test_approve_on_round_two_means_one_fix) ... ok
-test_failed_fix_keeps_the_review (__main__.Loop.test_failed_fix_keeps_the_review) ... [feat-20260908-review-proof] fix execution after round 1 FAILED â€” the gate opens with the review: coding handoff failed: added no commits
+test_failed_fix_keeps_the_review (__main__.Loop.test_failed_fix_keeps_the_review) ... [feat-20260908-review-proof] fix execution after round 1 FAILED — the gate opens with the review: coding handoff failed: added no commits
 ok
-test_failed_review_execution_opens_the_gate_without_it (__main__.Loop.test_failed_review_execution_opens_the_gate_without_it) ... [feat-20260908-review-proof] review round 1 FAILED â€” the gate opens without it: postconditions failed: review.json invalid
+test_failed_review_execution_opens_the_gate_without_it (__main__.Loop.test_failed_review_execution_opens_the_gate_without_it) ... [feat-20260908-review-proof] review round 1 FAILED — the gate opens without it: postconditions failed: review.json invalid
 ok
 test_never_approve_is_capped_with_the_last_review_attached (__main__.Loop.test_never_approve_is_capped_with_the_last_review_attached) ... ok
 test_one_round_never_fixes_and_zero_skips (__main__.Loop.test_one_round_never_fixes_and_zero_skips) ... ok
 test_pr_review_is_posted_per_round_when_a_pr_exists (__main__.Loop.test_pr_review_is_posted_per_round_when_a_pr_exists) ... ok
 test_review_block_carries_round_context (__main__.Loop.test_review_block_carries_round_context) ... ok
-test_wrong_round_in_review_json_is_an_error (__main__.Loop.test_wrong_round_in_review_json_is_an_error) ... [feat-20260908-review-proof] review round 1 FAILED â€” the gate opens without it: 03-coding/review/review.json missing or not round 1 after the review execution
+test_wrong_round_in_review_json_is_an_error (__main__.Loop.test_wrong_round_in_review_json_is_an_error) ... [feat-20260908-review-proof] review round 1 FAILED — the gate opens without it: 03-coding/review/review.json missing or not round 1 after the review execution
 ok
 test_a_plan_cannot_claim_them (__main__.NotBuilders.test_a_plan_cannot_claim_them) ... ok
 test_review_sub_stages_are_not_builder_names (__main__.NotBuilders.test_review_sub_stages_are_not_builder_names) ... ok
@@ -364,7 +364,7 @@ test_request_body_is_one_comment_review_with_inline_findings (__main__.PullReque
 test_stage_maps_and_the_task_block_hook (__main__.Wiring.test_stage_maps_and_the_task_block_hook) ... ok
 
 ----------------------------------------------------------------------
-Ran 35 tests in 15.478s
+Ran 35 tests in 12.653s
 
 OK
 test_a_turn_without_a_signed_in_human_gets_no_write_tools (__main__.AgentWiring.test_a_turn_without_a_signed_in_human_gets_no_write_tools) ... ok
@@ -400,7 +400,7 @@ test_an_idea_without_a_repo_asks_instead_of_guessing (__main__.StartRunCompositi
 test_exactly_one_of_idea_or_brief_path (__main__.StartRunComposition.test_exactly_one_of_idea_or_brief_path) ... ok
 
 ----------------------------------------------------------------------
-Ran 31 tests in 0.079s
+Ran 31 tests in 0.086s
 
 OK
 test_a_missing_directory_is_an_error_not_a_traceback (__main__.CommandLine.test_a_missing_directory_is_an_error_not_a_traceback) ... C:\Users\dimas\AppData\Local\Temp\no-such-repo-xyz is not a directory
@@ -425,7 +425,7 @@ test_optional_commands_the_repo_lacks_stay_commented_examples (__main__.WhatItWr
 test_running_twice_changes_nothing_the_second_time (__main__.WhatItWrites.test_running_twice_changes_nothing_the_second_time) ... ok
 
 ----------------------------------------------------------------------
-Ran 19 tests in 0.031s
+Ran 19 tests in 0.038s
 
 OK
 test_a_slow_pipeline_call_does_not_delay_the_ack (__main__.AckTiming.test_a_slow_pipeline_call_does_not_delay_the_ack) ... ok
@@ -466,12 +466,12 @@ test_retry_reaches_the_pipeline (__main__.SlashCommands.test_retry_reaches_the_p
 test_rework_reaches_the_pipeline_with_the_note (__main__.SlashCommands.test_rework_reaches_the_pipeline_with_the_note) ... ok
 
 ----------------------------------------------------------------------
-Ran 36 tests in 0.353s
+Ran 36 tests in 0.354s
 
 OK
 .........................................
 ----------------------------------------------------------------------
-Ran 41 tests in 0.341s
+Ran 41 tests in 0.309s
 
 OK
 No active span; trace error was not attached
@@ -485,22 +485,22 @@ No active span; trace error was not attached
 ..No active span; trace error was not attached
 .s.........
 ----------------------------------------------------------------------
-Ran 19 tests in 4.904s
+Ran 19 tests in 3.187s
 
 OK (skipped=1)
 ........
 ----------------------------------------------------------------------
-Ran 8 tests in 2.466s
+Ran 8 tests in 1.737s
 
 OK
 ...........
 ----------------------------------------------------------------------
-Ran 11 tests in 3.707s
+Ran 11 tests in 2.492s
 
 OK
-.......
+..............
 ----------------------------------------------------------------------
-Ran 7 tests in 1.655s
+Ran 14 tests in 2.406s
 
 OK
 test_a_dictionary_word_password_does_not_scrub_the_whole_trace (__main__.TraceTests.test_a_dictionary_word_password_does_not_scrub_the_whole_trace)
@@ -521,7 +521,7 @@ test_turn_numbers_and_usage_merge_across_fix_rounds (__main__.TraceTests.test_tu
 test_url_credentials_and_short_values (__main__.TraceTests.test_url_credentials_and_short_values) ... ok
 
 ----------------------------------------------------------------------
-Ran 15 tests in 0.040s
+Ran 15 tests in 0.050s
 
 OK
 test_builder_handoffs_are_read_too (__main__.MatrixTests.test_builder_handoffs_are_read_too) ... ok
@@ -535,12 +535,12 @@ test_structured_evidence_locations_render_and_escape (__main__.MatrixTests.test_
 test_unplanned_and_untraced_are_gaps_once_the_stage_ran (__main__.MatrixTests.test_unplanned_and_untraced_are_gaps_once_the_stage_ran) ... ok
 
 ----------------------------------------------------------------------
-Ran 9 tests in 0.033s
+Ran 9 tests in 0.030s
 
 OK
 ...............
 ----------------------------------------------------------------------
-Ran 15 tests in 2.812s
+Ran 15 tests in 1.683s
 
 OK
 ----------------------------------------------------------------------
@@ -549,7 +549,7 @@ Ran 5 tests in 0.002s
 OK
 gate latency query failed: aggregate blew up
 ----------------------------------------------------------------------
-Ran 35 tests in 0.016s
+Ran 35 tests in 0.019s
 
 OK
 ----------------------------------------------------------------------

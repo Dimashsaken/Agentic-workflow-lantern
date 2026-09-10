@@ -1,42 +1,46 @@
 {
-  "kind": "local_engineering_checks",
+  "kind": "local_regression",
   "fleet_execution": false,
-  "recorded_at": "2026-09-10T07:39:36.033174+00:00",
-  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
-  "quality_sha256": "b22009e04c1df2d2daabed0ddd37987cfdd956e7c5179cdab5ba7783b2e38894",
-  "passed": true,
+  "recorded_at": "2026-09-10T07:11:50.833567+00:00",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
   "results": [
     {
+      "suite": "test_tool_policy.py",
       "exit": 0,
-      "passed": true,
-      "seconds": 86.1,
-      "name": "test",
-      "command": "$LANTERN_PYTHON tools/azure-runner/test_model_stack.py && $LANTERN_PYTHON tools/azure-runner/test_factory.py && $LANTERN_PYTHON tools/azure-runner/test_builders.py && $LANTERN_PYTHON tools/azure-runner/test_coding_stage.py && $LANTERN_PYTHON tools/azure-runner/test_review.py && $LANTERN_PYTHON tools/azure-runner/test_chat_tools.py && $LANTERN_PYTHON tools/azure-runner/test_init_product.py && $LANTERN_PYTHON tools/slack-bridge/test_bridge.py && $LANTERN_PYTHON tools/azure-runner/test_intake.py && $LANTERN_PYTHON tools/azure-runner/test_product_access.py && $LANTERN_PYTHON tools/azure-runner/test_tool_policy.py && $LANTERN_PYTHON tools/azure-runner/test_gate_integrity.py && $LANTERN_PYTHON tools/azure-runner/test_evidence.py && $LANTERN_PYTHON tools/azure-runner/test_execution_journal.py && $LANTERN_PYTHON tools/azure-runner/test_trace.py && $LANTERN_PYTHON tools/mission-control/test_traceability.py && $LANTERN_PYTHON tools/evals/test_evals.py && $LANTERN_PYTHON -m unittest discover -q -s tools/azure-runner -p test_status_json.py && $LANTERN_PYTHON -m unittest discover -q -s tools/mission-control -p test_gate_latency.py && $LANTERN_PYTHON -m unittest discover -q -s lantern/regressions -p 'test_*.py'",
-      "log": "quality-test.log",
-      "unittest_count": 392
+      "log": "continuation-test_tool_policy.txt"
     },
     {
+      "suite": "test_evidence.py",
       "exit": 0,
-      "passed": true,
-      "seconds": 2.8,
-      "name": "lint",
-      "command": "$LANTERN_PYTHON -m compileall -q tools/azure-runner tools/mission-control tools/evals && $LANTERN_PYTHON tools/evals/check_pr.py",
-      "log": "quality-lint.log",
-      "unittest_count": 0
+      "log": "continuation-test_evidence.txt"
+    },
+    {
+      "suite": "test_gate_integrity.py",
+      "exit": 0,
+      "log": "continuation-test_gate_integrity.txt"
+    },
+    {
+      "suite": "test_execution_journal.py",
+      "exit": 0,
+      "log": "continuation-test_execution_journal.txt"
+    },
+    {
+      "suite": "test_traceability.py",
+      "exit": 0,
+      "log": "continuation-test_traceability.txt"
     }
   ],
   "source_sha256": {
     "tools/azure-runner/brief_composer.py": "be56ec1fc93e0b5651261248517d3f3b4b0595edf125fb139596d11b6731b3f9",
     "tools/azure-runner/builders.py": "b6e6a962802cfa7ea9a5bdbbba7ec67ccf0ef371146a5eb639f59ed38337b5b7",
     "tools/azure-runner/chat_service.py": "a04abf8946042e8c3b1d86978029528ae1b31cbae2043a06f66b2b0286bf5d31",
-    "tools/azure-runner/docker_isolation_validation.py": "0f0ef4856326b47b40e19cec13e6daeaf09aa28c1544094368537d385c8a65df",
     "tools/azure-runner/evidence.py": "ccab8621cda99b900e4f6bf56f7db2c1b61d78686a831d11494b181ad9731425",
     "tools/azure-runner/factory.py": "f3807b09685c219751f494a0f55ff0bfe3b35b220694448692ce16fa4febded3",
     "tools/azure-runner/init_product.py": "21059f5306a42208c7955dfb2ea05ed3c68ebe2614aa1da178ff808c050ca500",
     "tools/azure-runner/intake.py": "61ac5809c66d8e2a4f7294391d2e7b5f843dff06bf8fde9fe3823f92af4e31c0",
-    "tools/azure-runner/integration_validation.py": "b068522c01dec4767dc1b5b6e55fc75a8de00922747f469382861204ad086cdc",
-    "tools/azure-runner/orchestrator.py": "a80a39a29e8d8f0625eb637b18ff05d0af6a160bfdcf43dbc2b6f2cea7bcfabb",
-    "tools/azure-runner/pipeline.py": "325efbd7d4de38800cbdb2d7c6e9f057cd73160cc218b657f6253092c52f2cf2",
+    "tools/azure-runner/integration_validation.py": "d8ce239bae5e246c4f9db61222023c90eca463ac6e7cda6fccb538dcdc4ac67d",
+    "tools/azure-runner/orchestrator.py": "b5e2e6cbe538ad853b693d94f9f3926c703a477c1f102f61695a9e6e9a462717",
+    "tools/azure-runner/pipeline.py": "69aa0b0e904a113ae230b170ad84a2ab2e42e96c039af322429934df308bede5",
     "tools/azure-runner/readonly_git.py": "f1c6f1b12017dcc19c305ad878415353a552dc77e3b9bd603290cdaaedce9bf6",
     "tools/azure-runner/review.py": "d1d0ab4d3754f57358a3fdf986c6bf72576c51ead333348b33a01772590edc50",
     "tools/azure-runner/smoke_test.py": "8b4b41a79477d8e07f3f4ddd85ff820254cb18cb359becedd5168a9cfe120d9c",
@@ -46,7 +50,7 @@
     "tools/azure-runner/test_chat_tools.py": "718ac1924292b7ea2b3469bc91aa7d217b8e6daf4a5c76cb1fde8e0519e08966",
     "tools/azure-runner/test_coding_stage.py": "9c589ccf1640463d99aae3bf3783d7cf18d15b8bfde2100959bae0dc0cf1cc84",
     "tools/azure-runner/test_evidence.py": "ed0af9da25683d03a2b17b389233d4bcd91d6f3dcdc20c34186538581c49fd72",
-    "tools/azure-runner/test_execution_journal.py": "8220b0f6aabd6c5d850e2ee7c874e46795c82e1d899bac746e921b3cc1cfdcaf",
+    "tools/azure-runner/test_execution_journal.py": "30a7715bad32769e2041b94c8ebd5b9046f0aabe6f68279f09f0d28b18eb5bc9",
     "tools/azure-runner/test_factory.py": "0d6980e3752b05f060d79cfeb66a54f1ddcd51983e4bc26628ae46baebc3001b",
     "tools/azure-runner/test_gate_integrity.py": "049fdeedfa297a122dcd08773896f8eecc31f230e95e55dec255f26e691c12e3",
     "tools/azure-runner/test_init_product.py": "bc76b9c11ada3d9a9557b99e20e66c9c4aad74a45f091aaee2745f32c636a2bf",
@@ -59,14 +63,6 @@
     "tools/azure-runner/test_trace.py": "48003a5930d597ab3541f03cf8d9481f6ccb817d1b07632e3c98b3eb92dd8599",
     "tools/azure-runner/test_verification.py": "e00f42efd09f068eb4f05f721bdb9220650c560de4fd5349b170a83ced076b68",
     "tools/azure-runner/tool_policy.py": "47d1e43616682bb8b4b5dadec5a513af296cf713e847f4dec6f1c20887989030",
-    "tools/evals/build.py": "ee0c789810433bec35fe1f07e5647006cb545d66b4a9a6d5e71fd4ad1e32f3b9",
-    "tools/evals/check_pr.py": "c06d9346041eb87eeae0db9b3e0a934671d24120bdef03cece2d7a2de0ffa02f",
-    "tools/evals/evals_cli.py": "4d4123c589dd090a5f7ec0b69b1f358d433ee6f8ee22d2aa7cdedab52aaad466",
-    "tools/evals/integrity.py": "d2db9105bdc4673b9f8f9c826f7420c53ece3726d98fde790b23e032f7e678d6",
-    "tools/evals/replay.py": "0e0d97fa2be474b349253fd7f0645d0ab4351588c5044a358411b325f04cbf61",
-    "tools/evals/report.py": "5370d07a4eaeae331c6260bfa259f1638857d67bb0679defdcf760713f40f316",
-    "tools/evals/scorers.py": "b2855228817fd20dd7562560a5796b436c067da510a30159d601f09f20bbf5bc",
-    "tools/evals/test_evals.py": "a8d1fe60d05165e0972efa5e0a79ed89cbc9df5c1634db2457d829749a710097",
     "tools/mission-control/app.py": "9276a78a60d9f486a188dd12be2be855f1492f40c8ffd680e4e2702a99f0c365",
     "tools/mission-control/catalog.py": "0547f962cc5d42cdae80697e2feeb08ae2b51df59967c10f47c2731d88045288",
     "tools/mission-control/chat.py": "220a1ec67fcc13961df7006e7d3986886fc076fceb6ed5835eb437c203586596",
@@ -89,5 +85,6 @@
     "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60",
     "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
     "tools/mission-control/workspace.py": "21459236f4f07e85302a259c4f043b70e607476d53d988dc4338f3d0f216aebe"
-  }
+  },
+  "source_changed_during_tests": false
 }

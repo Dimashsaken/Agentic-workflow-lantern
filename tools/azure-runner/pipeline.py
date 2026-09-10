@@ -79,6 +79,7 @@ SANDBOX_ENV_ALLOWLIST = (
     "LANTERN_MODEL_REASONING", "LANTERN_MODEL_CODING", "LANTERN_MODEL_FAST",
     "LANTERN_EFFORT_REASONING", "LANTERN_EFFORT_CODING", "LANTERN_EFFORT_FAST",
     "LANTERN_OPENAI_API",
+    "LANTERN_MAX_TURNS",
 )
 
 # ── QA stages (P0.1): target credentials + video ─────────────────────────────
@@ -512,59 +513,61 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
            VALUES ($1, $2, $3, $4, 'running', $5, now()) RETURNING id""",
         run_id, stage, runner, attempt, execution_key,
     )
-    await log_event(conn, run_id, "orchestrator", "stage_started",
-                    {"stage": stage, "attempt": attempt, "runner": runner})
-
-    await render_role_memory(conn, role)   # instructions must read a fresh view
-    # Same product access as a sandbox, via a host checkout instead of a mount, so
-    # laptop/workstation runs see exactly what the box does (orchestrator reads
-    # LANTERN_PRODUCT_DIR at call time).
-    repo, branch = await product_target(conn, run_id)
-    work = await product_work_branch(conn, run_id) if repo else ""
-    work = builders.branch_for(work, stage)      # D18: a builder works on its own branch
-    for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
-                "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
-        os.environ.pop(var, None)
-    if role == "coding" and not repo:
-        raise RuntimeError("auto-coding needs a product repo — set one with "
-                           f"`pipeline.py set-product {run_id} --repo … --branch …"
-                           " [--working-branch …]` or in Mission Control at "
-                           f"/run/{run_id}/repo")
-    if repo:
-        checkout = await asyncio.to_thread(product_checkout, repo, branch, run_id, work)
-        os.environ["LANTERN_PRODUCT_DIR"] = str(checkout)
-        os.environ["LANTERN_PRODUCT_ORIGIN"], os.environ["LANTERN_PRODUCT_BRANCH"] = repo, branch
-        # D15: EVERY stage learns the working branch, not just coding — that is what
-        # lets stages 1-2 and 4-7 orient on the code the run is actually working on.
-        os.environ["LANTERN_PRODUCT_WORK_BRANCH"] = work
-        if role == "coding":       # D14: writable, on the run's branch, bot identity (D19: role_for_stage maps 03-coding.fix to coding, so a fix execution is writable here too; 03-coding.review is not)
-            start = await asyncio.to_thread(prepare_coding_checkout, checkout, work)
-            os.environ["LANTERN_CODING_BRANCH"] = work
-            os.environ["LANTERN_CODING_START_SHA"] = start
-            os.environ["LANTERN_PRODUCT_WRITABLE"] = "1"
-            if builders.name_for(stage):   # D18: which builder this execution is
-                os.environ["LANTERN_BUILDER"] = builders.name_for(stage)
-    session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
-
-    problem = check_stage_inputs(run_id, stage)
-    if problem:
-        raise RuntimeError(problem)
     mcp_servers = []
-    if role in BROWSER_ROLES:
-        mcp_servers.append(playwright_mcp_server(run_id, stage))
-    paper = None
-    if stage in PAPER_STAGES:
-        if not await paper_reachable():
-            raise RuntimeError(PAPER_PREFLIGHT_HINT)
-        paper = paper_mcp_server()
-        mcp_servers.append(paper)
-    for s in mcp_servers:
-        await s.connect()
-    journal = None
+    journal = factory.ExecutionJournal(run_id, stage, execution_key, "", "")
+    selected_model = None
     try:
+        await log_event(conn, run_id, "orchestrator", "stage_started",
+                        {"stage": stage, "attempt": attempt, "runner": runner})
+
+        await render_role_memory(conn, role)   # instructions must read a fresh view
+        # Same product access as a sandbox, via a host checkout instead of a mount, so
+        # laptop/workstation runs see exactly what the box does (orchestrator reads
+        # LANTERN_PRODUCT_DIR at call time).
+        repo, branch = await product_target(conn, run_id)
+        work = await product_work_branch(conn, run_id) if repo else ""
+        work = builders.branch_for(work, stage)      # D18: a builder works on its own branch
+        for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
+                    "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
+            os.environ.pop(var, None)
+        if role == "coding" and not repo:
+            raise RuntimeError("auto-coding needs a product repo — set one with "
+                               f"`pipeline.py set-product {run_id} --repo … --branch …"
+                               " [--working-branch …]` or in Mission Control at "
+                               f"/run/{run_id}/repo")
+        if repo:
+            checkout = await asyncio.to_thread(product_checkout, repo, branch, run_id, work)
+            os.environ["LANTERN_PRODUCT_DIR"] = str(checkout)
+            os.environ["LANTERN_PRODUCT_ORIGIN"], os.environ["LANTERN_PRODUCT_BRANCH"] = repo, branch
+            # D15: EVERY stage learns the working branch, not just coding — that is what
+            # lets stages 1-2 and 4-7 orient on the code the run is actually working on.
+            os.environ["LANTERN_PRODUCT_WORK_BRANCH"] = work
+            if role == "coding":       # D14: writable, on the run's branch, bot identity (D19: role_for_stage maps 03-coding.fix to coding, so a fix execution is writable here too; 03-coding.review is not)
+                start = await asyncio.to_thread(prepare_coding_checkout, checkout, work)
+                os.environ["LANTERN_CODING_BRANCH"] = work
+                os.environ["LANTERN_CODING_START_SHA"] = start
+                os.environ["LANTERN_PRODUCT_WRITABLE"] = "1"
+                if builders.name_for(stage):   # D18: which builder this execution is
+                    os.environ["LANTERN_BUILDER"] = builders.name_for(stage)
+        session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
+
+        problem = check_stage_inputs(run_id, stage)
+        if problem:
+            raise RuntimeError(problem)
+        if role in BROWSER_ROLES:
+            mcp_servers.append(playwright_mcp_server(run_id, stage))
+        paper = None
+        if stage in PAPER_STAGES:
+            if not await paper_reachable():
+                raise RuntimeError(PAPER_PREFLIGHT_HINT)
+            paper = paper_mcp_server()
+            mcp_servers.append(paper)
+        for s in mcp_servers:
+            await s.connect()
+        selected_model = model_for(role, stage)
         agent = Agent(
             name=role,
-            model=model_for(role, stage),
+            model=selected_model,
             model_settings=model_settings_for(role, stage),
             instructions=build_instructions(role, run_id, stage),
             tools=stage_tools(role, run_id, stage, execution_key, paper),
@@ -599,28 +602,43 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         final = str(result.final_output)
         # D14: bundle the committed branch into the run folder while the checkout exists.
         finalize_problems = finalize_coding(run_id, stage) if role == "coding" else []
+
+        if finalize_problems:
+            raise RuntimeError("coding handoff failed: " + "; ".join(finalize_problems))
+        missing = await check_postconditions(conn, role, run_id, stage, execution_key)
+        if missing:
+            raise RuntimeError("postconditions failed: " + "; ".join(missing))
     except BaseException as exc:
         if journal is not None:
             journal.failed(exc, model_attempt=False)
         raise
     finally:
+        primary_error = sys.exception()
         try:
             if journal is not None:
                 journal.flush()
-                await record_usage(conn, exec_id, journal.usage, model_for(role, stage))
+                await record_usage(conn, exec_id, journal.usage, selected_model)
+        except BaseException as error:
+            if primary_error is None:
+                journal.failed(error, model_attempt=False)
+                raise
+            print(f"[{run_id}] usage bookkeeping failed: {factory.redact(str(error))}", file=sys.stderr)
         finally:
             try:
-                await asyncio.gather(*(s.cleanup() for s in mcp_servers))
+                cleanup_errors = await asyncio.gather(
+                    *(s.cleanup() for s in mcp_servers), return_exceptions=True)
+                for error in cleanup_errors:
+                    if isinstance(error, BaseException):
+                        if sys.exception() is None:
+                            journal.failed(error, model_attempt=False)
+                            raise error
+                        print(f"[{run_id}] MCP cleanup failed: {factory.redact(str(error))}", file=sys.stderr)
             finally:
-                for var in ("LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
-                            "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
+                for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_ORIGIN", "LANTERN_PRODUCT_BRANCH",
+                            "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_PRODUCT_WRITABLE",
+                            "LANTERN_CODING_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
                     os.environ.pop(var, None)   # cleanup even if ledger or MCP fails
 
-    if finalize_problems:
-        raise RuntimeError("coding handoff failed: " + "; ".join(finalize_problems))
-    missing = await check_postconditions(conn, role, run_id, stage, execution_key)
-    if missing:
-        raise RuntimeError("postconditions failed: " + "; ".join(missing))
     await upload_stage_media(conn, run_id, sdir, execution_key)
 
     # D18: a builder's report is in its own subdir — point the artifact row at the file

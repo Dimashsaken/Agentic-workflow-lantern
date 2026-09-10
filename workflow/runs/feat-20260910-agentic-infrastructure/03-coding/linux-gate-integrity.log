@@ -1,0 +1,13 @@
+test_agent_cannot_make_a_failing_policy_green_by_replacing_it (test_gate_integrity.GateIntegrity.test_agent_cannot_make_a_failing_policy_green_by_replacing_it) ... ok
+test_command_cannot_replace_policy_during_the_gate (test_gate_integrity.GateIntegrity.test_command_cannot_replace_policy_during_the_gate) ... ok
+test_gate_summary_cannot_override_its_results (test_gate_integrity.GateIntegrity.test_gate_summary_cannot_override_its_results) ... ok
+test_malformed_quality_policy_is_a_red_gate (test_gate_integrity.GateIntegrity.test_malformed_quality_policy_is_a_red_gate) ... ok
+test_missing_and_stale_gates_are_not_legacy_success (test_gate_integrity.GateIntegrity.test_missing_and_stale_gates_are_not_legacy_success) ... ok
+test_missing_tests_stop_before_any_model_call (test_gate_integrity.GateIntegrity.test_missing_tests_stop_before_any_model_call) ... ok
+test_scope_inspection_error_holds_the_gate (test_gate_integrity.GateIntegrity.test_scope_inspection_error_holds_the_gate) ... ok
+test_scope_tracks_both_sides_of_renames_and_literal_untracked_names (test_gate_integrity.GateIntegrity.test_scope_tracks_both_sides_of_renames_and_literal_untracked_names) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.149s
+
+OK

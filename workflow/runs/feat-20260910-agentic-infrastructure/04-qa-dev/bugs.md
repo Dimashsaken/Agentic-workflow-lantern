@@ -76,3 +76,42 @@ the reproduced behaviors only, not a security signoff or a fleet QA pass. The
 attempted independent security review did not execute because of a platform risk
 check, as reported by the parent integrator. Browser QA remains unexecuted; no
 videos or timestamps are claimed.
+
+## Round 3 — continuation baseline and local renderer checks
+
+On 2026-09-10, all eight unchanged bypass reproductions remained false in
+`continuation-probes.txt`. Adjacent regression: 59 tests, 58 passed and one Windows
+symlink privilege skip. No new product bug was found in the local renderer browser
+checks; final desktop and mobile recordings pass. Videos, timestamps and trace
+links for all six local sessions are in Round 3 of `report.md`.
+
+The first desktop recording failed only because the test requested a button named
+`theme` after the application had changed its accessible name to `dark mode`.
+The recorder now targets the hydrated label and verifies the theme changed.
+An additional mobile assertion checks reference geometry against the sticky AC
+column, avoiding a false positive from visibility alone. Neither change modifies
+the product. Earlier failed and superseded recordings remain available.
+
+The authenticated dev QA blocker remains: both process environment and the normal
+dotenv-backed environment have no dev base URL or QA login configured. No live
+application session, Azure call, database lifecycle or container-isolation result
+is claimed by this QA audit. The local fixture server was stopped after recording.
+
+## Round 4 — actual authenticated local application
+
+The environment blocker was resolved for a supplied disposable local app and DB.
+Recorded browser sessions read actual Azure-produced researcher/story artifacts for
+`feat-20260910-live-inprocess-2`; no fixture execution or validation row was added.
+Final desktop and mobile recordings pass. Before/after Postgres snapshots prove
+approval 1 remains pending story_signoff and the run remains waiting_gate.
+See Round 4 of `report.md` for all five actual-app video/trace links and timestamps.
+
+No new product bug was found. One mobile test failed because it expected lowercase
+text while CSS transforms the label to uppercase. A later visual review strengthened
+the test again to bring the matrix inside the recorded viewport; text assertions
+alone had passed below the fold. Both are corrected recorder limitations, with
+earlier recordings preserved. The final screenshot visibly shows pending columns.
+
+No registered QA stage or gate approval is claimed. Real downstream structured
+validation content remains untested because the real run correctly waits for human
+story approval; the earlier fixture coverage is kept separate.

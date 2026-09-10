@@ -1,0 +1,14 @@
+{
+  "sdk_sequential_cleanup_errors": [],
+  "sdk_parallel_cleanup_errors": [],
+  "inprocess_setup_failure": {
+    "error": "injected missing approved plan",
+    "writable_env_after_failure": "1",
+    "branch_env_after_failure": "feat/probe"
+  },
+  "container_setup_failure": {
+    "error": "injected MCP connect failure",
+    "database_close_calls": 0,
+    "mcp_cleanup_calls": 0
+  }
+}

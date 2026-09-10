@@ -1,0 +1,48 @@
+{
+  "run": {
+    "id": "feat-20260910-live-inprocess-2",
+    "status": "waiting_gate",
+    "current_stage": "00-story.write",
+    "updated_at": "2026-09-10 07:11:31.147176+00:00"
+  },
+  "approvals": [
+    {
+      "id": 1,
+      "gate": "story_signoff",
+      "status": "pending",
+      "stage_execution_id": null,
+      "decided_at": null,
+      "decided_by": null,
+      "decision_note": null
+    }
+  ],
+  "executions": [
+    {
+      "id": 2,
+      "stage": "00-story.scout",
+      "status": "succeeded",
+      "attempt": 1,
+      "idempotency_key": "feat-20260910-live-inprocess-2:00-story.scout:1",
+      "input_tokens": 56699,
+      "output_tokens": 2301,
+      "total_tokens": 59000
+    },
+    {
+      "id": 3,
+      "stage": "00-story.write",
+      "status": "succeeded",
+      "attempt": 1,
+      "idempotency_key": "feat-20260910-live-inprocess-2:00-story.write:1",
+      "input_tokens": 60050,
+      "output_tokens": 2067,
+      "total_tokens": 62117
+    }
+  ],
+  "recorded_at": "2026-09-10T07:23:48.235407+00:00",
+  "source_sha256": {
+    "tools/mission-control/app.py": "9276a78a60d9f486a188dd12be2be855f1492f40c8ffd680e4e2702a99f0c365",
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60",
+    "tools/mission-control/drawer.py": "157cf7e9a8e03cd523146b08267f917c23fc56d986e8d6b617551bcb8d7f1f5d"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "kind": "local_fixture_renderer_regression",
+  "fleet_execution": false,
+  "live_dev": false,
+  "recorded_at": "2026-09-10T07:09:48.130Z",
+  "source_sha256": {
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60",
+    "tools/mission-control/app.py": "9276a78a60d9f486a188dd12be2be855f1492f40c8ffd680e4e2702a99f0c365"
+  },
+  "results": [
+    {
+      "name": "local-renderer-desktop",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "passed": false,
+      "events": [
+        {
+          "seconds": 0.42,
+          "title": "Structured evidence, HTML-shaped text and Unicode visible"
+        },
+        {
+          "seconds": 1.43,
+          "title": "Refresh preserves structured references"
+        },
+        {
+          "seconds": 1.66,
+          "title": "Legacy prose and back navigation"
+        },
+        {
+          "seconds": 2.59,
+          "title": "Empty story is explicit"
+        },
+        {
+          "seconds": 3.47,
+          "title": "Gate validation renderer structured references"
+        }
+      ],
+      "errors": [],
+      "failure": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'theme', exact: true })\u001b[22m\n",
+      "video": "media/local-renderer-desktop.webm",
+      "trace": "media/local-renderer-desktop.zip",
+      "video_sha256": "c2b41fbc55700d575c787ae21c17ad59eb21a3068c0e710541948d14c3a1c363"
+    },
+    {
+      "name": "local-renderer-mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.09,
+          "title": "Mobile layout and horizontal matrix scroll"
+        },
+        {
+          "seconds": 1.17,
+          "title": "Evidence column reachable after horizontal scroll"
+        }
+      ],
+      "errors": [],
+      "video": "media/local-renderer-mobile.webm",
+      "trace": "media/local-renderer-mobile.zip",
+      "video_sha256": "c4a24ddd06ca806281bb9340381e61c3e91cb8484456161f8fd6a02d1fd402c4"
+    }
+  ]
+}

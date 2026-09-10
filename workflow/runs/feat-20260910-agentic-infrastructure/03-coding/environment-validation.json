@@ -1,0 +1,21 @@
+{
+  "checked_at": "2026-09-10T07:37:57.449787+00:00",
+  "configured_postgres": "unreachable",
+  "durable_memory_appended": false,
+  "local_python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "local_packages": {
+    "openai-agents": "0.22.0",
+    "openai": "3.3.1",
+    "asyncpg": "0.31.0",
+    "SQLAlchemy": "2.0.52"
+  },
+  "sandbox_image": "sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756",
+  "sandbox_python": "3.12.3",
+  "sandbox_packages": {
+    "openai-agents": "0.22.2",
+    "openai": "3.11.0",
+    "asyncpg": "0.31.0",
+    "SQLAlchemy": "2.0.52"
+  },
+  "error_class": "ConnectionRefusedError"
+}

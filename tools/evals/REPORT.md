@@ -1,6 +1,6 @@
 # Factory evals — REPORT
 
-Generated 2026-09-10 06:43 UTC at commit `25bb11334b22` from frozen data: 11 briefs, 5 stories, 2 plans, 3 validations, 1 repros.
+Generated 2026-09-10 07:38 UTC at commit `90e4fb6feef4` from frozen data: 11 briefs, 5 stories, 2 plans, 3 validations, 1 repros.
 
 <!-- lantern-evals-fingerprint: 15d61e5a1a45e6d895d9a53b526df51f4dcc56634ca51535feb0ac7f66c4cc2b -->
 

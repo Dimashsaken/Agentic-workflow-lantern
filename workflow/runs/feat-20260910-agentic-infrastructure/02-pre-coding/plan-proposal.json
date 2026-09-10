@@ -1,0 +1,44 @@
+{
+  "kind": "plan",
+  "run_id": "feat-20260910-agentic-infrastructure",
+  "proposal_only": true,
+  "fleet_execution": false,
+  "approval_status": "pending",
+  "story_status": "proposed criteria in task-plan.md; no approved story envelope",
+  "tasks": [
+    {"id": 1, "title": "Finish current baseline verification", "size": "M", "hitl": false, "criteria": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-5", "AC-6"]},
+    {"id": 2, "title": "Approve controller worker and evidence contracts", "size": "S", "hitl": true, "criteria": ["AC-7", "AC-10"]},
+    {"id": 3, "title": "Isolate shell MCP and harness", "size": "M", "hitl": false, "criteria": ["AC-7"]},
+    {"id": 4, "title": "Make host gate acceptance authoritative", "size": "M", "hitl": false, "criteria": ["AC-7", "AC-10"]},
+    {"id": 5, "title": "Prove actual image containment", "size": "M", "hitl": false, "criteria": ["AC-7", "AC-11"]},
+    {"id": 6, "title": "Implement approved additive migration and rollback", "size": "M", "hitl": true, "criteria": ["AC-8", "AC-9"]},
+    {"id": 7, "title": "Acquire renew and fence run and execution ownership", "size": "M", "hitl": false, "criteria": ["AC-8"]},
+    {"id": 8, "title": "Persist diagnostics and reconcile interrupted execution", "size": "M", "hitl": false, "criteria": ["AC-8", "AC-9"]},
+    {"id": 9, "title": "Reconcile publication intent and duplicates", "size": "M", "hitl": false, "criteria": ["AC-9"]},
+    {"id": 10, "title": "Produce and verify execution manifests", "size": "M", "hitl": false, "criteria": ["AC-10"]},
+    {"id": 11, "title": "Bind requirement tests and video provenance", "size": "M", "hitl": false, "criteria": ["AC-10"]},
+    {"id": 12, "title": "Present provenance and record browser QA", "size": "M", "hitl": false, "criteria": ["AC-11"]},
+    {"id": 13, "title": "Integrate verify and prepare reviewed rollout", "size": "M", "hitl": false, "criteria": ["AC-6", "AC-7", "AC-8", "AC-9", "AC-10", "AC-11"]}
+  ],
+  "write_scope": [
+    "tools/azure-runner/pipeline.py", "tools/azure-runner/orchestrator.py",
+    "tools/azure-runner/factory.py", "tools/azure-runner/review.py",
+    "tools/azure-runner/builders.py", "tools/azure-runner/schema.sql",
+    "tools/azure-runner/evidence.py", "tools/azure-runner/tool_policy.py",
+    "tools/azure-runner/test_factory.py", "tools/azure-runner/test_gate_integrity.py",
+    "tools/azure-runner/test_execution_journal.py", "tools/azure-runner/test_verification.py",
+    "tools/azure-runner/test_coding_stage.py", "tools/azure-runner/test_review.py",
+    "tools/azure-runner/test_builders.py", "tools/azure-runner/test_evidence.py",
+    "tools/mission-control/traceability.py", "tools/mission-control/test_traceability.py",
+    "infra/sandbox/entrypoint.sh", "infra/sandbox/Dockerfile",
+    "infra/sandbox/prove_isolation.sh", "infra/sandbox/prove_video.sh",
+    "tools/evals/check_pr.py", "tools/evals/REPORT.md",
+    "docs/ORCHESTRATION.md", "docs/DECISIONS.md", "docs/AGENT-CAPABILITIES.md",
+    "workflow/runs/feat-20260910-agentic-infrastructure/**"
+  ],
+  "schema_changes": true,
+  "hitl_required": true,
+  "deferred_criteria": [
+    {"id": "AC-12", "reason": "Context budget and structured-output experiments require verified live baseline and separate experiment approval."}
+  ]
+}

@@ -1,0 +1,19 @@
+[trace] C:/Users/dimas/AppData/Local/Temp/tmprkcqwwbm/workflow/runs/local-probe/03-coding/trace/local-probe_03-coding_1.json (0 tool calls, 0 turn(s))
+[trace] C:/Users/dimas/AppData/Local/Temp/tmprkcqwwbm/workflow/runs/local-probe/03-coding/trace/local-probe_03-coding_1.json (0 tool calls, 0 turn(s))
+[trace] C:/Users/dimas/AppData/Local/Temp/tmpk57lkfrz/workflow/runs/local-probe/04-qa-dev/trace/manual_local-probe_04-qa-dev_20c5f1b3.json (0 tool calls, 0 turn(s))
+[trace] C:/Users/dimas/AppData/Local/Temp/tmpk57lkfrz/workflow/runs/local-probe/04-qa-dev/trace/manual_local-probe_04-qa-dev_20c5f1b3.json (0 tool calls, 0 turn(s))
+LANTERN_USAGE {"model": "gpt-5.6-sol"}
+{
+  "sdk_sequential_cleanup_errors": [],
+  "sdk_parallel_cleanup_errors": [],
+  "inprocess_setup_failure": {
+    "error": "injected missing approved plan",
+    "writable_env_after_failure": null,
+    "branch_env_after_failure": null
+  },
+  "container_setup_failure": {
+    "error": "injected MCP connect failure",
+    "database_close_calls": 1,
+    "mcp_cleanup_calls": 1
+  }
+}

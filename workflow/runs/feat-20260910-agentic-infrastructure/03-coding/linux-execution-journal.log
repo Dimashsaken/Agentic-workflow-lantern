@@ -1,0 +1,58 @@
+test_cleanup_failure_prevents_success_and_is_journaled (test_execution_journal.ExecutionJournal.test_cleanup_failure_prevents_success_and_is_journaled) ... ok
+test_completed_and_partial_usage_survive_a_later_failure (test_execution_journal.ExecutionJournal.test_completed_and_partial_usage_survive_a_later_failure) ... ok
+test_container_connect_failure_closes_database_and_mcp (test_execution_journal.ExecutionJournal.test_container_connect_failure_closes_database_and_mcp) ... ERROR
+test_container_executor_emits_known_usage_on_failure (test_execution_journal.ExecutionJournal.test_container_executor_emits_known_usage_on_failure) ... ok
+test_inprocess_connect_failure_cleans_mcp_and_keeps_primary_error (test_execution_journal.ExecutionJournal.test_inprocess_connect_failure_cleans_mcp_and_keeps_primary_error) ... ok
+test_inprocess_executor_records_usage_before_propagating_failure (test_execution_journal.ExecutionJournal.test_inprocess_executor_records_usage_before_propagating_failure) ... ok
+test_ledger_failure_does_not_mask_model_failure (test_execution_journal.ExecutionJournal.test_ledger_failure_does_not_mask_model_failure) ... ok
+test_missing_plan_cleans_coding_environment_and_records_setup_failure (test_execution_journal.ExecutionJournal.test_missing_plan_cleans_coding_environment_and_records_setup_failure) ... ok
+test_postcondition_failure_is_journaled_and_never_marks_success (test_execution_journal.ExecutionJournal.test_postcondition_failure_is_journaled_and_never_marks_success) ... ok
+test_same_exception_is_not_accounted_twice_at_outer_boundary (test_execution_journal.ExecutionJournal.test_same_exception_is_not_accounted_twice_at_outer_boundary) ... ok
+test_success_waits_for_mcp_cleanup_before_marking_succeeded (test_execution_journal.ExecutionJournal.test_success_waits_for_mcp_cleanup_before_marking_succeeded) ... ok
+test_transport_retry_after_tool_calls_is_not_blind_replay (test_execution_journal.ExecutionJournal.test_transport_retry_after_tool_calls_is_not_blind_replay) ... ok
+test_transport_retry_before_tools_still_recovers (test_execution_journal.ExecutionJournal.test_transport_retry_before_tools_still_recovers) ... ok
+test_unknown_failed_usage_stays_unknown (test_execution_journal.ExecutionJournal.test_unknown_failed_usage_stays_unknown) ... ok
+
+======================================================================
+ERROR: test_container_connect_failure_closes_database_and_mcp (test_execution_journal.ExecutionJournal.test_container_connect_failure_closes_database_and_mcp)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/repo-src/tools/azure-runner/orchestrator.py", line 1819, in main
+    await s.connect()
+  File "/usr/lib/python3.12/unittest/mock.py", line 2262, in _execute_mock_call
+    raise effect
+RuntimeError: MCP connect failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/repo-src/tools/azure-runner/test_execution_journal.py", line 106, in test_container_connect_failure_closes_database_and_mcp
+    asyncio.run(o.main())
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 674, in run_until_complete
+    self.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 641, in run_forever
+    self._run_once()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 1987, in _run_once
+    handle._run()
+  File "/usr/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/repo-src/tools/azure-runner/orchestrator.py", line 1884, in main
+    print(USAGE_MARKER + json.dumps({**journal.usage, "model": model_for(role, args.stage)}), flush=True)
+                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/repo-src/tools/azure-runner/orchestrator.py", line 208, in model_for
+    return deployment_for_tier(tier_for(role, stage))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/repo-src/tools/azure-runner/orchestrator.py", line 203, in deployment_for_tier
+    sys.exit("Missing env var LANTERN_MODEL_REASONING (Azure deployment name, e.g. "
+SystemExit: Missing env var LANTERN_MODEL_REASONING (Azure deployment name, e.g. gpt-5.6-sol) — see tools/azure-runner/README.md 'Model stack'
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.413s
+
+FAILED (errors=1)

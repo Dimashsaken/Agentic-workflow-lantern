@@ -57,3 +57,52 @@ then execute tool-policy/Git, evidence, gate-integrity, journal, Mission Control
 traceability and standalone product-access checks. Preserve before/after output.
 Keep the dev browser gate and independent security review separate from this local
 regression result.
+
+## Round 3 — continuation baseline and local browser regression
+
+Written before execution on 2026-09-10. The completed coding confidence map now
+identifies real database/model execution, OS isolation and browser behavior as
+unverified. The process and dotenv-backed environment contain no configured dev
+URL or dev login credentials. Consequently the real dev stage stays BLOCKED.
+
+Independently rerun the existing adversarial probes and relevant policy, evidence,
+gate, journal and Mission Control suites against baseline 90e4fb6. Preserve logs
+and source hashes. The parent owns real Postgres/Docker/Azure diagnosis.
+
+As separate local engineering evidence, record the production Mission Control
+traceability and validation renderers against disposable synthetic envelopes.
+This component server creates no database rows and has no gate actions. It cannot
+substitute for authenticated dev application QA or live integration evidence.
+
+- AC-4 desktop: structured file/line references, Unicode, literal HTML-shaped text,
+  long references, legacy evidence prose, empty story, refresh and browser back.
+- AC-4 mobile: matrix horizontal scrolling keeps every evidence column reachable;
+  inspect text truncation/tooltips and page overflow.
+- Exploratory session: switch theme, navigate repeatedly and inspect console
+  errors. Test structured evidence in the gate validation table too.
+- Record each context with qa-recorder's Playwright video/trace pattern. Keep
+  named local videos outside git, record timestamps and hashes, and explicitly
+  label all generated pages as fixtures. Do not invent an execution ID or upload.
+
+## Round 4 — authenticated local dev integration
+
+The parent has completed genuine Azure/Postgres researcher and story executions
+in an isolated harness, with the resulting run stopped at pending story_signoff.
+Use that existing disposable run; do not create fixture validation records.
+Before recording, snapshot its run status, execution IDs and approval decision
+fields directly from disposable Postgres. Launch the actual isolated Mission
+Control application using process-only local auth and an environment-provided URL.
+
+- Verify unauthenticated navigation requires login, then authenticate through UI.
+- Record real run lanes, story evidence and the traceability matrix. Later stages
+  must remain pending because the story gate has not been approved.
+- Open actual researcher/story execution drawers, compiled-prompt/tool-call
+  diagnostics, typed envelopes and memory sections; refresh without mutations.
+- Mobile: real matrix scroll and later-stage pending evidence remain legible.
+- Do not click gate, retry, rework, chat-send or other modifying controls. Reject
+  unexpected non-GET browser requests after login. Re-read Postgres afterwards
+  and require run/execution/gate decision state to remain identical.
+- Video covers login with the password masked. Tracing begins after login so it
+  never records credential payloads. All session links carry timestamps and hashes.
+- This is authenticated local dev integration against real disposable data, not
+  a registered 04-qa-dev pipeline execution or deployed-environment signoff.

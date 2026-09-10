@@ -1,0 +1,8 @@
+old check (shared-file diff):
+  PASS  A (which wrote) passes
+  PASS  B (which wrote NOTHING) also passes � the unsoundness
+new check (role_memory row per execution_key):
+  PASS  A (which wrote) passes
+  PASS  B (which wrote nothing) FAILS
+  PASS  a retry of A (attempt 2, fresh key) cannot reuse attempt 1's row
+all checks passed � the new postcondition is sound where the old one was not

@@ -70,7 +70,10 @@ RUN touch /tmp/.qa-build-marker \
 
 # plain COPY + chmod: --chmod needs BuildKit, which docker.io's legacy builder lacks
 COPY infra/sandbox/entrypoint.sh /opt/lantern/entrypoint.sh
-RUN chmod 755 /opt/lantern/entrypoint.sh
+# Windows checkouts may supply CRLF; normalize the executable shebang in the
+# image so a build from Git for Windows starts identically to a Linux build.
+RUN sed -i 's/\r$//' /opt/lantern/entrypoint.sh \
+    && chmod 755 /opt/lantern/entrypoint.sh
 
 # The container runs as uid 1000 (the dispatcher passes --user), which on the host
 # is `ubuntu` — so files written onto the mounted run dir come out host-owned, not

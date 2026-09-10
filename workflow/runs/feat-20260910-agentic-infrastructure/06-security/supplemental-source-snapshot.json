@@ -1,0 +1,22 @@
+{
+  "kind": "local_defensive_security_review_supplement",
+  "registered_fleet_execution": false,
+  "source_head": "90e4fb6feef464ef97aa56ccc451ca082b802165",
+  "source_sha256": {
+    "tools/azure-runner/tool_policy.py": "47d1e43616682bb8b4b5dadec5a513af296cf713e847f4dec6f1c20887989030",
+    "tools/azure-runner/readonly_git.py": "f1c6f1b12017dcc19c305ad878415353a552dc77e3b9bd603290cdaaedce9bf6",
+    "tools/azure-runner/evidence.py": "ccab8621cda99b900e4f6bf56f7db2c1b61d78686a831d11494b181ad9731425",
+    "tools/azure-runner/factory.py": "f3807b09685c219751f494a0f55ff0bfe3b35b220694448692ce16fa4febded3",
+    "tools/azure-runner/orchestrator.py": "a80a39a29e8d8f0625eb637b18ff05d0af6a160bfdcf43dbc2b6f2cea7bcfabb",
+    "tools/azure-runner/pipeline.py": "325efbd7d4de38800cbdb2d7c6e9f057cd73160cc218b657f6253092c52f2cf2",
+    "tools/azure-runner/review.py": "d1d0ab4d3754f57358a3fdf986c6bf72576c51ead333348b33a01772590edc50",
+    "tools/azure-runner/requirements.txt": "bb8f333e7725cc4612f45489d7a3304bdcbe3c96775a65174bb5dbbf5cff2355",
+    "tools/azure-runner/test_execution_journal.py": "8220b0f6aabd6c5d850e2ee7c874e46795c82e1d899bac746e921b3cc1cfdcaf",
+    "tools/mission-control/app.py": "9276a78a60d9f486a188dd12be2be855f1492f40c8ffd680e4e2702a99f0c365",
+    "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60",
+    "tools/evals/check_pr.py": "c06d9346041eb87eeae0db9b3e0a934671d24120bdef03cece2d7a2de0ffa02f",
+    "tools/evals/integrity.py": "d2db9105bdc4673b9f8f9c826f7420c53ece3726d98fde790b23e032f7e678d6",
+    "infra/sandbox/Dockerfile": "9445a8057b09eca32edfa5b90a5d44f82a038742470bd5d8949646498a0157d9"
+  },
+  "supplied_image_id": "sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756"
+}

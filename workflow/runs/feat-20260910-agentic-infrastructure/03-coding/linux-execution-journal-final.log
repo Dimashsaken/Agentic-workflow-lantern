@@ -1,0 +1,19 @@
+test_cleanup_failure_prevents_success_and_is_journaled (test_execution_journal.ExecutionJournal.test_cleanup_failure_prevents_success_and_is_journaled) ... ok
+test_completed_and_partial_usage_survive_a_later_failure (test_execution_journal.ExecutionJournal.test_completed_and_partial_usage_survive_a_later_failure) ... ok
+test_container_connect_failure_closes_database_and_mcp (test_execution_journal.ExecutionJournal.test_container_connect_failure_closes_database_and_mcp) ... ok
+test_container_executor_emits_known_usage_on_failure (test_execution_journal.ExecutionJournal.test_container_executor_emits_known_usage_on_failure) ... ok
+test_inprocess_connect_failure_cleans_mcp_and_keeps_primary_error (test_execution_journal.ExecutionJournal.test_inprocess_connect_failure_cleans_mcp_and_keeps_primary_error) ... ok
+test_inprocess_executor_records_usage_before_propagating_failure (test_execution_journal.ExecutionJournal.test_inprocess_executor_records_usage_before_propagating_failure) ... ok
+test_ledger_failure_does_not_mask_model_failure (test_execution_journal.ExecutionJournal.test_ledger_failure_does_not_mask_model_failure) ... ok
+test_missing_plan_cleans_coding_environment_and_records_setup_failure (test_execution_journal.ExecutionJournal.test_missing_plan_cleans_coding_environment_and_records_setup_failure) ... ok
+test_postcondition_failure_is_journaled_and_never_marks_success (test_execution_journal.ExecutionJournal.test_postcondition_failure_is_journaled_and_never_marks_success) ... ok
+test_same_exception_is_not_accounted_twice_at_outer_boundary (test_execution_journal.ExecutionJournal.test_same_exception_is_not_accounted_twice_at_outer_boundary) ... ok
+test_success_waits_for_mcp_cleanup_before_marking_succeeded (test_execution_journal.ExecutionJournal.test_success_waits_for_mcp_cleanup_before_marking_succeeded) ... ok
+test_transport_retry_after_tool_calls_is_not_blind_replay (test_execution_journal.ExecutionJournal.test_transport_retry_after_tool_calls_is_not_blind_replay) ... ok
+test_transport_retry_before_tools_still_recovers (test_execution_journal.ExecutionJournal.test_transport_retry_before_tools_still_recovers) ... ok
+test_unknown_failed_usage_stays_unknown (test_execution_journal.ExecutionJournal.test_unknown_failed_usage_stays_unknown) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.362s
+
+OK

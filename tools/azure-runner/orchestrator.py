@@ -1795,31 +1795,33 @@ async def main() -> None:
 
     conn = await db_connect()
     execution_key = args.execution_key or f"manual:{args.run_id}:{args.stage}:{uuid4().hex[:8]}"
-    await render_role_memory(conn, role)   # instructions must read a fresh view
-
-    session = None
-    if args.persist_session:
-        from agents.extensions.memory import SQLAlchemySession
-        session = SQLAlchemySession.from_url(
-            f"{args.run_id}:{args.stage}", url=db_urls()[0], create_tables=True)
-
     mcp_servers = []
-    if role in BROWSER_ROLES:
-        mcp_servers.append(playwright_mcp_server(args.run_id, args.stage))
-    paper = None
-    if args.stage in PAPER_STAGES:
-        if not await paper_reachable():
-            sys.exit(PAPER_PREFLIGHT_HINT)
-        paper = paper_mcp_server()
-        mcp_servers.append(paper)
-
-    for s in mcp_servers:
-        await s.connect()
-    journal = None
+    journal = factory.ExecutionJournal(args.run_id, args.stage, execution_key, "", "")
+    selected_model = None
     try:
+        await render_role_memory(conn, role)   # instructions must read a fresh view
+
+        session = None
+        if args.persist_session:
+            from agents.extensions.memory import SQLAlchemySession
+            session = SQLAlchemySession.from_url(
+                f"{args.run_id}:{args.stage}", url=db_urls()[0], create_tables=True)
+
+        if role in BROWSER_ROLES:
+            mcp_servers.append(playwright_mcp_server(args.run_id, args.stage))
+        paper = None
+        if args.stage in PAPER_STAGES:
+            if not await paper_reachable():
+                sys.exit(PAPER_PREFLIGHT_HINT)
+            paper = paper_mcp_server()
+            mcp_servers.append(paper)
+
+        for s in mcp_servers:
+            await s.connect()
+        selected_model = model_for(role, args.stage)
         agent = Agent(
             name=role,
-            model=model_for(role, args.stage),
+            model=selected_model,
             model_settings=model_settings_for(role, args.stage),
             instructions=build_instructions(role, args.run_id, args.stage),
             tools=stage_tools(role, args.run_id, args.stage, execution_key, paper),
@@ -1881,10 +1883,17 @@ async def main() -> None:
         try:
             if journal is not None:
                 journal.flush()
-                print(USAGE_MARKER + json.dumps({**journal.usage, "model": model_for(role, args.stage)}), flush=True)
+                print(USAGE_MARKER + json.dumps({**journal.usage, "model": selected_model}), flush=True)
         finally:
             try:
-                await asyncio.gather(*(s.cleanup() for s in mcp_servers))
+                cleanup_errors = await asyncio.gather(
+                    *(s.cleanup() for s in mcp_servers), return_exceptions=True)
+                for error in cleanup_errors:
+                    if isinstance(error, BaseException):
+                        if sys.exception() is None:
+                            journal.failed(error, model_attempt=False)
+                            raise error
+                        print(f"MCP cleanup failed: {factory.redact(str(error))}", file=sys.stderr)
             finally:
                 await conn.close()
     print("postconditions ok")

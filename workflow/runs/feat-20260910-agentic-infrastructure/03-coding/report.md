@@ -157,3 +157,72 @@ approval is part of this commit handoff. Database-backed memory recording remain
 unavailable as documented above and is included in the continuation prompt.
 
 Status: PASS-WITH-NOTES
+
+## Continuation increment 1 — live validation and lifecycle fixes, 2026-09-10
+
+Status: PASS-WITH-NOTES
+
+Resumed at 90e4fb6 on codex/agentic-infrastructure; preserved unrelated .codex/.
+The existing venv now works (Python 3.12.10, Agents SDK 0.22.0). Configured checks
+need Git Bash first on PATH; WindowsApps/bash is a broken WSL stub. No credentials
+were printed or production database modified.
+
+Implemented independent review findings R-1 through R-3: setup/MCP failures now
+enter cleanup and diagnostic boundaries, usage bookkeeping cannot replace the
+primary failure, cleanup finishes before success, and postcondition failures are
+journaled. A Linux regression exposed model lookup during failure logging; the
+selected model is now captured once. Docker forwards the generic turn limit.
+The actual image built on Windows failed with `bash\r`; Dockerfile normalizes the
+entrypoint line endings. Seven lifecycle regressions extend the original seven.
+
+Live evidence (all databases/products disposable; no approvals decided):
+
+| Evidence | Actual result |
+|---|---|
+| live-inprocess-final.json | Azure research/story succeeded, executions 5/6, stopped at pending story_signoff, two actual memory-tool rows |
+| live-docker-1.json | Actual sandbox/Azure/Postgres research/story succeeded, executions 7/8, stopped at pending story_signoff, two memory-tool rows |
+| live-inprocess-partial.json | MaxTurnsExceeded failed honestly; 2 requests / 18,304 tokens retained |
+| live-docker-partial.json | Same failure through actual sandbox; 2 requests / 17,022 tokens retained |
+| live-docker-killed.json | Actual active stage killed, execution 10 failed, no gate, usage remains null/unknown; no restart/resumption claim |
+| postgres-memory-verification.log | Real Postgres concurrency/retry memory controls pass |
+| linux-*.log | Candidate-image policy (19), gate (8), evidence (11), final journal (14): 52 passed; initial journal failure retained separately |
+| docker-isolation-controls.json | Three independent clones, original unchanged, killed container removed, fresh container has no residue |
+| ../04-qa-dev/live-browser-results.json | Authenticated actual Mission Control desktop/mobile recordings on Azure-produced run data; before/after DB state unchanged |
+| ../04-qa-dev/local-browser-results.json | Separate fixture-backed structured evidence/legacy/escaping renderer recordings |
+
+Image: sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756.
+Image Python 3.12.3 / Agents SDK 0.22.2; within the checked-in >=0.22,<0.23 bound.
+This differs from Windows SDK 0.22.0 and is explicitly recorded in
+environment-validation.json. Live JSON records carry tested source hashes and
+physical artifact directories. Model transcripts stay in isolated ignored
+workspaces; videos/traces remain local ignored media, not git binaries.
+The initial live-inprocess-1.json failure used an erroneous validation-driver
+Chat Completions default; the driver was corrected to the product's Responses
+API default before successful runs. It is not a product regression.
+
+Independent post-coding and defensive security reviews executed. Security also
+independently checked the lifecycle corrections. Both reports remain local
+engineering evidence, not registered stage signoffs. No feature-introduced new
+critical/high vulnerability was confirmed; staging remains NO-GO pending the
+next infrastructure work and release gates.
+
+Local complete configured checks pass: 392 tests (391 passed, one Windows symlink
+privilege skip), plus standalone property scripts; lint/evals pass. Final log,
+source hashes and timings are in local-quality.json and quality-*.log.
+
+Limitations: the configured localhost:5432 Lantern DB still refuses connections.
+The actual memory tool worked in disposable runs; this does not satisfy the missing
+durable manual learning in the configured DB. New container controls prove product
+separation/cleanup, not immutable harness authority, scoped credentials or egress.
+Hard kills still lose unknown tail usage. No lease/restart/effect guarantee is
+inferred from a killed container being removed. Actual downstream validator-stage
+evidence remains unexecuted; its UI rendering was separately fixture-tested.
+
+## Next increment authorization — 2026-09-10
+
+The concrete 02-pre-coding task plan and forward/rollback SQL were presented to the
+user. Their subsequent instruction was "continue". This developer session treats
+that as authorization to proceed with the presented local implementation and
+disposable-schema tests. It is not a live pipeline approval row or deployment
+permission. No approved story, registered plan_signoff or other fleet record is
+fabricated. Live gates continue to require their existing mechanisms.

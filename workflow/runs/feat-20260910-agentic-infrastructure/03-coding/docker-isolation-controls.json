@@ -1,0 +1,14 @@
+{
+  "kind": "real_container_clone_and_kill_controls",
+  "os_containment_claim": false,
+  "image_id": "sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756",
+  "concurrent_clones": [
+    "isolated-0",
+    "isolated-1",
+    "isolated-2"
+  ],
+  "source_unchanged": true,
+  "killed_container_removed": true,
+  "fresh_container_no_residue": true,
+  "passed": true
+}

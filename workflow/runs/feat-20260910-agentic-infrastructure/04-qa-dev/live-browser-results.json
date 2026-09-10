@@ -1,0 +1,93 @@
+{
+  "kind": "authenticated_local_dev_integration",
+  "fleet_qa_execution": false,
+  "actual_application": true,
+  "database": "disposable_postgres",
+  "run_id": "feat-20260910-live-inprocess-2",
+  "recorded_at": "2026-09-10T07:25:41.540Z",
+  "source_sha256": {
+    "tools/mission-control/app.py": "9276a78a60d9f486a188dd12be2be855f1492f40c8ffd680e4e2702a99f0c365",
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60",
+    "tools/mission-control/drawer.py": "157cf7e9a8e03cd523146b08267f917c23fc56d986e8d6b617551bcb8d7f1f5d"
+  },
+  "trace_starts_after_login": true,
+  "results": [
+    {
+      "name": "local-dev-authenticated-desktop-retest",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 1.72,
+          "title": "Anonymous evidence request redirects to login"
+        },
+        {
+          "seconds": 2.24,
+          "title": "Authenticated through actual application login"
+        },
+        {
+          "seconds": 3.05,
+          "title": "Real run lanes and pending story evidence"
+        },
+        {
+          "seconds": 4.55,
+          "title": "Real story criteria; later stages explicitly pending"
+        },
+        {
+          "seconds": 6.83,
+          "title": "00-story.scout: real compiled prompt and execution diagnostics"
+        },
+        {
+          "seconds": 7.63,
+          "title": "00-story.scout: real tool-call evidence"
+        },
+        {
+          "seconds": 8.46,
+          "title": "00-story.scout: execution-linked memory"
+        },
+        {
+          "seconds": 9.69,
+          "title": "00-story.write: real compiled prompt and execution diagnostics"
+        },
+        {
+          "seconds": 10.46,
+          "title": "00-story.write: real tool-call evidence"
+        },
+        {
+          "seconds": 11.29,
+          "title": "00-story.write: execution-linked memory"
+        },
+        {
+          "seconds": 13.02,
+          "title": "Returned to unchanged pending story run"
+        }
+      ],
+      "errors": [],
+      "blocked_mutations": [],
+      "http_errors": [],
+      "video": "media/local-dev-authenticated-desktop-retest.webm",
+      "trace": "media/local-dev-authenticated-desktop-retest.zip",
+      "video_sha256": "8ca252caf836a4eae92667b623288eaea96c14c7d7386df35ca0ef28d29056ab"
+    },
+    {
+      "name": "local-dev-authenticated-mobile-retest",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 1.73,
+          "title": "Authenticated mobile matrix from real story"
+        },
+        {
+          "seconds": 2.56,
+          "title": "Later-stage pending columns remain reachable"
+        }
+      ],
+      "errors": [],
+      "blocked_mutations": [],
+      "http_errors": [],
+      "video": "media/local-dev-authenticated-mobile-retest.webm",
+      "trace": "media/local-dev-authenticated-mobile-retest.zip",
+      "video_sha256": "5cdd25137f5aba32e6098b1e09d59b872fe546b371c1913e1bc71baad2057a6c"
+    }
+  ]
+}
