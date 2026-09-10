@@ -1,0 +1,59 @@
+{
+  "recorded_at": "2026-09-10T16:04:22.468446+00:00",
+  "environment": "actual GitHub REST with existing configured Lantern bot credential; read only",
+  "repository": "Dimashsaken/Agentic-workflow-lantern",
+  "calls": [
+    {
+      "method": "GET",
+      "path": "/repos/Dimashsaken/Agentic-workflow-lantern",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/Dimashsaken/Agentic-workflow-lantern/git/ref/heads/main",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/Dimashsaken/Agentic-workflow-lantern",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/Dimashsaken/Agentic-workflow-lantern/git/ref/heads/main",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/Dimashsaken/Agentic-workflow-lantern",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/Dimashsaken/Agentic-workflow-lantern/git/ref/heads/main",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/Dimashsaken/Agentic-workflow-lantern/git/ref/heads/feat%2F20260910-agentic-infrastructure",
+      "status": 404,
+      "message": "Not Found"
+    },
+    {
+      "method": "GET",
+      "path": "/repos/Dimashsaken/Agentic-workflow-lantern/pulls?state=all&head=Dimashsaken%3Afeat%2F20260910-agentic-infrastructure&per_page=100&page=1",
+      "status": 403,
+      "message": "Resource not accessible by personal access token"
+    }
+  ],
+  "provider_mutations": 0,
+  "repository_id": 1344678260,
+  "base": "main",
+  "base_sha": "25bb11334b224f01e7ca81f6e96483a9aa2ad5d0",
+  "observer_result": "held",
+  "observer_reason": "GitHub PR observation unavailable or malformed",
+  "source_sha256": {
+    "github_publication.py": "d0b0b0d41cdfd74abc924361849a62f03e02abbc31ea8599a9c35816f314704e",
+    "pipeline.py": "a564fadefd812a855fe197f44d82680982b958ee45c3597782bfa9e874db75bf"
+  }
+}

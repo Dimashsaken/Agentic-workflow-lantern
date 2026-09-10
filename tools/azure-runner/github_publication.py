@@ -55,10 +55,12 @@ def _repository_and_base(api, request):
     return repo["id"], base["object"]["sha"]
 
 
-def prepare_request(api, request):
+def prepare_request(api, request, version=2):
     """Capture immutable provider identities BEFORE persisting the new intent."""
     repository_id, base_sha = _repository_and_base(api, request)
-    result = {**request, "version": 2, "repository_id": repository_id,
+    if version not in (2, 3):
+        raise PublicationHeld("unsupported publication request version")
+    result = {**request, "version": version, "repository_id": repository_id,
               "base_sha": base_sha, "expected_remote_sha": None}
     initial = observe(api, result)
     result["expected_remote_sha"] = initial.head
@@ -99,7 +101,7 @@ def _pr_identity(pr, owner, name, branch, base, repository_id=None, base_sha=Non
 def observe(api, request, max_pages=20):
     """Bounded complete pagination; any unavailable/contradictory read holds."""
     owner, name = destination(request)
-    if request.get("version") == 2:
+    if request.get("version") in (2, 3):
         repository_id, base_sha = _repository_and_base(api, request)
         if (type(request.get("repository_id")) is not int or request["repository_id"] != repository_id
                 or request.get("base_sha") != base_sha
@@ -203,3 +205,66 @@ def publish(api, git, remote, cwd, request, title, body, before=None, check_curr
     except (OSError, TimeoutError):
         pass
     return receipt(request, observe(api, request), reused=False)
+
+
+def action_request(request, action):
+    if request.get("version") != 3 or action not in ("branch", "pr"):
+        raise PublicationHeld("split publication requires a v3 branch or PR intent")
+    return {"publication_request": dict(request), "action": action}
+
+
+def publish_split(api, git, remote, cwd, request, title, body, before=None,
+                  check_current=None, begin_effect=None, complete_effect=None):
+    """Resume only effects whose durable before-action intent does not exist yet.
+
+    Callbacks are host-owned, fenced database operations. An existing action can
+    only be confirmed by fresh provider state; absence of its desired result is
+    never permission to retry. A missing PR action after an observed branch push
+    permits a new PR intent and one POST, because this v3 protocol always persists
+    that intent before invoking the provider. V1/v2 parents cannot enter this path.
+    """
+    if request.get("version") != 3 or not all(callable(fn) for fn in (check_current, begin_effect, complete_effect)):
+        raise PublicationHeld("split publication requires bound host effect callbacks")
+    owner, name = destination(request)
+    observed = before or observe(api, request)
+    branch_effect = begin_effect("branch")
+    if observed.head != request["head_sha"]:
+        if not branch_effect.created:
+            raise PublicationHeld("existing branch intent is unresolved; refusing push replay")
+        if observed.head != request["expected_remote_sha"]:
+            raise PublicationHeld("remote revision changed after publication intent")
+        check_current()
+        push_cas(git, remote, request["branch"], request["head_sha"], observed.head, cwd)
+        observed = observe(api, request)
+    if observed.head != request["head_sha"]:
+        raise PublicationHeld("branch effect is not observed at the intended revision")
+    branch_ref = f"https://github.com/{owner}/{name}/tree/{request['head_sha']}"
+    branch_result = {**action_request(request, "branch"), "head_sha": observed.head,
+                     "observed_at": datetime.now(timezone.utc).isoformat()}
+    if branch_effect.status == "confirmed" and branch_effect.external_ref != branch_ref:
+        raise PublicationHeld("confirmed branch effect identity changed")
+    complete_effect("branch", branch_effect, branch_ref, branch_result)
+
+    # Refresh after the branch receipt transaction. A takeover, repository change,
+    # branch move or changed PR cannot be hidden by the earlier observation.
+    observed = observe(api, request)
+    if observed.head != request["head_sha"]:
+        raise PublicationHeld("branch changed before PR intent")
+    pr_effect = begin_effect("pr")
+    reused = observed.pr is not None
+    if observed.pr is None:
+        if not pr_effect.created:
+            raise PublicationHeld("existing PR intent is unresolved; refusing POST replay")
+        check_current()
+        try:
+            api("POST", f"/repos/{owner}/{name}/pulls",
+                {"title": title, "head": request["branch"], "base": request["base"], "body": body})
+        except (OSError, TimeoutError):
+            pass
+        observed = observe(api, request)
+    result = receipt(request, observed, reused=reused)
+    if pr_effect.status == "confirmed" and (pr_effect.external_ref != result["pr_url"]
+            or not isinstance(pr_effect.result, dict) or pr_effect.result.get("pr_number") != result["pr_number"]):
+        raise PublicationHeld("confirmed PR effect identity changed")
+    complete_effect("pr", pr_effect, result["pr_url"], result)
+    return result

@@ -1,0 +1,65 @@
+{
+  "recorded_at": "2026-09-10T15:58:33.013025+00:00",
+  "root": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts",
+  "mode": "read-only inventory; no cleanup attempted",
+  "checkouts": [
+    {
+      "directory": "bug-20260908-help-crash-without-env",
+      "bytes": 27411334,
+      "files": 678,
+      "skipped_links": 0,
+      "cleanup": "held: legacy path without per-execution descriptor or shared retirement lock"
+    },
+    {
+      "directory": "feat-20260825-demo-export",
+      "bytes": 24324552,
+      "files": 292,
+      "skipped_links": 0,
+      "cleanup": "held: legacy path without per-execution descriptor or shared retirement lock"
+    },
+    {
+      "directory": "feat-20260831-gate-latency",
+      "bytes": 16513123,
+      "files": 251,
+      "skipped_links": 0,
+      "cleanup": "held: legacy path without per-execution descriptor or shared retirement lock"
+    },
+    {
+      "directory": "feat-20260908-note-delete",
+      "bytes": 57530,
+      "files": 53,
+      "skipped_links": 0,
+      "cleanup": "held: legacy path without per-execution descriptor or shared retirement lock"
+    },
+    {
+      "directory": "feat-20260908-runboard-stage-timestamps",
+      "bytes": 27074113,
+      "files": 656,
+      "skipped_links": 0,
+      "cleanup": "held: legacy path without per-execution descriptor or shared retirement lock"
+    },
+    {
+      "directory": "feat-20260908-status-facts",
+      "bytes": 26019381,
+      "files": 415,
+      "skipped_links": 0,
+      "cleanup": "held: legacy path without per-execution descriptor or shared retirement lock"
+    },
+    {
+      "directory": "feat-20260908-status-version",
+      "bytes": 27662374,
+      "files": 772,
+      "skipped_links": 0,
+      "cleanup": "held: legacy path without per-execution descriptor or shared retirement lock"
+    },
+    {
+      "directory": "feat-20260909-trace-proof",
+      "bytes": 30978,
+      "files": 37,
+      "skipped_links": 0,
+      "cleanup": "held: legacy path without per-execution descriptor or shared retirement lock"
+    }
+  ],
+  "total_bytes": 149093385,
+  "evidence_deleted": false
+}

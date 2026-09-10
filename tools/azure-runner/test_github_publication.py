@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import Mock
 
 import github_publication as publication
+import execution_leases as leases
 
 
 REQUEST = {"run_id": "run", "repo": "https://github.com/owner/product.git",
@@ -247,6 +248,130 @@ class FreshPublication(unittest.TestCase):
         with self.assertRaises(publication.PublicationHeld):
             publication.publish(provider.api, provider.git, "remote", "mirror", REQUEST, "title", "body")
         self.assertTrue(all(call[0] == "GET" for call in provider.calls))
+
+
+class SplitPublication(unittest.TestCase):
+    class Crash(BaseException):
+        pass
+
+    def setUp(self):
+        self.provider = Provider(None)
+        self.request = publication.prepare_request(self.provider.api, REQUEST, 3)
+        self.effects = {}
+        self.live = True
+        self.crash_before_confirmation = None
+        self.crash_before_intent = None
+
+    def check_current(self):
+        if not self.live:
+            raise leases.LeaseLost("stale owner")
+
+    def begin(self, action):
+        self.check_current()
+        if self.crash_before_intent == action:
+            raise self.Crash(action)
+        if action in self.effects:
+            effect = self.effects[action]
+            return leases.Effect(False, effect.status, effect.external_ref, effect.result)
+        effect = leases.Effect(True, "intended", None, publication.action_request(self.request, action))
+        self.effects[action] = effect
+        return effect
+
+    def complete(self, action, effect, external_ref, result):
+        self.check_current()
+        if self.crash_before_confirmation == action:
+            raise self.Crash(action)
+        self.effects[action] = leases.Effect(False, "confirmed", external_ref, result)
+
+    def publish(self):
+        return publication.publish_split(self.provider.api, self.provider.git, "remote", "mirror", self.request,
+                                         "title", "body", check_current=self.check_current,
+                                         begin_effect=self.begin, complete_effect=self.complete)
+
+    def writes(self, kind):
+        return [call for call in self.provider.calls if call[0] == kind]
+
+    def test_crash_after_branch_before_confirmation_resumes_only_missing_pr(self):
+        self.crash_before_confirmation = "branch"
+        with self.assertRaises(self.Crash):
+            self.publish()
+        self.assertEqual(self.effects["branch"].status, "intended")
+        self.assertNotIn("pr", self.effects)
+        self.assertEqual(len(self.writes("git")), 1)
+        self.assertEqual(len(self.writes("POST")), 0)
+        self.crash_before_confirmation = None
+        result = self.publish()
+        self.assertEqual(result["pr_number"], 7)
+        self.assertEqual(len(self.writes("git")), 1)
+        self.assertEqual(len(self.writes("POST")), 1)
+        self.assertEqual([effect.status for effect in self.effects.values()], ["confirmed", "confirmed"])
+
+    def test_crash_after_confirmed_branch_before_pr_intent_resumes_pr(self):
+        self.crash_before_intent = "pr"
+        with self.assertRaises(self.Crash):
+            self.publish()
+        self.assertEqual(self.effects["branch"].status, "confirmed")
+        self.assertNotIn("pr", self.effects)
+        self.crash_before_intent = None
+        self.publish()
+        self.assertEqual(len(self.writes("git")), 1)
+        self.assertEqual(len(self.writes("POST")), 1)
+
+    def test_crash_after_pr_post_reobserves_without_duplicate_post(self):
+        self.crash_before_confirmation = "pr"
+        with self.assertRaises(self.Crash):
+            self.publish()
+        self.assertEqual(self.effects["pr"].status, "intended")
+        self.crash_before_confirmation = None
+        self.publish()
+        self.publish()
+        self.assertEqual(len(self.writes("git")), 1)
+        self.assertEqual(len(self.writes("POST")), 1)
+
+    def test_preexisting_uncertain_pr_with_no_provider_result_never_replays(self):
+        self.provider.head = REQUEST["head_sha"]
+        for status in ("intended", "uncertain", "confirmed"):
+            self.effects["pr"] = leases.Effect(False, status, None, publication.action_request(self.request, "pr"))
+            with self.assertRaisesRegex(publication.PublicationHeld, "refusing POST replay"):
+                self.publish()
+        self.assertFalse(self.writes("POST"))
+
+    def test_preexisting_branch_without_desired_result_never_replays(self):
+        for status in ("intended", "uncertain", "confirmed"):
+            self.effects["branch"] = leases.Effect(False, status, None, publication.action_request(self.request, "branch"))
+            with self.assertRaisesRegex(publication.PublicationHeld, "refusing push replay"):
+                self.publish()
+        self.assertFalse(self.writes("git"))
+        self.assertNotIn("pr", self.effects)
+
+    def test_stale_owner_cannot_create_missing_pr_intent(self):
+        self.crash_before_intent = "pr"
+        with self.assertRaises(self.Crash):
+            self.publish()
+        self.crash_before_intent = None
+        self.live = False
+        with self.assertRaises(leases.LeaseLost):
+            self.publish()
+        self.assertNotIn("pr", self.effects)
+        self.assertFalse(self.writes("POST"))
+
+    def test_newer_owner_winning_pr_intent_race_prevents_post(self):
+        original_begin = self.begin
+        def competing_begin(action):
+            if action == "pr":
+                self.effects[action] = leases.Effect(False, "intended", None, publication.action_request(self.request, action))
+            return original_begin(action)
+        self.begin = competing_begin
+        with self.assertRaisesRegex(publication.PublicationHeld, "refusing POST replay"):
+            self.publish()
+        self.assertFalse(self.writes("POST"))
+
+    def test_legacy_request_cannot_enter_split_protocol(self):
+        self.request["version"] = 2
+        with self.assertRaisesRegex(publication.PublicationHeld, "bound host effect callbacks"):
+            self.publish()
+        self.assertFalse(self.effects)
+        self.assertFalse(self.writes("git"))
 
 
 class ActualLocalGitCAS(unittest.TestCase):

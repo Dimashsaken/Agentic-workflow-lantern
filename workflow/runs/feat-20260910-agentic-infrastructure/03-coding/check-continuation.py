@@ -12,6 +12,9 @@ from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[4]
 OUT = Path(__file__).resolve().parent
+label = sys.argv[1] if len(sys.argv) > 1 else "continuation3"
+if not re.fullmatch(r"[a-z0-9-]+", label):
+    raise ValueError("invalid evidence label")
 policy_bytes = (ROOT / "lantern.toml").read_bytes()
 policy = tomllib.loads(policy_bytes.decode())["quality"]
 paths = sorted(set((ROOT / "tools/azure-runner").glob("*.py")) | set((ROOT / "tools/evals").glob("*.py")) | set((ROOT / "tools/mission-control").glob("*.py")))
@@ -29,7 +32,7 @@ if os.name == "nt":
     record["shell"] = str(git_bin / "bash.exe")
 for name in ("test", "lint"):
     command = policy[name].replace("$LANTERN_PYTHON", '"' + Path(sys.executable).as_posix() + '"')
-    log = OUT / f"continuation3-{name}.log"
+    log = OUT / f"{label}-{name}.log"
     start = time.monotonic()
     with log.open("w", encoding="utf-8") as output:
         result = subprocess.run([record.get("shell", "bash"), "-c", command], cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT, timeout=policy["timeout_s"])
@@ -41,5 +44,5 @@ for name in ("test", "lint"):
 after = {str(p.relative_to(ROOT)).replace("\\", "/"): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 record["runtime_source_unchanged_during_checks"] = hashes == after
 record["passed"] = all(r["exit_code"] == 0 for r in record["results"]) and hashes == after
-(OUT / "continuation3-quality.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+(OUT / f"{label}-quality.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 raise SystemExit(0 if record["passed"] else 1)

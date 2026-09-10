@@ -59,12 +59,12 @@ An already running host Git command or external request cannot be revoked by
 heartbeat cancellation. Partial mirror refs or ambiguous provider effects require
 explicit reconciliation; they are not automatically replayed.
 
-Strict GitHub publication records a version-2 durable intent including run,
+Strict GitHub publication records a version-3 durable intent including run,
 repository ID, destination URL/base/work, desired commit, observed base commit and
 expected old remote commit. Repository/ref reads and bounded PR pagination verify
 the exact head/base repository, refs, revisions, PR identity and open state.
-Interrupted and confirmed duplicates reobserve the provider without replaying
-writes. A moved base/head, changed repository ID, contradictory PR, unavailable API
+Interrupted actions and confirmed duplicates reobserve the provider without
+repeating their writes. A moved base/head, changed repository ID, contradictory PR, unavailable API
 or ambiguous outcome holds. Old unbound aggregate intents stay held; they are not
 silently upgraded. Conditional Git pushes use the immutable desired commit and
 exact expected remote value, with no unconditional-force fallback. Publication
@@ -72,9 +72,12 @@ receipts/artifacts share target and ownership checks; the provider is observed
 again after review before opening the human gate. These are observations at a
 point in time, not a distributed atomic transaction with GitHub.
 
-The current aggregate branch-plus-PR effect intentionally holds partial success:
-a pushed branch without its matching PR is not automatically repaired. Separate
-versioned branch/PR intents are still needed for safe partial repair. Strict mode
+Separate fenced branch and PR intents precede each external action. After an
+interrupted branch write, recovery can confirm the observed branch and create the
+previously unattempted PR once. An existing intended or uncertain action without
+its expected provider result stays held; absence of that result cannot prove the
+request never ran. Version-1 and version-2 aggregate attempts also remain held:
+their missing child intents cannot authorize a new action. Strict mode
 omits optional external review posts, comments and labels without their own effect
 handling. Local review artifacts and human review ownership remain. Babysitting
 is centrally held in lease mode until dedicated maintenance ownership is approved

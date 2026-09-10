@@ -450,3 +450,64 @@ foundation acceptance. Security permits only the bounded local pilot; staging
 remains NO-GO.
 
 Status: IN PROGRESS (publication partial-repair follow-up; B–D approval pending)
+
+### Continuation 3 publication v3 — split effects and final checks
+
+Date: 2026-09-11 (Asia/Hong_Kong; receipts record UTC on September 10).
+
+Fresh publication now records separate fenced branch and PR intents under a
+version-3 parent. Recovery observes a completed branch and may create the PR
+only when its child intent never existed. An interrupted PR call is observed,
+never repeated. A child intent with an absent provider result remains held.
+Every legacy v1/v2 parent is refused before new child intents: those protocols
+cannot prove a missing child means its external operation never started.
+Destination, repository ID, base/head revisions, expected old remote ref and
+request hash remain bound. Conditional push, target/fence checks, final provider
+observation and human gate ownership are unchanged. No schema was added.
+
+Independent post-coding and security review found no new fix-now or high/critical
+findings. Their reports record 30 publication tests, 36 runtime tests, independent
+production-callback fault injections and security's lease-loss-before-POST
+control. The earlier partial-branch implementation debt is closed for fresh v3
+requests. This does not close positive live GitHub or full pipeline acceptance.
+
+| Evidence | Environment and exact result |
+|---|---|
+| `publication-v3-quality.json`, `publication-v3-test.log`, `publication-v3-lint.log` | Complete configured local commands: **571 unittest cases, 569 passed and two explicit skips**, plus standalone property scripts; test 183.265s, lint 1.641s; unchanged runtime source during checks. Windows symlink privilege and opt-in live Docker are the two skips; Docker ran separately below. |
+| `publication-split-postgres-proof.json` and matching `.py` | Actual disposable PostgreSQL at port 55432 and two actual controller-process kills, after branch write and after PR write. Git/GitHub operations are durable local-file simulations. Each recovery ends with exactly one branch write and one PR write, both child receipts confirmed, duplicate invocation does not replay, and the stale owner is refused. Existing validation approvals are unchanged. This executes the production split driver with real lease callbacks, not the entire production orchestration against GitHub. |
+| `github-v3-readonly-validation.json` | Actual configured bot, GitHub REST: repository/main GET 200, queried branch 404, PR GET 403 (`Resource not accessible by personal access token`). Observer holds; **zero provider mutations**. Repository ID 1344678260, main SHA `25bb11334b224f01e7ca81f6e96483a9aa2ad5d0`. |
+| `publication-v3-frozen-source.json` and `.log` | Actual Docker image `sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756`, one test passed in 117.678s. Positive command, manifest/source negatives, ignored dependency exclusion and mutable modify/test/restore versus read-only refusal pass. No Azure or database used. Manifest `8c049363b11f89c61f9aa5b7a5221d13df94a6d9970d8da5b584a80de3fd1998`; harness source fingerprint `d666a795620833921db1a5854824b71a8ff941689bf69f281209d77d90b4f724`. |
+| `publication-v3-memory.json` | Actual append_memory: coding row **57**, post-coding row **58** in original configured localhost:5432 `lantern` database. Runs/executions/approvals remain **12/23/8**, complete approval snapshot unchanged; memory count 34→36. No migration or substitute cluster. |
+| `retention-inventory.json` | Read-only inventory of the configured checkout root: eight legacy checkouts, **149,093,385 bytes**. All held without per-execution descriptors/shared retirement locks; no checkout or evidence deleted. Not an inventory of every temporary integration directory. |
+
+Final runtime SHA-256 values match the independent reviews and disposable crash
+proof: github_publication.py `d0b0b0d41cdfd74abc924361849a62f03e02abbc31ea8599a9c35816f314704e`,
+pipeline.py `a564fadefd812a855fe197f44d82680982b958ee45c3597782bfa9e874db75bf`,
+execution_leases.py `8693d056fd6daa506808bef6425ea9727fa09d40be30eddbb2bc4ac1c4825afd`.
+Full per-file identities are in the quality record. D20 build/report regenerated;
+fingerprint `d847da278368673a6d7a65a90d63a7a7a76f46e2ef722bc571b5163daca23bb0`,
+frozen plan coverage 1.00 (n=2), invalid acceptance 0/14, valid rejection 0/1.
+Unpaired suites remain n/a; no new Azure model measurement is claimed.
+
+The four recorded browser QA contexts and decoded videos from the preceding
+checkpoint still cover the unchanged Mission Control UI source hashes listed in
+`../04-qa-dev/report.md`. No UI files changed for v3; browser QA was not repeated
+for a backend-only effect split. Real-app and fixture provenance remain separate.
+QA-E6's event-clock/video-offset limitation remains recorded. These videos do not
+establish deployment-bound capture with requirement outcomes.
+
+Remaining blockers: approval of architecture contracts B–D; their implementation
+and race/transport/capture acceptance; an authorized GitHub test destination and
+bot PR permissions for positive live publication; full execution-linked external
+QA evidence. Retention deletion stays disabled. Existing legacy or ambiguous
+publication intents stay held. Configured database recovery is complete, but the
+underlying prior Windows startup exception is not diagnosed beyond its logs.
+Foundation acceptance is incomplete, so context-budget/structured-output Azure
+experiments remain deferred as requested. No human approval, merge or deployment
+was performed; staging remains **NO-GO**, with only the bounded local pilot allowed.
+
+Status: BLOCKED (remaining dependent architecture work; v3 increment complete)
+
+Do you approve local implementation of architecture contracts B–D in
+`../02-pre-coding/continuation-3-task-plan.md`, preserving every existing human
+gate and excluding configured-database migration and deployment?

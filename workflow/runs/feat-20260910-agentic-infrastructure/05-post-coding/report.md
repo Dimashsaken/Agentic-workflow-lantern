@@ -305,3 +305,106 @@ Open question: Do you approve the schema-free local contracts B–D in
 and evidence-deletion gates?
 
 Status: BLOCKED (complete foundation/formal stage); scoped publication review PASS-WITH-NOTES
+
+## Publication v3 split-intent follow-up — 2026-09-11
+
+- **Agent/author:** post-coding, independent reviewer.
+- **Scope:** new split-publication increment after checkpoint `da8a9ad`, on the
+  same branch with existing changes and unrelated `.codex/` preserved. The full
+  versus-main foundation review above remains applicable; this section examines
+  the new provider algorithm, production callbacks and ledger compatibility.
+- **Result:** PASS-WITH-NOTES for the scoped local v3 implementation. No new
+  fix-now finding. Complete foundation/formal stage and staging remain blocked.
+
+### Findings and debt disposition
+
+| ID | Area | Severity | Tag | Evidence and disposition |
+|---|---|---|---|---|
+| C3-R3 / LANTERN-DEBT-PUBLICATION-PARTIAL | Partial branch/PR recovery | prior major acceptance gap | debt-ticket — local v3 implementation resolved | `publish_split` now obtains separately fenced branch and PR intents before their respective provider mutations. Fresh provider observations may reconcile an existing branch effect; only a previously absent PR action can authorize one new POST. Existing intended/uncertain actions with no observed result hold. The 5 independent callback controls and supplied two real PostgreSQL/process-kill scenarios below verify the previously missing local recovery behavior. Actual GitHub positive validation remains a separate rollout prerequisite. |
+| C3-R4 / LANTERN-DEBT-EXECUTION-GC | Checkout/evidence retention | medium operational debt | debt-ticket — open | A read-only inventory is now supplied in `../03-coding/retention-inventory.json`; it holds legacy paths with no execution descriptor/shared retirement lock. Inventory is not cleanup. Approved retention semantics, implementation and race tests remain outstanding under contract D. |
+
+No fix-now finding was waived, and the earlier artifact-ordering and strict
+provider-review guards remain in the updated source. V1 and v2 aggregate keys
+are explicitly held before creating a v3 parent; no old ambiguous outcome is
+reinterpreted as a missing action. New v3 parent confirmation follows both action
+receipts. Confirmed parent reuse remains read-only and the final human gate still
+requires a fresh provider observation and target check after review.
+
+### Independent verification
+
+`publication-v3-probes.py` calls the actual pipeline `_publish_coding_branch`
+callback construction, `execution_leases.begin_effect` and effect confirmation/
+reconciliation functions. It injects in-memory SQL storage, fence assertions and
+GitHub/Git operations; it is explicitly not real database or provider validation.
+All **5 controls passed** in `publication-v3-probes.log`:
+
+- Wrong stored effect kind or canonical request hash is rejected before provider
+  mutation, for both branch and PR action keys.
+- A lost response after durable PR-intent insertion produces no POST; a later
+  attempt sees that intent and holds rather than replaying.
+- Stale ownership immediately after push prevents receipt confirmation and the
+  creation of a PR intent.
+- A changed handoff immediately after push likewise prevents receipt acceptance
+  and the next action.
+- An observed branch with no PR action creates the missing action once; the next
+  invocation re-observes and produces no second external effect.
+
+Independent configured-module reruns: **30 publication tests passed** in 1.918
+seconds (`publication-v3-tests.log`) and **36 runtime tests passed** in 4.805
+seconds (`publication-v3-runtime-tests.log`). The publication suite retains the
+actual temporary Git CAS test alongside simulated provider crash/duplicate tests;
+the runtime suite retains changed-target/gate and stale callback controls.
+Python 3.12.10 / Agents SDK 0.22.1; `git diff --check` passed. The integrator owns
+the final complete configured policy and eval run at the committed snapshot.
+
+| Reviewed source | SHA-256 |
+|---|---|
+| `tools/azure-runner/github_publication.py` | `d0b0b0d41cdfd74abc924361849a62f03e02abbc31ea8599a9c35816f314704e` |
+| `tools/azure-runner/pipeline.py` | `a564fadefd812a855fe197f44d82680982b958ee45c3597782bfa9e874db75bf` |
+| `tools/azure-runner/execution_leases.py` | `8693d056fd6daa506808bef6425ea9727fa09d40be30eddbb2bc4ac1c4825afd` |
+| `tools/azure-runner/test_github_publication.py` | `2c098027a34bd8f66a347c67e8d5e42af934e73a1e5b580b8e137448d8d9d9d2` |
+| `tools/azure-runner/test_execution_runtime.py` | `8eedaf800092eaa0fe736b163b421cea2db885f7e1ba4eb3255edb72108eb21c` |
+
+### Supplied integration evidence and remaining limits
+
+Inspected `../03-coding/publication-split-postgres-proof.py` and its JSON result.
+Two actual controller subprocesses were killed against real disposable PostgreSQL:
+one after the simulated branch write before receipt, one after the simulated PR
+write before receipt. Explicit disposable-operator recovery produced one branch
+write and one PR write per scenario; duplicate recovery added no write and the
+old owner could not start another action. Validation approval rows were unchanged;
+the isolated fixture created no approvals. Runtime hashes match this review.
+
+That driver invokes the production split algorithm and lease functions with its
+own bound callbacks, rather than the entire pipeline stage/parent/gate sequence.
+The independent controls above cover the production pipeline callback wiring.
+GitHub/Git provider state in the crash driver is an fsynced local-file simulation;
+it does not establish actual GitHub timing or service idempotency. No external
+write, schema change, approval, deployment or destructive cleanup was performed
+by this reviewer.
+
+Actual GitHub PR-list access remains blocked by the configured token's recorded
+403. Complete maintenance fencing, constrained external QA/deployment capture,
+retention and then context/output experiments remain outside this implemented
+increment. B–D approval is still unanswered; no dependent implementation or fake
+approval was introduced. Prior browser evidence retains its original source
+identity and does not need to be relabelled as new UI testing.
+
+### Durable learning and handoff
+
+The integrator recorded this learning through the actual bound `append_memory`
+tool on the populated configured database, post-coding row **58**, evidenced by
+`../03-coding/publication-v3-memory.json`. Runs/executions/approvals remain
+12/23/8 with an unchanged approval snapshot. This is manual engineering memory,
+not a fleet stage. Recorded learning: “2026-09-11: Absence of
+a per-action intent permits first execution only when every version of that
+protocol persists intent before its external call; legacy aggregate records and
+lost intent responses must remain held because absence of a provider result
+cannot prove the operation never started.” The prior row 55 remains valid and
+no rendered memory was hand-edited.
+
+Open question: Do you approve the schema-free local contracts B–D in
+`02-pre-coding/continuation-3-task-plan.md`, preserving the existing live rollout
+and evidence-deletion gates?
+
+Status: BLOCKED (complete foundation/formal stage); scoped v3 publication review PASS-WITH-NOTES

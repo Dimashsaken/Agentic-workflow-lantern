@@ -1,0 +1,74 @@
+{
+  "environment": "actual disposable PostgreSQL and two controller subprocess kills; GitHub/Git provider operations are durable local-file simulations",
+  "actual_github": false,
+  "database": "lantern_split_proof_859f9c56e6c7",
+  "scenarios": [
+    {
+      "killed_after": "branch durable simulated provider write; before receipt",
+      "effects_at_kill": [
+        {
+          "operation_key": "publish-v3:feat-20260910-split-crash-branch:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:branch",
+          "status": "intended"
+        }
+      ],
+      "effects_after_retry": [
+        {
+          "operation_key": "publish-v3:feat-20260910-split-crash-branch:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:branch",
+          "status": "confirmed"
+        },
+        {
+          "operation_key": "publish-v3:feat-20260910-split-crash-branch:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:pr",
+          "status": "confirmed"
+        }
+      ],
+      "provider_writes": {
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "pr": true,
+        "branch_writes": 1,
+        "pr_writes": 1
+      },
+      "duplicate_replayed": false,
+      "stale_owner_refused": true,
+      "gets_during_recovery": 20
+    },
+    {
+      "killed_after": "pr durable simulated provider write; before receipt",
+      "effects_at_kill": [
+        {
+          "operation_key": "publish-v3:feat-20260910-split-crash-pr:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:branch",
+          "status": "confirmed"
+        },
+        {
+          "operation_key": "publish-v3:feat-20260910-split-crash-pr:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:pr",
+          "status": "intended"
+        }
+      ],
+      "effects_after_retry": [
+        {
+          "operation_key": "publish-v3:feat-20260910-split-crash-pr:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:branch",
+          "status": "confirmed"
+        },
+        {
+          "operation_key": "publish-v3:feat-20260910-split-crash-pr:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:pr",
+          "status": "confirmed"
+        }
+      ],
+      "provider_writes": {
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "pr": true,
+        "branch_writes": 1,
+        "pr_writes": 1
+      },
+      "duplicate_replayed": false,
+      "stale_owner_refused": true,
+      "gets_during_recovery": 16
+    }
+  ],
+  "validation_approvals_unchanged": true,
+  "source_sha256": {
+    "github_publication.py": "d0b0b0d41cdfd74abc924361849a62f03e02abbc31ea8599a9c35816f314704e",
+    "execution_leases.py": "8693d056fd6daa506808bef6425ea9727fa09d40be30eddbb2bc4ac1c4825afd",
+    "pipeline.py": "a564fadefd812a855fe197f44d82680982b958ee45c3597782bfa9e874db75bf"
+  },
+  "passed": true
+}

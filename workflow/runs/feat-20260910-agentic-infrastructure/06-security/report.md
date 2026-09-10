@@ -310,3 +310,45 @@ Recommendation unchanged: **GO with conditions for the bounded local pilot; NO-G
 **Open question:** Do you approve the schema-free local contracts B–D in `02-pre-coding/continuation-3-task-plan.md`, preserving existing live rollout and evidence-deletion gates?
 
 Status: BLOCKED (full continuation / staging); bounded local pilot GO with conditions
+
+## V3 split publication defensive review — 2026-09-11 (Asia/Hong_Kong)
+
+**GO with conditions for the bounded local pilot; NO-GO for staging.** Reviewed the complete runtime/test diff after `da8a9ad`, including `github_publication.publish_split`, the pipeline parent/child intent callbacks and the supplied actual-process-kill PostgreSQL proof. No new unmitigated high or critical finding was identified. This supplement closes S3-4 for fresh v3 branch-only recovery within the stated evidence limits; it does not enable external publication, maintenance, transport or cleanup, and it grants no approval.
+
+### Findings and disposition
+
+| ID | Severity / status | Evidence | Mitigation / verified behavior |
+|---|---|---|---|
+| S3-4 | Medium, resolved for new v3 requests | `github_publication.py:216` journals branch and PR actions separately. `pipeline.py:1159` persists each action under the current target/handoff and lease before invoking its provider write; `:1166` rechecks before receipt acceptance. | A completed branch with no PR action permits one fresh PR action. An existing unresolved branch or PR intent never authorizes replay when its desired external result is absent. Actual disposable PostgreSQL and two killed controllers demonstrate one simulated branch write and one simulated PR write in each recovered scenario. |
+| S3-6 | Medium, retained compatibility hold | `pipeline.py:1084` refuses any v1/v2 parent intent before creating v3; v3's absence-of-child inference is valid only for its own persist-before-action protocol. The historical formats cannot prove that a missing PR child means no POST was started. | Keep v1/v2 effects held for explicit inspection. Never delete, rename or reset old effects to force v3 migration. Unit controls cover intended, uncertain and confirmed v2 holds. This safe compatibility restriction is not transparent legacy recovery. |
+| S3-5 / S3-P1–P4 | Medium acceptance limits / high design constraints, unchanged | B–D remain proposed and unimplemented; the actual bot token's PR-list check returned 403; full external execution-linked QA and retention acceptance remain incomplete. | Preserve offline pilot limits, pending architecture approval, human gate/merge ownership and staging NO-GO. No live GitHub mutation or context/output experiment is authorized by this review. |
+
+The parent canonical request remains bound to run, repository identity, base revision, branch, head and expected prior remote revision. Action requests add the branch/PR discriminator and retain the request hash. Branch updates use immutable-SHA conditional ref updates. A new owner can reconcile an old child's observed result; it cannot reissue an old child's ambiguous action. The missing-child condition is checked transactionally by `begin_effect`, so a racing owner that wins the intent prevents the other caller's POST. Parent receipt acceptance and the final pre-gate reobservation retain the previous target/fence controls. No approval rows or merge actions are introduced.
+
+### Independently executed controls
+
+- `python tools/azure-runner/test_github_publication.py`: **30 passed in 1.786 seconds**. Includes both crash boundaries, an existing uncertain action with absent provider result, missing-child race, stale owner and legacy-version refusal. Provider effects are mocked; existing CAS controls use actual disposable local Git repositories.
+- `python tools/azure-runner/test_execution_runtime.py`: **36 passed in 4.785 seconds**. Includes actual threaded callback dispatch with injected target/fence refusal before intent creation, plus the retained artifact and gate acceptance-order controls.
+- `python tools/azure-runner/test_execution_leases.py`: **8 passed in 0.188 seconds**; `test_recovery_acceptance.py`: **8 passed in 0.888 seconds**. These are local/injected checks, not live database evidence.
+- Additional independent injected control: lose the lease immediately after the PR intent is persisted and before the POST. The old caller emits **zero POSTs**; a new caller sees the existing intended PR and remains held with **zero POSTs**. This verifies the conservative gap between a recorded intent and a provider call.
+- `git diff --check`: passed. No DDL, dependency or lockfile change is present in this narrow increment. The parent owns refreshed configured checks/eval output after the final source snapshot.
+
+Inspected `03-coding/publication-split-postgres-proof.py` and its JSON rather than rerunning them. The proof creates and removes an explicitly disposable PostgreSQL database, uses the production split algorithm and lease operations, and actually kills two subprocess controllers after durable simulated branch/PR writes but before receipts. Both scenarios retain exactly **one branch write and one PR write**, reconcile child effects to confirmed, refuse stale ownership, and preserve the existing validation approval snapshot; no fixture approvals are created. Git/GitHub operations in this proof are durable local-file simulations. It does not execute the full pipeline callback stack, perform live GitHub writes, establish provider request quiescence, or change the configured database. The JSON hashes match this review cutoff.
+
+| Reviewed file | SHA-256 |
+|---|---|
+| `tools/azure-runner/github_publication.py` | `d0b0b0d41cdfd74abc924361849a62f03e02abbc31ea8599a9c35816f314704e` |
+| `tools/azure-runner/pipeline.py` | `a564fadefd812a855fe197f44d82680982b958ee45c3597782bfa9e874db75bf` |
+| `tools/azure-runner/execution_leases.py` | `8693d056fd6daa506808bef6425ea9727fa09d40be30eddbb2bc4ac1c4825afd` |
+| `tools/azure-runner/test_github_publication.py` | `2c098027a34bd8f66a347c67e8d5e42af934e73a1e5b580b8e137448d8d9d9d2` |
+| `tools/azure-runner/test_execution_runtime.py` | `8eedaf800092eaa0fe736b163b421cea2db885f7e1ba4eb3255edb72108eb21c` |
+
+### Deploy-day additions and memory
+
+The prior deploy-day checklist still applies. Before a later human activation: inventory all v1/v2 and v3 parent/child effects; preserve them during rollback; never downgrade an uncertain v3 action to the legacy publisher; verify final-source configured tests/evals and the exact target credentials; stop on any stale acceptance, changed destination, missing effect binding or unexplained duplicate write. A held intended action may have been persisted before any call, but absence of its result is deliberately not treated as proof that replay is safe.
+
+The actual security `append_memory` postcondition remains satisfied by configured row **54**, as documented above; this is a continued review of the same engineering work, not a new fleet execution. No rendered memory edit or new insert is claimed. All runtime edits were made by the implementation owner; this reviewer changed only this report.
+
+**Open question:** Do you approve the schema-free local contracts B–D in `02-pre-coding/continuation-3-task-plan.md`, preserving existing live rollout and evidence-deletion gates?
+
+Status: BLOCKED (full continuation / staging); bounded local pilot GO with conditions

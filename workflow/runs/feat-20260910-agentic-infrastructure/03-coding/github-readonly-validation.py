@@ -40,12 +40,12 @@ if status == 200:
         request = {"run_id": "manual-readonly-publication-probe", "repo": origin, "base": base,
                    "work": "feat/20260910-agentic-infrastructure", "branch": "feat/20260910-agentic-infrastructure", "head_sha": ref["object"]["sha"]}
         try:
-            github.prepare_request(read_api, request)
+            github.prepare_request(read_api, request, 3)
         except github.PublicationHeld as error:
             record["observer_result"] = "held"
             record["observer_reason"] = str(error)
         else:
             record["observer_result"] = "observation prepared; no publication attempted"
 record["source_sha256"] = {name: hashlib.sha256((ROOT / "tools/azure-runner" / name).read_bytes()).hexdigest() for name in ("github_publication.py", "pipeline.py")}
-Path(__file__).with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+Path(__file__).with_name("github-v3-readonly-validation.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(record, indent=2))

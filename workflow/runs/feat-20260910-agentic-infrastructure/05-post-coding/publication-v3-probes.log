@@ -1,0 +1,10 @@
+test_actual_callbacks_reject_wrong_kind_and_request_before_provider_effect (__main__.ProductionCallbacks.test_actual_callbacks_reject_wrong_kind_and_request_before_provider_effect) ... ok
+test_durable_missing_pr_response_never_authorizes_post_on_retry (__main__.ProductionCallbacks.test_durable_missing_pr_response_never_authorizes_post_on_retry) ... ok
+test_production_callbacks_repair_missing_action_and_reobserve_duplicates (__main__.ProductionCallbacks.test_production_callbacks_repair_missing_action_and_reobserve_duplicates) ... ok
+test_stale_owner_after_push_cannot_confirm_or_create_pr_intent (__main__.ProductionCallbacks.test_stale_owner_after_push_cannot_confirm_or_create_pr_intent) ... ok
+test_target_change_after_push_prevents_receipt_and_missing_action (__main__.ProductionCallbacks.test_target_change_after_push_prevents_receipt_and_missing_action) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.340s
+
+OK
