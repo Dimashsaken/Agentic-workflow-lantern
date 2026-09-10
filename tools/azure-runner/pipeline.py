@@ -29,6 +29,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,6 +57,8 @@ import factory  # noqa: E402  D17: quality gate + fix loop for the in-process co
 import builders  # noqa: E402  D18: stage 3 fans out into scoped parallel builders
 import review   # noqa: E402  D19: review loop after publish + merge babysitter
 import intake  # noqa: E402  D20: the debug lifecycle — bug runs, their envelopes, the shepherd
+import execution_runtime as ownership
+import tool_execution
 
 PIPELINE_VERSION = "3"  # v3 (D17): story stage + validation execution; v2: stage 1 diverge/design split
 POLL_SECONDS = 5
@@ -333,14 +336,19 @@ async def record_usage(conn, exec_id: int, usage: dict, model: str | None = None
     """Write one execution's token counts onto its stage_executions row (host-side)."""
     if not usage:
         return
-    await conn.execute(
-        """UPDATE stage_executions
-           SET model = coalesce($1, model), requests = $2, input_tokens = $3,
-               cached_input_tokens = $4, output_tokens = $5, total_tokens = $6
-           WHERE id = $7""",
-        usage.get("model", model), usage.get("requests"), usage.get("input_tokens"),
-        usage.get("cached_input_tokens"), usage.get("output_tokens"),
-        usage.get("total_tokens"), exec_id)
+    if ownership.enabled():
+        current = ownership.STAGE.get()
+        if current is None or current.lease.execution_id != exec_id:
+            raise ownership.leases.LeaseLost("usage does not belong to the bound execution")
+    async with ownership.mutation(conn, stage=True):
+        await conn.execute(
+            """UPDATE stage_executions
+               SET model = coalesce($1, model), requests = $2, input_tokens = $3,
+                   cached_input_tokens = $4, output_tokens = $5, total_tokens = $6
+               WHERE id = $7""",
+            usage.get("model", model), usage.get("requests"), usage.get("input_tokens"),
+            usage.get("cached_input_tokens"), usage.get("output_tokens"),
+            usage.get("total_tokens"), exec_id)
 
 
 # Per-key upper bounds match the column types: requests is int4, tokens are bigint.
@@ -416,12 +424,42 @@ def est_cost_rows(rows) -> float:
 
 async def insert_artifact(conn, run_id: str, stage: str, kind: str, uri: str,
                           metadata: dict | None = None) -> None:
-    await conn.execute(
-        "INSERT INTO artifacts (run_id, stage, kind, uri, metadata) VALUES ($1, $2, $3, $4, $5)",
-        run_id, stage, kind, uri, json.dumps(metadata) if metadata else None)
+    metadata = dict(metadata or {})
+    if ownership.enabled():
+        parent, child = ownership.RUN.get(), ownership.STAGE.get()
+        if parent is None or parent.lease.run_id != run_id:
+            raise ownership.leases.LeaseLost("artifact has no matching run ownership")
+        if child is not None:
+            if child.lease.run_id != run_id:
+                raise ownership.leases.LeaseLost("artifact execution belongs to another run")
+            metadata.update(stage_execution_id=child.lease.execution_id,
+                            lease_fence=child.lease.fence)
+    async with ownership.mutation(conn, stage=ownership.enabled() and ownership.STAGE.get() is not None):
+        if ownership.enabled() and ownership.STAGE.get() is not None:
+            actual_stage = await conn.fetchval("SELECT stage FROM stage_executions WHERE id=$1", ownership.STAGE.get().lease.execution_id)
+            if not actual_stage or factory.stage_dir(actual_stage) != factory.stage_dir(stage):
+                raise ownership.leases.LeaseLost("artifact stage differs from its owned execution")
+        await conn.execute(
+            "INSERT INTO artifacts (run_id, stage, kind, uri, metadata) VALUES ($1, $2, $3, $4, $5)",
+            run_id, stage, kind, uri, json.dumps(metadata) if metadata else None)
 
 
-async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str) -> None:
+def media_candidates(root: Path, floor_ts: float) -> list[Path]:
+    """Collect only ordinary files after all worker writers have been stopped."""
+    from tool_policy import confined
+    files = []
+    for candidate in root.rglob("*.webm"):
+        path = confined(root, candidate.relative_to(root).parts)
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError("media must be an ordinary file with one link")
+        if info.st_size > 0 and info.st_mtime >= floor_ts:
+            files.append(path)
+    return sorted(files, key=lambda path: path.stat().st_mtime)
+
+
+async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str,
+                             *, media_root: Path | None = None) -> None:
     """Ship THIS attempt's videos to the artifact bucket, then delete them locally.
 
     Runs on the HOST after postconditions pass — sandboxes have no AWS credentials.
@@ -448,9 +486,7 @@ async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str) -
         tail = execution_key.rsplit(":", 1)[-1]
         attempt = int(tail) if tail.isdigit() else 1
         stage_path = REPO / "workflow" / "runs" / run_id / sdir
-        media = sorted((p for p in stage_path.rglob("*.webm") if p.is_file()
-                        and p.stat().st_size > 0 and p.stat().st_mtime >= floor_ts),
-                       key=lambda p: p.stat().st_mtime)
+        media = media_candidates(media_root or stage_path, floor_ts)
         if not media:
             return
         if not ARTIFACT_BUCKET:
@@ -463,11 +499,16 @@ async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str) -
             name = f"{run_id}--{sdir}--session-{session}.webm"
             uri = f"s3://{ARTIFACT_BUCKET}/lantern/{run_id}/{sdir}/attempt-{attempt}/{name}"
             try:
-                proc = await asyncio.create_subprocess_exec(
-                    "aws", "s3", "cp", str(f), uri,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-                out, _ = await proc.communicate()
-                err = None if proc.returncode == 0 else out.decode(errors="replace")[-300:]
+                with tempfile.TemporaryDirectory(prefix="lantern-upload-") as temporary:
+                    staged = Path(temporary) / "recording.webm"
+                    shutil.copyfile(f, staged)
+                    with staged.open("rb") as recorded:
+                        digest = hashlib.file_digest(recorded, "sha256").hexdigest()
+                    proc = await asyncio.create_subprocess_exec(
+                        "aws", "s3", "cp", str(staged), uri,
+                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+                    out, _ = await proc.communicate()
+                    err = None if proc.returncode == 0 else out.decode(errors="replace")[-300:]
             except OSError as e:          # aws CLI missing / not on the unit's PATH
                 err = str(e)
             if err is not None:
@@ -476,7 +517,8 @@ async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str) -
                 continue
             await insert_artifact(conn, run_id, sdir, "qa_video", uri,
                                   {"local_name": f.name, "bytes": f.stat().st_size,
-                                   "attempt": attempt, "session": session})
+                                   "attempt": attempt, "session": session,
+                                   "execution_key": execution_key, "sha256": digest})
             f.unlink()   # .gitignore also excludes *.webm — belt and braces
             uploaded += 1
         rows = await conn.fetch(
@@ -500,22 +542,40 @@ async def upload_stage_media(conn, run_id: str, sdir: str, execution_key: str) -
 
 # ── stage execution ──────────────────────────────────────────────────────────
 
+INPROCESS_STAGE_LOCK = asyncio.Lock()
+
+
 async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
+    # Legacy prompt helpers still use process environment for product context.
+    # Serialize controller stages until those helpers are fully context-local.
+    async with INPROCESS_STAGE_LOCK:
+        async with ownership.stage_scope(conn, connect, run_id, stage, runner) as execution:
+            await _run_agent_stage(conn, run_id, stage, runner, execution)
+
+
+async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution=None) -> None:
     role = role_for_stage(stage)                      # D18: '03-coding.<x>' is coding
     sdir = STAGE_DIR.get(stage) or factory.stage_dir(stage)   # D18: builder keys are dynamic
-    attempt = await conn.fetchval(
-        "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
-        run_id, stage,
-    )
-    execution_key = f"{run_id}:{stage}:{attempt}"
-    exec_id = await conn.fetchval(
-        """INSERT INTO stage_executions (run_id, stage, runner, attempt, status, idempotency_key, heartbeat_at)
-           VALUES ($1, $2, $3, $4, 'running', $5, now()) RETURNING id""",
-        run_id, stage, runner, attempt, execution_key,
-    )
+    if execution is not None:
+        attempt, execution_key, exec_id = execution
+    else:
+        attempt = await conn.fetchval(
+            "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
+            run_id, stage,
+        )
+        execution_key = f"{run_id}:{stage}:{attempt}"
+        exec_id = await conn.fetchval(
+            """INSERT INTO stage_executions (run_id, stage, runner, attempt, status, idempotency_key, heartbeat_at)
+               VALUES ($1, $2, $3, $4, 'running', $5, now()) RETURNING id""",
+            run_id, stage, runner, attempt, execution_key,
+        )
     mcp_servers = []
     journal = factory.ExecutionJournal(run_id, stage, execution_key, "", "")
     selected_model = None
+    worker = None
+    worker_token = None
+    durable = None
+    accepted_provenance = None
     try:
         await log_event(conn, run_id, "orchestrator", "stage_started",
                         {"stage": stage, "attempt": attempt, "runner": runner})
@@ -536,7 +596,7 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
                                " [--working-branch …]` or in Mission Control at "
                                f"/run/{run_id}/repo")
         if repo:
-            checkout = await asyncio.to_thread(product_checkout, repo, branch, run_id, work)
+            checkout = await asyncio.to_thread(product_checkout, repo, branch, run_id, work, execution_key)
             os.environ["LANTERN_PRODUCT_DIR"] = str(checkout)
             os.environ["LANTERN_PRODUCT_ORIGIN"], os.environ["LANTERN_PRODUCT_BRANCH"] = repo, branch
             # D15: EVERY stage learns the working branch, not just coding — that is what
@@ -554,6 +614,19 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         problem = check_stage_inputs(run_id, stage)
         if problem:
             raise RuntimeError(problem)
+        if tool_execution.enabled():
+            if stage in PAPER_STAGES:
+                raise RuntimeError("isolated tools cannot connect to the desktop Paper service")
+            if not repo:
+                raise RuntimeError("isolated tools require a disposable product checkout")
+            from isolated_tools import IsolatedToolWorker
+            media = REPO / "workflow/runs" / run_id / sdir / "media" / hashlib.sha256(execution_key.encode()).hexdigest()[:16]
+            media.mkdir(parents=True, exist_ok=True)
+            worker = IsolatedToolWorker(checkout, media, execution_key, SANDBOX_IMAGE,
+                                        writable_product=role == "coding",
+                                        protected_roots=[Path(__file__).parent])
+            await asyncio.to_thread(worker.start)
+            worker_token = tool_execution.CURRENT.set(worker)
         if role in BROWSER_ROLES:
             mcp_servers.append(playwright_mcp_server(run_id, stage))
         paper = None
@@ -577,13 +650,19 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
                    "reply with a plan — start calling tools now and keep working until the "
                    "report is on disk and append_memory has been called.")
         journal = factory.ExecutionJournal(run_id, stage, execution_key, agent.instructions, kickoff)
+        import durable_execution
+        if durable_execution.enabled():
+            durable = durable_execution.DurableHooks(
+                run_id, execution_key,
+                on_usage=lambda usage: record_usage(conn, exec_id, usage, selected_model))
 
         async def run_turn(text: str):
             # D23: same retry policy as the container path — a throttled builder is a
             # retriable transport failure, not a failed stage.
             return await factory.with_retry(
                 lambda: journal.attempt(lambda: Runner.run(agent, input=text, session=session,
-                                                          max_turns=max_turns_for(role))),
+                                                          max_turns=max_turns_for(role),
+                                                          **({"hooks": durable} if durable else {}))),
                 on_retry=lambda n, of, e, d: print(
                     f"[{run_id}] retry {n}/{of} after {type(e).__name__} — {d:.1f}s"))
 
@@ -600,6 +679,23 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
             results = [await run_turn(kickoff)]
         result = results[-1]
         final = str(result.final_output)
+        if worker is not None:
+            # End every model-controlled writer before accepting/exporting files.
+            # A fresh, never-started worker object permits only the controller's
+            # subsequent ephemeral Git inspections; each command removes itself.
+            cleanup = await asyncio.gather(*(s.cleanup() for s in mcp_servers), return_exceptions=True)
+            mcp_servers.clear()
+            for error in cleanup:
+                if isinstance(error, BaseException):
+                    raise error
+            await asyncio.to_thread(worker.stop)
+            inspection = IsolatedToolWorker(worker.product_root, worker.output_root,
+                execution_key, worker.image_id, writable_product=role == "coding",
+                protected_roots=[Path(__file__).parent])
+            inspection.image_id = worker.image_id
+            tool_execution.CURRENT.reset(worker_token)
+            worker = inspection
+            worker_token = tool_execution.CURRENT.set(worker)
         # D14: bundle the committed branch into the run folder while the checkout exists.
         finalize_problems = finalize_coding(run_id, stage) if role == "coding" else []
 
@@ -608,6 +704,8 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         missing = await check_postconditions(conn, role, run_id, stage, execution_key)
         if missing:
             raise RuntimeError("postconditions failed: " + "; ".join(missing))
+        if role == "coding":
+            accepted_provenance = gate.get("provenance")
     except BaseException as exc:
         if journal is not None:
             journal.failed(exc, model_attempt=False)
@@ -617,7 +715,11 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
         try:
             if journal is not None:
                 journal.flush()
-                await record_usage(conn, exec_id, journal.usage, selected_model)
+                usage = dict(journal.usage)
+                if durable is not None:
+                    for key, value in durable.usage.items():
+                        usage[key] = max(usage.get(key) or 0, value)
+                await record_usage(conn, exec_id, usage, selected_model)
         except BaseException as error:
             if primary_error is None:
                 journal.failed(error, model_attempt=False)
@@ -634,27 +736,55 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
                             raise error
                         print(f"[{run_id}] MCP cleanup failed: {factory.redact(str(error))}", file=sys.stderr)
             finally:
-                for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_ORIGIN", "LANTERN_PRODUCT_BRANCH",
-                            "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_PRODUCT_WRITABLE",
-                            "LANTERN_CODING_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
-                    os.environ.pop(var, None)   # cleanup even if ledger or MCP fails
+                try:
+                    if worker is not None:
+                        await asyncio.to_thread(worker.stop)
+                finally:
+                    if worker_token is not None:
+                        tool_execution.CURRENT.reset(worker_token)
+                    for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_ORIGIN", "LANTERN_PRODUCT_BRANCH",
+                                "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_PRODUCT_WRITABLE",
+                                "LANTERN_CODING_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
+                        os.environ.pop(var, None)   # cleanup even if ledger or MCP fails
 
-    await upload_stage_media(conn, run_id, sdir, execution_key)
+    await upload_stage_media(conn, run_id, sdir, execution_key,
+                             **({"media_root": worker.output_root} if worker else {}))
 
     # D18: a builder's report is in its own subdir — point the artifact row at the file
     # that exists, not at the stage report the integrator will write later.
     report = f"workflow/runs/{run_id}/{factory.exec_dir(sdir, factory.builder_of(stage))}/report.md"
     await insert_artifact(conn, run_id, sdir, "report", report)
+    if accepted_provenance and accepted_provenance.get("status") == "verified":
+        await insert_artifact(conn, run_id, sdir, "execution_evidence",
+                              accepted_provenance["manifest"]["path"],
+                              {"execution_key": execution_key, **accepted_provenance})
     if stage == "01-ui-ux.design":
         await register_design_artifacts(conn, run_id, sdir)
-    await conn.execute(
-        "UPDATE stage_executions SET status = 'succeeded', output = $1, finished_at = now() WHERE id = $2",
-        json.dumps({"final_output": final[-4000:], "report": report}), exec_id,
-    )
+    async with ownership.mutation(conn, stage=True, finish=True):
+        await conn.execute(
+            "UPDATE stage_executions SET status = 'succeeded', output = $1, finished_at = now() WHERE id = $2",
+            json.dumps({"final_output": final[-4000:], "report": report,
+                        "provenance": accepted_provenance,
+                        "diagnostics": str(durable.path) if durable else None}), exec_id,
+        )
+    if durable is not None:
+        try:
+            durable.finish(True)
+        except OSError as exc:
+            # The DB success is already committed; report the missing terminal
+            # diagnostic without rewriting that established lifecycle outcome.
+            print(f"[{run_id}] terminal diagnostic unavailable: {factory.redact(str(exc))}", file=sys.stderr)
     await log_event(conn, run_id, f"agent:{role}", "stage_succeeded", {"stage": stage})
 
 
 async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> None:
+    if ownership.enabled() or tool_execution.enabled() or os.environ.get("LANTERN_TRUSTED_EVIDENCE") == "1":
+        raise RuntimeError("leases, isolated tools and trusted evidence require the host controller executor (LANTERN_EXECUTOR=isolated)")
+    async with ownership.stage_scope(conn, connect, run_id, stage, runner) as execution:
+        await _run_agent_stage_docker(conn, run_id, stage, runner, execution)
+
+
+async def _run_agent_stage_docker(conn, run_id: str, stage: str, runner: str, execution=None) -> None:
     """One stage in one ephemeral sandbox container (D10/D12).
 
     The host side owns the DB row lifecycle and the postcondition verdict; the
@@ -664,16 +794,19 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     """
     role = role_for_stage(stage)                      # D18: '03-coding.<x>' is coding
     sdir = STAGE_DIR.get(stage) or factory.stage_dir(stage)   # D18: builder keys are dynamic
-    attempt = await conn.fetchval(
-        "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
-        run_id, stage,
-    )
-    execution_key = f"{run_id}:{stage}:{attempt}"
-    exec_id = await conn.fetchval(
-        """INSERT INTO stage_executions (run_id, stage, runner, attempt, status, idempotency_key, heartbeat_at)
-           VALUES ($1, $2, $3, $4, 'running', $5, now()) RETURNING id""",
-        run_id, stage, runner, attempt, execution_key,
-    )
+    if execution is not None:
+        attempt, execution_key, exec_id = execution
+    else:
+        attempt = await conn.fetchval(
+            "SELECT coalesce(max(attempt), 0) + 1 FROM stage_executions WHERE run_id = $1 AND stage = $2",
+            run_id, stage,
+        )
+        execution_key = f"{run_id}:{stage}:{attempt}"
+        exec_id = await conn.fetchval(
+            """INSERT INTO stage_executions (run_id, stage, runner, attempt, status, idempotency_key, heartbeat_at)
+               VALUES ($1, $2, $3, $4, 'running', $5, now()) RETURNING id""",
+            run_id, stage, runner, attempt, execution_key,
+        )
     await log_event(conn, run_id, "orchestrator", "stage_started",
                     {"stage": stage, "attempt": attempt, "runner": runner, "executor": "docker"})
 
@@ -752,7 +885,7 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     # container self-check, this host re-check, and the in-process path.
     verify_product = None
     if repo and stage in {"00-story.scout", "03-coding.review", "05-post-coding.validate"}:
-        verify_product = await asyncio.to_thread(product_checkout, repo, branch, run_id, work)
+        verify_product = await asyncio.to_thread(product_checkout, repo, branch, run_id, work, execution_key)
     missing = await check_postconditions(conn, role, run_id, stage, execution_key, verify_product)
     if missing:
         raise RuntimeError("postconditions failed (host re-check): " + "; ".join(missing))
@@ -763,10 +896,11 @@ async def run_agent_stage_docker(conn, run_id: str, stage: str, runner: str) -> 
     await insert_artifact(conn, run_id, sdir, "report", report)
     if stage == "01-ui-ux.design":
         await register_design_artifacts(conn, run_id, sdir)
-    await conn.execute(
-        "UPDATE stage_executions SET status = 'succeeded', output = $1, finished_at = now() WHERE id = $2",
-        json.dumps({"final_output": tail, "report": report}), exec_id,
-    )
+    async with ownership.mutation(conn, stage=True, finish=True):
+        await conn.execute(
+            "UPDATE stage_executions SET status = 'succeeded', output = $1, finished_at = now() WHERE id = $2",
+            json.dumps({"final_output": tail, "report": report}), exec_id,
+        )
     await log_event(conn, run_id, f"agent:{role}", "stage_succeeded", {"stage": stage})
 
 
@@ -851,7 +985,7 @@ def _open_or_find_pr(owner: str, name: str, branch: str, base: str, title: str, 
     return {"pr_url": pr["html_url"], "pr_number": pr["number"], "pr_reused": False}
 
 
-def _publish_branch(run_id: str, repo: str, base: str, work: str = "") -> dict:
+def _publish_branch(run_id: str, repo: str, base: str, work: str = "", expected_head: str = "") -> dict:
     """Verify the coding handoff against the host mirror, land the branch in it, push it
     to the origin (https remotes; a local-path product repo is updated in place) and
     open or reuse the pull request. Returns the code_complete payload. Sync, testable."""
@@ -860,6 +994,8 @@ def _publish_branch(run_id: str, repo: str, base: str, work: str = "") -> dict:
     if not hf.is_file():
         raise RuntimeError("no 03-coding/handoff.json — the coding stage produced no branch")
     handoff = json.loads(hf.read_text(encoding="utf-8"))
+    if expected_head and handoff.get("head_sha") != expected_head:
+        raise RuntimeError("coding handoff changed after publication intent")
     branch = str(handoff.get("branch") or "")
     expected = work_branch(run_id, work)
     if branch != expected:
@@ -923,11 +1059,51 @@ def _publish_branch(run_id: str, repo: str, base: str, work: str = "") -> dict:
 
 
 async def publish_coding_branch(conn, run_id: str) -> dict:
+    if not ownership.enabled():
+        return await _publish_coding_branch(conn, run_id)
+    # Publication is a real host execution with its own lease and stable logical
+    # operation key. A duplicate intent is never permission to issue the call again.
+    async with ownership.stage_scope(conn, connect, run_id, "03-coding.publish", "host") as execution:
+        handoff = _read_handoff(run_id, "03-coding") or {}
+        head = handoff.get("head_sha")
+        if not head:
+            raise RuntimeError("publication requires a committed coding handoff")
+        lease = ownership.STAGE.get().lease
+        key = f"publish:{run_id}:{head}"
+        repo, base = await product_target(conn, run_id)
+        work = await product_work_branch(conn, run_id)
+        request = {"run_id": run_id, "head_sha": head, "branch": handoff.get("branch"),
+                   "repo": repo, "base": base, "work": work}
+        effect = await ownership.leases.begin_effect(conn, lease, key, "publish_branch", request)
+        if not effect.created:
+            if effect.status != "confirmed":
+                raise RuntimeError("publication outcome needs reconciliation; refusing duplicate effect")
+            result = effect.result
+        else:
+            try:
+                result = await _publish_coding_branch(conn, run_id, expected=request)
+                await ownership.leases.confirm_effect(conn, lease, key, result.get("pr_url"), result)
+            except ownership.leases.LeaseLost:
+                raise
+            except Exception:
+                await ownership.leases.mark_effect_uncertain(conn, lease, key)
+                raise
+        async with ownership.mutation(conn, stage=True, finish=True):
+            await conn.execute("UPDATE stage_executions SET status='succeeded', finished_at=clock_timestamp() WHERE id=$1", execution[2])
+        return result
+
+
+async def _publish_coding_branch(conn, run_id: str, expected: dict | None = None) -> dict:
     repo, base = await product_target(conn, run_id)
     if not repo:
         raise RuntimeError("auto-coding produced a branch but the run has no product repo to push to")
     work = await product_work_branch(conn, run_id)
-    payload = await asyncio.to_thread(_publish_branch, run_id, repo, base, work)
+    if expected:
+        if (repo, base, work) != (expected["repo"], expected["base"], expected["work"]):
+            raise RuntimeError("publication target changed after recorded intent")
+        payload = await asyncio.to_thread(_publish_branch, run_id, repo, base, work, expected["head_sha"])
+    else:
+        payload = await asyncio.to_thread(_publish_branch, run_id, repo, base, work)
     await insert_artifact(conn, run_id, "03-coding", "coding_branch", payload["bundle"],
                           {"branch": payload["branch"], "head_sha": payload["head_sha"],
                            "commits": payload["commit_count"]})
@@ -1111,6 +1287,11 @@ async def advance(conn, run_id: str, stage: str) -> None:
 
 
 async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
+    async with ownership.run_scope(conn, connect, run_id):
+        await _step_run(conn, run_id, runner)
+
+
+async def _step_run(conn, run_id: str, runner: str = "ec2") -> None:
     """Execute the current stage of one claimed run, then gate or advance."""
     row = await conn.fetchrow("SELECT current_stage, coding_mode FROM runs WHERE id = $1", run_id)
     stage = row["current_stage"]
@@ -1137,20 +1318,26 @@ async def step_run(conn, run_id: str, runner: str = "ec2") -> None:
             external_ref = extra.get("pr_url")
         else:  # human stage: nothing to execute — the gate IS the stage
             print(f"[{run_id}] {stage} is a human stage (the developer's own session).")
-        if intake.is_bug_run(run_id):   # D20: the debug lifecycle gates/advances from its envelopes
-            await intake.after_stage(conn, run_id, stage, gate, extra, external_ref)
-        elif gate:
-            await open_gate(conn, run_id, stage, gate, extra, external_ref)
-        else:
-            await advance(conn, run_id, stage)
+        async with ownership.mutation(conn, finish=True):
+            if intake.is_bug_run(run_id):   # D20: debug lifecycle contracts are unchanged
+                await intake.after_stage(conn, run_id, stage, gate, extra, external_ref)
+            elif gate:
+                await open_gate(conn, run_id, stage, gate, extra, external_ref)
+            else:
+                await advance(conn, run_id, stage)
+    except ownership.leases.LeaseLost:
+        # Recovery owns the expired attempt. A stale dispatcher cannot mark a
+        # replacement failed or move its gate after losing its fence.
+        raise
     except Exception as e:  # noqa: BLE001 — orchestrator must not die with a claim held
-        await conn.execute(
-            """UPDATE stage_executions SET status = 'failed', error = $1, error_class = $4, finished_at = now()
-               WHERE run_id = $2 AND stage = $3 AND status = 'running'""",
-            factory.redact(str(e))[:4000], run_id, stage, factory.classify_error(e))
-        await conn.execute(
-            "UPDATE runs SET status = 'failed', updated_at = now() WHERE id = $1", run_id)
-        await log_event(conn, run_id, "orchestrator", "stage_failed", {"stage": stage, "error": factory.redact(str(e))[:500]})
+        async with ownership.mutation(conn, finish=True):
+            await conn.execute(
+                """UPDATE stage_executions SET status = 'failed', error = $1, error_class = $3, finished_at = now()
+                   WHERE run_id = $2 AND status = 'running'""",
+                factory.redact(str(e))[:4000], run_id, factory.classify_error(e))
+            await conn.execute(
+                "UPDATE runs SET status = 'failed', updated_at = now() WHERE id = $1", run_id)
+            await log_event(conn, run_id, "orchestrator", "stage_failed", {"stage": stage, "error": factory.redact(str(e))[:500]})
         print(f"[{run_id}] {stage} FAILED: {e}\n  rework, then: python pipeline.py retry {run_id}", file=sys.stderr)
     await render_runboard(conn)
 
@@ -1167,8 +1354,9 @@ async def claim_run(conn, runner: str) -> str | None:
     The claim marks the run 'executing' — without that, a daemon running N>1 slots
     (or a second tick during a long stage) would claim the same run twice; the old
     single-slot loop was only safe because it executed synchronously. The status
-    is overwritten by every completion path (gate/advance/fail); a daemon crash is
-    recovered by the startup requeue in cmd_daemon.
+    is overwritten by every completion path (gate/advance/fail). Lease-enabled
+    dispatchers hold expired attempts for recovery; startup never blanket-requeues
+    another process's executing work.
     """
     stages = [s for s, r in STAGE_RUNNER.items() if r == runner]
     async with conn.transaction():
@@ -1177,6 +1365,8 @@ async def claim_run(conn, runner: str) -> str | None:
                ORDER BY updated_at FOR UPDATE SKIP LOCKED LIMIT 1""", stages)
         if not row:
             return None
+        if ownership.enabled():
+            return await ownership.claim(conn, row["id"])
         await conn.execute(
             "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1", row["id"])
         return row["id"]
@@ -1266,13 +1456,32 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
                     waiting_on = row["current_stage"]
                 await asyncio.sleep(POLL_SECONDS)
                 continue
-            claimed = await conn.execute(
-                "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1 AND status = 'running'",
-                run_id)
-            if claimed.endswith(" 0"):         # a daemon won the race — watch instead
+            if ownership.enabled():
+                claimed = await ownership.claim(conn, run_id)
+            else:
+                claimed = await conn.execute(
+                    "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1 AND status = 'running'",
+                    run_id)
+            if not claimed or claimed.endswith(" 0"):  # another daemon won
                 continue
             await step_run(conn, run_id, local)
     await conn.close()
+
+
+async def recover_expired_runs(conn):
+    recovered = await ownership.leases.recover_expired(conn)
+    if tool_execution.enabled():
+        from isolated_tools import cleanup_execution
+        for run in recovered:
+            for execution_id in run["execution_ids"]:
+                key = await conn.fetchval("SELECT idempotency_key FROM stage_executions WHERE id=$1 AND status='failed'", execution_id)
+                if key:
+                    try:
+                        await asyncio.to_thread(cleanup_execution, key)
+                    except Exception as exc:
+                        await log_event(conn, run["run_id"], "orchestrator", "worker_cleanup_failed",
+                                        {"execution_id": execution_id, "error": factory.redact(str(exc))})
+    return recovered
 
 
 async def cmd_daemon(runner: str) -> None:
@@ -1286,12 +1495,10 @@ async def cmd_daemon(runner: str) -> None:
     conn = await connect()
     if runner == "workstation" and not await paper_reachable():
         sys.exit(PAPER_PREFLIGHT_HINT)  # fail fast at startup, never mid-run
-    # Crashed-daemon recovery: with one daemon per runner, any of OUR stages still
-    # marked 'executing' at startup is an orphan from a dead process — requeue it.
-    my_stages = [s for s, r in STAGE_RUNNER.items() if r == runner]
-    await conn.execute(
-        """UPDATE runs SET status = 'running', updated_at = now()
-           WHERE status = 'executing' AND current_stage = ANY($1::text[])""", my_stages)
+    # A new process is not proof that every other worker died. Only expired
+    # ownership may be recovered; legacy unleased work is held for reconciliation.
+    if ownership.enabled():
+        await recover_expired_runs(conn)
     print(f"lantern orchestrator daemon [{runner}] executor={EXECUTOR} "
           f"concurrency={MAX_CONCURRENCY} — polling every {POLL_SECONDS}s")
 
@@ -1320,7 +1527,11 @@ async def cmd_daemon(runner: str) -> None:
     try:
         while True:
             slots = {t for t in slots if not t.done()}
-            if runner == "ec2" and review.babysit_due():   # D19: merge babysitter, own slot + connection
+            if ownership.enabled():
+                await recover_expired_runs(conn)
+            if runner == "ec2" and review.babysit_due() and not ownership.enabled():
+                # Existing babysitting starts from waiting_gate. Until it owns a
+                # distinct fenced operation it must not mutate an approved branch.
                 slots.add(asyncio.create_task(review.babysit_slot(connect, runner)))
             if runner == "workstation":
                 ok = await paper_reachable()
@@ -1415,7 +1626,7 @@ def force_rmtree(path: Path) -> None:
         shutil.rmtree(path, onerror=_chmod_retry)
 
 
-def product_checkout(repo: str, branch: str, run_id: str, work: str = "") -> Path:
+def product_checkout(repo: str, branch: str, run_id: str, work: str = "", execution_key: str = "") -> Path:
     """Host-side working checkout of the product for the in-process executor.
 
     Cloned fresh from the mirror every stage, so a stage can never read a tree some
@@ -1428,8 +1639,15 @@ def product_checkout(repo: str, branch: str, run_id: str, work: str = "") -> Pat
     and a read-only stage has no business creating branches at all.
     """
     mirror = sync_product_mirror(repo)
-    dest = PRODUCT_MIRROR_DIR / "checkouts" / run_id
-    force_rmtree(dest)               # D18: loud, and copes with read-only git objects
+    # No stage may delete a path still mounted by an interrupted worker. Runtime
+    # callers supply their unique attempt key; direct utility callers retain the
+    # historical reusable path until migrated to explicit execution identities.
+    dest = PRODUCT_MIRROR_DIR / "checkouts" / (
+        hashlib.sha256(execution_key.encode()).hexdigest() if execution_key else run_id)
+    if execution_key and dest.exists():
+        raise RuntimeError("execution checkout already exists; use a new attempt, never replace a live worker mount")
+    if not execution_key:
+        force_rmtree(dest)
     if dest.exists():
         raise RuntimeError(
             f"could not clear the previous checkout at {dest} — remove it and retry "

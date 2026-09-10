@@ -7,6 +7,7 @@ write/execute forms. Enumerate useful inspection forms instead of chasing a deny
 import os
 import re
 import subprocess
+import tool_execution
 from pathlib import Path
 
 from tool_policy import SECRET_DIRS, SECRET_NAMES, confined, is_secret, path_parts
@@ -36,7 +37,7 @@ def repository_options(root: Path | None) -> list[str]:
     config_env = environment()
     config_env.pop("GIT_CONFIG_GLOBAL", None)
     config_env.pop("GIT_CONFIG_NOSYSTEM", None)
-    result = subprocess.run(["git", "config", "--get", "core.autocrlf"], cwd=root,
+    result = tool_execution.run(["git", "config", "--get", "core.autocrlf"], cwd=root,
                             env=config_env, stdin=subprocess.DEVNULL,
                             capture_output=True, text=True, timeout=15)
     value = result.stdout.strip().lower()
@@ -49,7 +50,7 @@ def _commit(root: Path | None, value: str) -> None:
         raise ValueError("content inspection requires a product checkout")
     for revision in re.split(r"\.{2,3}", value.lstrip("^")):
         revision = revision or "HEAD"
-        result = subprocess.run(
+        result = tool_execution.run(
             ["git", "--no-pager", "rev-parse", "--verify", "--end-of-options", revision + "^{commit}"],
             cwd=root, env=environment(), stdin=subprocess.DEVNULL,
             capture_output=True, timeout=15,
@@ -62,7 +63,7 @@ def _alias_exclusions(root: Path | None) -> list[str]:
     """Working-tree diff/grep must not follow innocent-named file aliases."""
     if root is None:
         raise ValueError("content inspection requires a product checkout")
-    result = subprocess.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "ls-files", "-z"],
+    result = tool_execution.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "ls-files", "-z"],
                             cwd=root, env=environment(), stdin=subprocess.DEVNULL,
                             capture_output=True, timeout=30, check=True)
     exclusions = []

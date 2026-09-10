@@ -1,0 +1,25 @@
+{
+  "environment": "real PostgreSQL localhost:55432 disposable database",
+  "database": "lantern_validation_leases",
+  "forward_seconds": 0.018,
+  "legacy_and_pending_gates": "held; approvals byte-equivalent",
+  "two_dispatchers_parallel_children_duplicate_intents": "pass",
+  "dedicated_connection_renewal_and_loss_cancellation": "pass",
+  "transaction_lock_and_stale_parent_child": "pass",
+  "process_kill_restart_usage_diagnostics_uncertain_hold_reconcile": "pass",
+  "expired_child_holds_parent": "pass",
+  "runtime_parallel_builders_distinct_postgres_connections": "pass",
+  "runtime_failure_finalization_and_completed_child_preservation": "pass",
+  "rollback_seconds": 0.0047,
+  "rollback_preserves_existing_rows": "pass",
+  "server_version": "16.15 (Debian 16.15-1.pgdg13+2)",
+  "recorded_at_utc": "2026-09-10T08:51:01.034923+00:00",
+  "source_sha256": {
+    "tools/azure-runner/execution_leases.py": "45719ccdf522284eed7434159b6db464b5730b4787b7edc50157cf5d947083e9",
+    "tools/azure-runner/execution_runtime.py": "e9344d7e1862f26b96097620fc77751fd130fd216ae2412cda0630816efd5783",
+    "tools/azure-runner/integration_leases.py": "96be1ff424630bed67c9a607acc4fba139fe9ef9e03ce69588f46e7db71dc898",
+    "tools/azure-runner/schema.sql": "8c6ef3b51ab058654ba0d8103025a20dcb4ad888817bb6d01a08e37e980b00bc",
+    "tools/azure-runner/builders.py": "9d61a1f06f8e2ba7f917f33f40c9b09f4916be8279f92805e86392282451f51d",
+    "tools/azure-runner/review.py": "3f6ad3e42df241df7ce305883770e7a1ae6ed639399a3e3eceed0ae5ae11b51b"
+  }
+}

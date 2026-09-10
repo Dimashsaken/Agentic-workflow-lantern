@@ -7,17 +7,47 @@ import os
 from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from agents.exceptions import MaxTurnsExceeded
 import factory as f
 import orchestrator as o
 import pipeline as p
+import durable_execution as d
 from test_factory import Base, RUN, RateLimitError
 from test_trace import result, call, output
 
 
 class ExecutionJournal(Base):
+    def test_isolated_writers_stop_before_postconditions_and_media_reads(self):
+        import isolated_tools
+        worker, inspection = MagicMock(), MagicMock()
+        for value in (worker, inspection):
+            value.product_root = f.REPO
+            value.output_root = f.REPO / "media"
+            value.image_id = "sha256:" + "a" * 64
+        order = []
+        worker.stop.side_effect = lambda: order.append("writer_stopped")
+        inspection.stop.side_effect = lambda: order.append("inspection_stopped")
+        async def conditions(*args):
+            self.assertIn("writer_stopped", order)
+            self.assertNotIn("inspection_stopped", order)
+            order.append("postconditions")
+            return []
+        async def media(*args, **kwargs):
+            self.assertIn("inspection_stopped", order)
+            self.assertEqual(kwargs["media_root"], worker.output_root)
+        with ExitStack() as stack, redirect_stderr(io.StringIO()):
+            conn = self.local_stage(stack, product=True)
+            stack.enter_context(patch.dict(os.environ, {"LANTERN_ISOLATED_TOOLS": "1"}))
+            stack.enter_context(patch.object(isolated_tools, "IsolatedToolWorker", side_effect=[worker, inspection]))
+            stack.enter_context(patch.object(p, "check_postconditions", side_effect=conditions))
+            stack.enter_context(patch.object(p, "upload_stage_media", side_effect=media))
+            stack.enter_context(patch.object(p.Runner, "run", AsyncMock(return_value=result([]))))
+            asyncio.run(p.run_agent_stage(conn, RUN, "06-security", "local"))
+        self.assertEqual(order, ["writer_stopped", "postconditions", "inspection_stopped"])
+        inspection.start.assert_not_called()
+
     def local_stage(self, stack, *, product=False):
         conn = AsyncMock()
         conn.fetchval.side_effect = [1, 42]
@@ -143,6 +173,57 @@ class ExecutionJournal(Base):
         trace = f.read_trace(RUN, "04-qa-dev", f"{RUN}:04-qa-dev:1")
         self.assertEqual(trace["failure"]["message"], "cleanup unavailable")
         self.assertEqual(trace["usage"]["input_tokens"], 75)
+
+    def test_cleanup_failure_keeps_durable_diagnostics_incomplete(self):
+        server = AsyncMock()
+        server.cleanup.side_effect = RuntimeError("cleanup unavailable")
+        hooks = d.DurableHooks(RUN, "cleanup-failure", root=f.REPO / "diagnostics")
+        with ExitStack() as stack, redirect_stderr(io.StringIO()):
+            conn = self.local_stage(stack)
+            stack.enter_context(patch.object(p, "playwright_mcp_server", return_value=server))
+            stack.enter_context(patch.object(p.Runner, "run", AsyncMock(return_value=result([], inp=75))))
+            stack.enter_context(patch.object(d, "enabled", return_value=True))
+            stack.enter_context(patch.object(d, "DurableHooks", return_value=hooks))
+            with self.assertRaisesRegex(RuntimeError, "cleanup unavailable"):
+                asyncio.run(p.run_agent_stage(conn, RUN, "04-qa-dev", "local"))
+        diagnostic = d.read_diagnostics(hooks.path)
+        self.assertTrue(diagnostic["incomplete"])
+        self.assertFalse(any(row.get("succeeded") for row in diagnostic["rows"]))
+        self.assertFalse(any("status = 'succeeded'" in str(c) for c in conn.execute.call_args_list))
+
+    def test_durable_success_follows_cleanup_and_database_completion(self):
+        hooks = d.DurableHooks(RUN, "successful-cleanup", root=f.REPO / "diagnostics")
+        server = AsyncMock()
+        order = []
+
+        async def cleanup():
+            order.append("cleanup")
+
+        async def execute(query, *args):
+            if "status = 'succeeded'" in query:
+                order.append("database_succeeded")
+                self.assertTrue(d.read_diagnostics(hooks.path)["incomplete"])
+
+        original_finish = hooks.finish
+
+        def finish(succeeded):
+            order.append("durable_finished")
+            original_finish(succeeded)
+
+        server.cleanup.side_effect = cleanup
+        with ExitStack() as stack, redirect_stderr(io.StringIO()):
+            conn = self.local_stage(stack)
+            conn.execute.side_effect = execute
+            stack.enter_context(patch.object(p, "playwright_mcp_server", return_value=server))
+            stack.enter_context(patch.object(p.Runner, "run", AsyncMock(return_value=result([], inp=75))))
+            stack.enter_context(patch.object(d, "enabled", return_value=True))
+            stack.enter_context(patch.object(d, "DurableHooks", return_value=hooks))
+            stack.enter_context(patch.object(hooks, "finish", side_effect=finish))
+            asyncio.run(p.run_agent_stage(conn, RUN, "04-qa-dev", "local"))
+        self.assertEqual(order, ["cleanup", "database_succeeded", "durable_finished"])
+        diagnostic = d.read_diagnostics(hooks.path)
+        self.assertFalse(diagnostic["incomplete"])
+        self.assertTrue(diagnostic["rows"][-1]["succeeded"])
 
     def journal(self):
         return f.ExecutionJournal(RUN, "06-security", "key", "instructions", "begin")

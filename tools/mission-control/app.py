@@ -1378,7 +1378,7 @@ def _trace_keys(run_id: str, execs) -> set[str]:
         if not key:
             continue
         sdir = STAGE_DIR.get(e["stage"], e["stage"].split(".", 1)[0])
-        if (run_root(run_id) / sdir / factory.TRACE_DIR / factory.trace_filename(key)).is_file():
+        if drawer.load_trace(run_root(run_id) / sdir, key) is not None:
             out.add(key)
     return out
 

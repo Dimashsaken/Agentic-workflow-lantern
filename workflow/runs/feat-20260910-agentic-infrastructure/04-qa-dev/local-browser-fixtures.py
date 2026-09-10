@@ -17,6 +17,8 @@ sys.path.insert(0, str(ROOT / "tools/mission-control"))
 import app
 import traceability as tr
 import ui
+import drawer
+from fakes import NOW, exec_row, run_row
 
 
 def main():
@@ -48,13 +50,37 @@ def main():
         legacy = copy.deepcopy(matrix)
         legacy["rows"][0]["verdict"]["evidence"] = "Legacy prose: <result> remains literal."
         empty = tr.build_matrix("synthetic-empty-fixture", root / "absent")
+        drawer_run = "synthetic-provenance-fixture"
+        drawer_key = drawer_run + ":03-coding:2"
+        receipt = {"status": "verified", "identity": {
+            "run_id": drawer_run, "execution_key": drawer_key,
+            "product": {"head_sha": "a" * 40, "tree_sha": "b" * 40},
+            "image_digest": "sha256:" + "c" * 64},
+            "manifest": {"sha256": "d" * 64},
+            "test_links": {"AC-10": ["quality:test", "café-🧪-<probe>"]}}
+        stage = fixture / "03-coding"
+        (stage / "gate.json").write_text(json.dumps({"execution_key": drawer_key,
+            "passed": True, "results": [], "provenance": receipt}), encoding="utf-8")
+        drawer_pages = {}
+        for name in ("verified", "forged-mirror", "stale", "cross-run"):
+            recorded = copy.deepcopy(receipt)
+            if name == "stale":
+                recorded["identity"]["execution_key"] = drawer_run + ":03-coding:1"
+            if name == "cross-run":
+                recorded["identity"]["run_id"] = "different-fixture-run"
+            execution = exec_row(900, drawer_run, "03-coding", 2, "succeeded", NOW, 5, key=drawer_key)
+            execution["output"] = {} if name == "forged-mirror" else {"provenance": recorded}
+            model = drawer.load_execution(run_row(id=drawer_run, status="executing",
+                current_stage="03-coding"), execution, fixture, [], NOW, validate=lambda *_: [])
+            drawer_pages[name] = drawer.render_drawer(model, app.render_markdown, app.STAGE_META, fragment=False)
         for name, content in {
             "structured": tr.render_matrix(matrix),
             "legacy": tr.render_matrix(legacy),
             "empty": tr.render_matrix(empty),
             "validation": app.validation_table(envelopes["05-post-coding/validation.json"]),
+            **drawer_pages,
         }.items():
-            nav = " · ".join(f"<a href='/{n}.html'>{n}</a>" for n in ("structured", "legacy", "empty", "validation"))
+            nav = " · ".join(f"<a href='/{n}.html'>{n}</a>" for n in ("structured", "legacy", "empty", "validation", *drawer_pages))
             body = ("<main style='padding:24px;max-width:100%'><h1>Local renderer fixture</h1>"
                     "<p>Component regression only. No live service, database, authentication or gate.</p>"
                     f"<nav>{nav}</nav>{content}</main>")

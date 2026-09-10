@@ -1,0 +1,30 @@
+test_board_and_run_page_too (__main__.BugRunOnEveryPage.test_board_and_run_page_too) ... ok
+test_every_status_of_an_unmapped_stage_renders (__main__.BugRunOnEveryPage.test_every_status_of_an_unmapped_stage_renders) ... ok
+test_runs_page_survives_a_debug_lifecycle_run (__main__.BugRunOnEveryPage.test_runs_page_survives_a_debug_lifecycle_run) ... ok
+test_anonymous_callers_are_redirected_or_refused (__main__.EmptyDatabase.test_anonymous_callers_are_redirected_or_refused) ... ok
+test_bare_run_renders_lanes_matrix_and_404_drawer (__main__.EmptyDatabase.test_bare_run_renders_lanes_matrix_and_404_drawer) ... ok
+test_every_list_page_renders_empty (__main__.EmptyDatabase.test_every_list_page_renders_empty) ... ok
+test_run_scoped_pages_404_for_an_unknown_run (__main__.EmptyDatabase.test_run_scoped_pages_404_for_an_unknown_run) ... ok
+test_spend_redirects_to_cost (__main__.EmptyDatabase.test_spend_redirects_to_cost) ... ok
+test_reject_carries_the_note_and_fails_the_run (__main__.GateDecisionUnchanged.test_reject_carries_the_note_and_fails_the_run) ... ok
+test_a_named_png_that_is_gone_is_said_not_shown_broken (__main__.HomeInboxAndBoard.test_a_named_png_that_is_gone_is_said_not_shown_broken)
+Presence AND validity for the artifact under decision: a handoff naming a ... ok
+test_blocked_report_marks_the_form (__main__.HomeInboxAndBoard.test_blocked_report_marks_the_form) ... ok
+test_inbox_leads_with_the_artifact_and_carries_the_keyboard_hooks (__main__.HomeInboxAndBoard.test_inbox_leads_with_the_artifact_and_carries_the_keyboard_hooks) ... ok
+test_later_gates_lead_with_their_artifacts (__main__.HomeInboxAndBoard.test_later_gates_lead_with_their_artifacts) ... ok
+test_retry_is_fail_closed_then_calls_the_primitives (__main__.LoopActions.test_retry_is_fail_closed_then_calls_the_primitives) ... ok
+test_rework_validates_then_delegates_to_cmd_rework (__main__.LoopActions.test_rework_validates_then_delegates_to_cmd_rework) ... ok
+test_drawer_fragment_and_full_page (__main__.RunPageWithData.test_drawer_fragment_and_full_page) ... [trace] C:/Users/dimas/AppData/Local/Temp/mc-runpage-g7dr9yz5/workflow/runs/feat-20260908-routes/00-story/trace/feat-20260908-routes_00-story.write_2.json (0 tool calls, 0 turn(s))
+ok
+test_run_page_lanes_and_pending_gate (__main__.RunPageWithData.test_run_page_lanes_and_pending_gate) ... [trace] C:/Users/dimas/AppData/Local/Temp/mc-runpage-qnmysyet/workflow/runs/feat-20260908-routes/00-story/trace/feat-20260908-routes_00-story.write_2.json (0 tool calls, 0 turn(s))
+ok
+test_one_field_style_covers_every_input_on_every_page (__main__.Shell.test_one_field_style_covers_every_input_on_every_page)
+The login form, a gate's decision note, the repo picker, the drawer's rework ... ok
+test_theme_keyboard_and_drawer_on_every_page (__main__.Shell.test_theme_keyboard_and_drawer_on_every_page) ... ok
+test_white_is_the_default_on_every_page_whatever_the_os_prefers (__main__.Shell.test_white_is_the_default_on_every_page_whatever_the_os_prefers)
+One style for every page and every reader: the bare :root is the white ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.156s
+
+OK

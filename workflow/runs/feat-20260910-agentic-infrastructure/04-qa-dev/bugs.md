@@ -115,3 +115,19 @@ earlier recordings preserved. The final screenshot visibly shows pending columns
 No registered QA stage or gate approval is claimed. Real downstream structured
 validation content remains untested because the real run correctly waits for human
 story approval; the earlier fixture coverage is kept separate.
+
+## Round 5 — execution provenance UI
+
+No new product bug found in the executed fixture scope. Matching controller
+provenance renders; forged gate mirrors and stale/cross-run receipts do not acquire
+verified status. All 12 drawer controls and final desktop/mobile recordings pass.
+Initial mobile screenshot returned to the header after clicking theme; the recorder
+now scrolls the evidence section back into view. This was a recording limitation,
+not a product failure. All initial and final media remain linked in report.md.
+
+Actual authenticated desktop/mobile sessions also pass on executions 11/12.
+Their unverified-manifest labels remain visible and honest beside succeeded stage
+and valid-envelope badges. Before/after snapshots retain pending approval 4 and
+unchanged execution/run state. No product bug, gate decision or deployment was
+introduced. Verified-receipt display remains explicitly fixture-tested because
+these real story stages did not produce a coding manifest.

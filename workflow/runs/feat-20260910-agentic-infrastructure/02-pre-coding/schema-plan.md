@@ -1,7 +1,9 @@
 # Proposed schema and recovery contract
 
-**HITL: required.** No migration has been written or applied. Approval covers the
-forward and rollback contract below before schema-dependent implementation.
+The user authorized this local forward/rollback contract through the subsequent
+"continue" instruction (see 03-coding/report.md). Migration and rollback have now
+been implemented and exercised only on disposable PostgreSQL. **HITL: required**
+for application to a registered/live environment; no approval row is fabricated.
 
 ## Schema-free work
 

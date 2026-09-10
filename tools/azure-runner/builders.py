@@ -39,6 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import factory
+import execution_runtime as ownership
 from orchestrator import CODING_BRANCH_PREFIXES, check_coding_handoff
 
 INTEGRATOR = factory.INTEGRATOR
@@ -128,21 +129,35 @@ def batches(names: list[str], size: int) -> list[list[str]]:
     return [names[i:i + size] for i in range(0, len(names), size)]
 
 
-async def fan_out(conn, run_id: str, runner: str, names: list[str], execute, size: int) -> None:
+async def fan_out(conn, run_id: str, runner: str, names: list[str], execute, size: int,
+                  connect=None) -> None:
     """Run each builder's execution, `size` at a time, in plan order.
 
     A batch runs to completion before the next starts, and one failure fails the stage:
     a merge is only meaningful when every branch it merges is green.
     """
+    async def execute_independent(name):
+        if connect is None:
+            if conn is not None:
+                raise BuilderError("parallel builders require independent database connections")
+            return await execute(None, run_id, stage_key(name), runner)
+        child_conn = await connect()
+        try:
+            return await execute(child_conn, run_id, stage_key(name), runner)
+        finally:
+            await child_conn.close()
+
     for batch in batches(names, size):
         if len(batch) == 1:
             await execute(conn, run_id, stage_key(batch[0]), runner)
             continue
         done = await asyncio.gather(
-            *(execute(conn, run_id, stage_key(n), runner) for n in batch),
+            *(execute_independent(n) for n in batch),
             return_exceptions=True)
         for name, out in zip(batch, done):
             if isinstance(out, BaseException):
+                if isinstance(out, ownership.leases.LeaseLost):
+                    raise out
                 raise BuilderError(f"builder '{name}' failed: {out}") from out
 
 
@@ -182,14 +197,15 @@ def seed_branches(repo: str, base: str, work: str, names: list[str]) -> tuple[Pa
 
 
 def merge(run_id: str, repo: str, base: str, work: str, names: list[str],
-          start: str = "") -> dict:
+          start: str = "", *, persist: bool = True) -> dict:
     """Land each builder's bundle in the mirror, then build the run's branch from them.
 
     Reset `work` to the shared start point and `git merge --no-ff` each builder branch
     in PLAN order (so the history reads the way the plan does), in a throwaway clone —
     the mirror may be bare, and a local-path product repo must not grow a worktree.
     The merged branch is pushed back into the mirror, which is where the integrator's
-    checkout comes from. Writes `03-coding/builders.json`.
+    checkout comes from. ``persist=False`` defers the authoritative merge record
+    until the async caller rechecks its run fence after the Git work returns.
     """
     import pipeline                                 # late: pipeline imports this module
     mirror = pipeline.sync_product_mirror(repo)
@@ -261,10 +277,17 @@ def merge(run_id: str, repo: str, base: str, work: str, names: list[str],
         "merged_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "builders": entries,
     }
+    if persist:
+        write_merge_record(record)
+    return record
+
+
+def write_merge_record(record: dict) -> None:
+    """Publish the accepted merge facts; leased callers hold the run fence here."""
+    sdir = factory.run_dir(record['run_id']) / CODING_STAGE
     sdir.mkdir(parents=True, exist_ok=True)
     (sdir / MERGE_RECORD).write_text(json.dumps(record, indent=2), encoding="utf-8")
     (sdir / "builders.md").write_text(render_merge_md(record), encoding="utf-8")
-    return record
 
 
 def render_merge_md(record: dict) -> str:
@@ -302,19 +325,30 @@ async def run_coding(conn, run_id: str, stage: str, runner: str, execute) -> lis
                            f"`pipeline.py set-product {run_id} --repo … --branch …`")
     work = await pipeline.product_work_branch(conn, run_id)
     size = parallelism()
+    async with ownership.mutation(conn):
+        await pipeline.log_event(conn, run_id, "orchestrator", "builders_seed_intended",
+                                 {"branch": work, "builders": names})
+    # Git subprocesses in a thread are not revocable. Lost ownership prevents
+    # acceptance, while interrupted work remains held for mirror reconciliation.
     _, start = await asyncio.to_thread(seed_branches, repo, base, work, names)
-    await pipeline.log_event(conn, run_id, "orchestrator", "builders_fanout",
-                             {"builders": names, "branch": work, "start_sha": start,
-                              "parallelism": size})
+    async with ownership.mutation(conn):
+        await pipeline.log_event(conn, run_id, "orchestrator", "builders_fanout",
+                                 {"builders": names, "branch": work, "start_sha": start,
+                                  "parallelism": size})
     print(f"[{run_id}] stage 3 fans out into {len(names)} builder(s) "
           f"({', '.join(names)}), {size} at a time, from {start[:12]}")
 
-    await fan_out(conn, run_id, runner, names, execute, size)
+    await fan_out(conn, run_id, runner, names, execute, size, connect=pipeline.connect)
 
-    record = await asyncio.to_thread(merge, run_id, repo, base, work, names, start)
-    await pipeline.log_event(conn, run_id, "orchestrator", "builders_merged",
-                             {"branch": work, "head_sha": record["head_sha"],
-                              "builders": [b["name"] for b in record["builders"]]})
+    async with ownership.mutation(conn):
+        await pipeline.log_event(conn, run_id, "orchestrator", "builders_merge_intended",
+                                 {"branch": work, "start_sha": start, "builders": names})
+    record = await asyncio.to_thread(merge, run_id, repo, base, work, names, start, persist=False)
+    async with ownership.mutation(conn):
+        write_merge_record(record)
+        await pipeline.log_event(conn, run_id, "orchestrator", "builders_merged",
+                                 {"branch": work, "head_sha": record["head_sha"],
+                                  "builders": [b["name"] for b in record["builders"]]})
     print(f"[{run_id}] merged {len(names)} builder branch(es) into {work} "
           f"@ {record['head_sha'][:12]} — integrating")
 

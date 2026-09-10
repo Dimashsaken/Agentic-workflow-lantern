@@ -10,6 +10,7 @@ from pathlib import Path
 
 from tool_policy import confined, is_secret, path_parts
 import readonly_git
+import tool_execution
 
 
 def references(value) -> list[dict]:
@@ -85,7 +86,7 @@ def validation_problems(value, run: Path, product: Path | None) -> list[str]:
 
 
 def _git(root: Path, *args: str) -> str:
-    result = subprocess.run(["git", "--no-pager", "-c", "core.fsmonitor=false", *args],
+    result = tool_execution.run(["git", "--no-pager", "-c", "core.fsmonitor=false", *args],
                             cwd=root, env=readonly_git.environment(), stdin=subprocess.DEVNULL,
                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     if result.returncode:

@@ -12,13 +12,14 @@ const media = path.join(out, 'media');
 const { QA_BASE_URL: base, QA_USER: user, QA_PASS: password, QA_RUN_ID: run } = process.env;
 assert(base && user && password && run, 'QA environment must be populated');
 assert(['127.0.0.1', 'localhost'].includes(new URL(base).hostname), 'Disposable loopback service required');
-const snapshot = JSON.parse(readFileSync(path.join(out, 'live-browser-before.json')));
+const snapshot = JSON.parse(readFileSync(path.join(out, process.env.QA_BEFORE_FILE || 'live-browser-before.json')));
 assert.equal(snapshot.run.id, run);
 const browser = await chromium.launch();
 mkdirSync(media, { recursive: true });
 const results = [];
 let auth;
 const mobileOnly = process.env.QA_RECORDING_MODE === 'mobile';
+const provenanceOnly = process.env.QA_RECORDING_MODE === 'provenance';
 
 async function session(name, viewport, body, reuseAuth = false) {
   name += process.env.QA_RECORDING_SUFFIX || '';
@@ -72,7 +73,31 @@ async function session(name, viewport, body, reuseAuth = false) {
 }
 
 try {
-  if (!mobileOnly) await session('local-dev-authenticated-desktop', { width: 1280, height: 720 }, async (page, mark) => {
+  if (provenanceOnly) {
+    for (const [name, viewport] of [['desktop', {width:1280,height:720}], ['mobile', {width:390,height:844}]]) {
+      await session('provenance-actual-'+name, viewport, async(page, mark)=>{
+        for (const execution of snapshot.executions) {
+          await page.goto(`${base}/run/${run}/exec/${execution.id}`);
+          assert.ok((await page.locator('h2').first().innerText()).includes(execution.stage));
+          const section=page.locator('.dsect').filter({has:page.getByRole('heading',{name:'Execution evidence',exact:true})});
+          await section.scrollIntoViewIfNeeded();
+          assert.ok((await section.innerText()).includes('No verified manifest recorded for this execution'));
+          const box=await section.boundingBox();
+          assert.ok(box.y>=0 && box.y+box.height<=viewport.height,'Evidence message inside recorded viewport');
+          mark(`Execution ${execution.id}: absent controller provenance stated honestly`);
+          await page.waitForTimeout(1000);
+          await page.reload(); await section.scrollIntoViewIfNeeded();
+          assert.ok((await section.innerText()).includes('No verified manifest'));
+          await page.screenshot({path:path.join(media,`provenance-actual-${name}-${execution.id}.png`)});
+        }
+        await page.goto(`${base}/run/${run}`);
+        assert.equal(await page.locator('a[data-drawer]').count(),snapshot.executions.length);
+        mark('Returned to existing run; no state-changing action requested');
+        await page.waitForTimeout(700);
+      }, Boolean(auth));
+    }
+  }
+  if (!mobileOnly && !provenanceOnly) await session('local-dev-authenticated-desktop', { width: 1280, height: 720 }, async (page, mark) => {
     await page.goto(`${base}/run/${run}`);
     await page.locator('a[data-drawer]').first().waitFor();
     assert.equal(await page.locator('a[data-drawer]').count(), snapshot.executions.length);
@@ -109,7 +134,7 @@ try {
     mark('Returned to unchanged pending story run');
     await page.waitForTimeout(700);
   });
-  if (auth || mobileOnly) await session('local-dev-authenticated-mobile', { width: 390, height: 844 }, async (page, mark) => {
+  if (!provenanceOnly && (auth || mobileOnly)) await session('local-dev-authenticated-mobile', { width: 390, height: 844 }, async (page, mark) => {
     await page.goto(`${base}/run/${run}/trace`);
     assert.equal(await page.locator('.matrix tr').count(), 3);
     mark('Authenticated mobile matrix from real story');

@@ -54,6 +54,42 @@ class Capabilities(unittest.TestCase):
                 self.assertNotEqual(self.invoke(tools, "write_file", path=path, content="tampered"), f"wrote {path}")
         self.assertEqual((self.product / "app.py").read_text(), "value = 1\n")
 
+    def test_isolated_product_file_tools_never_use_controller_file_io(self):
+        from types import SimpleNamespace
+        import tool_execution
+        tools = o.stage_tools("coding", RUN, "03-coding", "execution-file-boundary")
+        worker = SimpleNamespace(product_root=self.product, output_root=self.root / "media")
+        token = tool_execution.CURRENT.set(worker)
+        try:
+            def file_io(operation, target, **kwargs):
+                return {"read": "worker content", "list": [{"name": "app.py", "is_dir": False}],
+                        "write": 7, "append": 7}[operation]
+            with patch.object(tool_execution, "file_io", side_effect=file_io) as worker_io:
+                self.assertEqual(self.invoke(tools, "read_file", path="product/app.py"), "worker content")
+                self.assertEqual(self.invoke(tools, "list_dir", path="product"), "app.py")
+                self.assertEqual(self.invoke(tools, "write_file", path="product/app.py", content="changed"), "wrote product/app.py")
+                self.assertEqual(self.invoke(tools, "append_file", path="product/app.py", content="changed"), "appended to product/app.py")
+            self.assertEqual([call.args[0] for call in worker_io.call_args_list], ["read", "list", "write", "append"])
+            self.assertEqual((self.product / "app.py").read_text(), "value = 1\n")
+        finally:
+            tool_execution.CURRENT.reset(token)
+
+    def test_isolated_controller_artifacts_still_follow_host_policy(self):
+        from types import SimpleNamespace
+        import tool_execution
+        tools = o.stage_tools("coding", RUN, "03-coding", "execution-file-boundary")
+        worker = SimpleNamespace(product_root=self.product, output_root=self.root / "media")
+        token = tool_execution.CURRENT.set(worker)
+        try:
+            with patch.object(tool_execution, "file_io") as worker_io:
+                self.assertEqual(self.invoke(tools, "read_file", path="AGENTS.md"), "contract\n")
+                report = f"workflow/runs/{RUN}/03-coding/report.md"
+                self.assertEqual(self.invoke(tools, "write_file", path=report, content="report"), "wrote " + report)
+            worker_io.assert_not_called()
+            self.assertEqual((self.repo / report).read_text(), "report")
+        finally:
+            tool_execution.CURRENT.reset(token)
+
     def test_stage_tools_capture_identity_when_other_execution_changes_environment(self):
         first = o.stage_tools("coding", RUN, "03-coding", "a")
         other_product = self.root / "other-product"

@@ -1,0 +1,62 @@
+{
+  "kind": "local_fixture_provenance_renderer",
+  "fleet_execution": false,
+  "live_dev": false,
+  "recorded_at": "2026-09-10T08:52:38.918Z",
+  "source_sha256": {
+    "tools/mission-control/drawer.py": "8efad548f5de7561e9e69b784a276ad6e45e23acfedddbb82dc6a6eba76cf084",
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/app.py": "87bf94dba0b42e3e89ab8a4fb2e09209a0cb83172f1174f9218ca606f08d601d",
+    "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/local-browser-fixtures.py": "61134cf707938546d2ab02d47ca6fa4c0479b24f33d0090ae14fe3827c39b0ab"
+  },
+  "results": [
+    {
+      "name": "provenance-fixture-desktop-final",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.14,
+          "title": "verified: evidence section visible"
+        },
+        {
+          "seconds": 1.23,
+          "title": "forged-mirror: evidence section visible"
+        },
+        {
+          "seconds": 2.33,
+          "title": "stale: evidence section visible"
+        },
+        {
+          "seconds": 3.42,
+          "title": "cross-run: evidence section visible"
+        },
+        {
+          "seconds": 4.56,
+          "title": "Back and refresh retain stale receipt refusal"
+        }
+      ],
+      "errors": [],
+      "video": "media/provenance-fixture-desktop-final.webm",
+      "trace": "media/provenance-fixture-desktop-final.zip",
+      "video_sha256": "5f421c1f0e0d5c4cc1cc226c8b1eb7236a3158793173c3b05ed1644ec8d5e7ed"
+    },
+    {
+      "name": "provenance-fixture-mobile-final",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.18,
+          "title": "Verified hashes and test links fit mobile viewport"
+        },
+        {
+          "seconds": 1.25,
+          "title": "Theme change preserves provenance readability"
+        }
+      ],
+      "errors": [],
+      "video": "media/provenance-fixture-mobile-final.webm",
+      "trace": "media/provenance-fixture-mobile-final.zip",
+      "video_sha256": "944e13e371437517ca8fb78051fc29ad052b2c50d2e1bc79c4a367ee97a384d9"
+    }
+  ]
+}

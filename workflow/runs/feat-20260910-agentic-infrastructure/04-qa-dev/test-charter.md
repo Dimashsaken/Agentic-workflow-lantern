@@ -106,3 +106,19 @@ Control application using process-only local auth and an environment-provided UR
   never records credential payloads. All session links carry timestamps and hashes.
 - This is authenticated local dev integration against real disposable data, not
   a registered 04-qa-dev pipeline execution or deployed-environment signoff.
+
+## Round 5 — execution provenance continuation
+
+Written before execution, 2026-09-10. AC-10/AC-11 component probes use explicitly
+synthetic execution rows with the production drawer renderer: a matching verified
+receipt, no receipt with a forged gate mirror, a stale execution receipt, a
+cross-run receipt, Unicode/HTML-shaped test names, and narrow-screen readability.
+Record short video/trace contexts, scroll the actual evidence section into the
+viewport, refresh/back and switch theme. Verify no markup is interpreted.
+
+Separately launch current Mission Control against existing disposable Azure run
+data. Record authenticated execution drawers and missing-provenance labels without
+inserting fixture receipts into its database. Snapshot run, execution and approval
+state before/after. Existing live story gates remain pending. Actual controller
+manifest generation, tamper refusal, lease recovery and Azure calls are covered
+by the integrator's separate evidence, not inferred from renderer fixtures.

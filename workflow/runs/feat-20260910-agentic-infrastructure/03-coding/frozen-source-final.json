@@ -1,0 +1,59 @@
+{
+  "kind": "real-isolated-quality-evidence",
+  "image_digest": "sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756",
+  "tested_product": {
+    "head_sha": "c8177cd6894d37e58e2c5cab3447b711d045f36f",
+    "tree_sha": "331abb9014a861416a20f39b17458bff77879fe3",
+    "worktree_sha256": "6ea129319f1d048bf7715354827301c517efd67a24679f4ce4ac17903e683be7"
+  },
+  "harness_state": {
+    "revision": "7f01faad1c9cfbef886026906f9a3e8631632a74",
+    "dirty": true,
+    "source_sha256": "461e493e56ca03ff5b77af45bdbba43fdc766151b9a960679b1b13287058d1f5",
+    "source_scope": [
+      "tools/azure-runner source",
+      "infra/sandbox source",
+      "agents",
+      "workflow/templates"
+    ]
+  },
+  "execution_key": "feat-test:03-coding:1",
+  "manifest_sha256": "1226ed7174a742ca081c572f49c9e879502583799152295808275db750d8236f",
+  "command": {
+    "command": "python source.py",
+    "exit_code": 0,
+    "id": "quality:test",
+    "observed_at": "2026-09-10T09:08:54+00:00",
+    "outcome": "pass",
+    "seconds": 0.7
+  },
+  "valid_gate": true,
+  "changed_manifest_rejected": true,
+  "changed_source_rejected": true,
+  "ignored_dependencies_excluded": true,
+  "mutable_modify_restore_passed": true,
+  "readonly_modify_restore_rejected": true,
+  "readonly_command_result": {
+    "name": "test",
+    "command": "python mutate_restore.py",
+    "exit": 1,
+    "passed": false,
+    "seconds": 0.7,
+    "output_tail": "\n[stderr]\nTraceback (most recent call last):\n  File \"/work/product/mutate_restore.py\", line 5, in <module>\n    p.write_text(\"print('forged pass')\\n\")\n  File \"/usr/lib/python3.12/pathlib.py\", line 1049, in write_text\n    with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1015, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nOSError: [Errno 30] Read-only file system: 'source.py'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/work/product/mutate_restore.py\", line 8, in <module>\n    p.write_bytes(original)\n  File \"/usr/lib/python3.12/pathlib.py\", line 1038, in write_bytes\n    with self.open(mode='wb') as f:\n         ^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1015, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nOSError: [Errno 30] Read-only file system: 'source.py'\n"
+  },
+  "source_preserved_for_fix_loop": true,
+  "azure_used": false,
+  "database_used": false,
+  "suite": {
+    "tests": 25,
+    "seconds": 123.989,
+    "passed": true
+  },
+  "critical_source_sha256": {
+    "tools/azure-runner/trusted_evidence.py": "8f71f3b7dc12ed1ef124314e82f13c7c96dbacd0ce5bc26a941f8241647d16bc",
+    "tools/azure-runner/evidence_manifest.py": "fe535050b67586a064cd068a34ad56b637d60b0a7cac551c7f12c38415a3fc11",
+    "tools/azure-runner/factory.py": "d850780e3d03ec1ec41c8a619ba40632cd3afb4a14b5574cc41ee08129133cb8",
+    "tools/azure-runner/tool_execution.py": "69fb952682dfece9e5d7aa09abb95bdbed0af42f9199ab9d3ca59c865a2fa33b",
+    "tools/azure-runner/isolated_tools.py": "ee731cdb276d01ec3fac2646059ef9c6a394398a4906a0f5f401e30454f54970"
+  }
+}

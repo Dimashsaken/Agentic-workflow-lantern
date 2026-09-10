@@ -1,0 +1,118 @@
+{
+  "kind": "actual-docker-isolation-controls",
+  "fleet_execution": false,
+  "recorded_at": "2026-09-10T09:03:56.236478+00:00",
+  "controls": {
+    "mounts": [
+      {
+        "destination": "/work/product",
+        "rw": true
+      },
+      {
+        "destination": "/work/media",
+        "rw": true
+      }
+    ],
+    "shell": {
+      "writes_blocked": {
+        "/authority/gate.json": true,
+        "/repo-src/AGENTS.md": true,
+        "/var/run/docker.sock": true,
+        "/work/run/gate.json": true,
+        "/opt/lantern/controller.env": true,
+        "/outside-write": true
+      },
+      "reads_blocked": {
+        "/authority/gate.json": true,
+        "/repo-src/AGENTS.md": true,
+        "/var/run/docker.sock": true,
+        "/work/run/gate.json": true,
+        "/opt/lantern/controller.env": true,
+        "/outside-write": true
+      },
+      "egress_blocked": true,
+      "controller_credentials_absent": true,
+      "uid": 1000
+    },
+    "mcp_stdio_command": {
+      "writes_blocked": {
+        "/authority/gate.json": true,
+        "/repo-src/AGENTS.md": true,
+        "/var/run/docker.sock": true,
+        "/work/run/gate.json": true,
+        "/opt/lantern/controller.env": true,
+        "/outside-write": true
+      },
+      "reads_blocked": {
+        "/authority/gate.json": true,
+        "/repo-src/AGENTS.md": true,
+        "/var/run/docker.sock": true,
+        "/work/run/gate.json": true,
+        "/opt/lantern/controller.env": true,
+        "/outside-write": true
+      },
+      "egress_blocked": true,
+      "controller_credentials_absent": true,
+      "uid": 1000
+    },
+    "normal_product_and_media_writes": true,
+    "binary_git_routing": {
+      "binary_roundtrip_bytes": 260,
+      "sha256": "11a20732404dc4f347f44babdff26628334d23cb3ab09e682f96b1e57a20d67b",
+      "replacement_ref_ignored": true,
+      "product_module_shadow_ignored": true,
+      "safe_directory": "/work/product"
+    },
+    "file_policy_race": {
+      "control": "deterministic symlink swap after StageAccess validation",
+      "denied_operations": [
+        "read",
+        "write",
+        "append",
+        "list"
+      ],
+      "controller_sentinel_unchanged": true,
+      "normal_read_write_append_list": true
+    },
+    "browser_protocol_recording": {
+      "transport": "Agents SDK MCPServerStdio via worker.mcp_command",
+      "fixture": "container-local data URL; no network",
+      "tools_available": 24,
+      "button_result": "Verified",
+      "video": "C:\\Users\\dimas\\AppData\\Local\\Temp\\lantern-isolated-browser-20260910g\\page@fc7ea056c45bea59a156edead554c1d1.webm",
+      "decoded": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "vp8",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          }
+        ],
+        "format": {
+          "duration": "1.520000"
+        }
+      },
+      "video_sha256": "a97a96a4e6be3f7721ce0dcbc64242a9a4db12bf2b56946a67a13f29830f5a51",
+      "capture_container_id": "54054abd8e020ba8ff03246caa1767e159e2c99a2b8bfc11b265b108229b03fd"
+    },
+    "timeout_raised": true,
+    "timeout_and_success_background_children_reaped": true,
+    "read_only_product": true,
+    "all_execution_containers_removed": true
+  },
+  "image_id": "sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756",
+  "source_sha256": {
+    "isolated_tools.py": "ee731cdb276d01ec3fac2646059ef9c6a394398a4906a0f5f401e30454f54970",
+    "integration_isolated_tools.py": "e4360b3a1335a38ba83be3ce8429820913fc774216087bf61d45c2913cfaddf8",
+    "tool_execution.py": "69fb952682dfece9e5d7aa09abb95bdbed0af42f9199ab9d3ca59c865a2fa33b"
+  },
+  "limitations": [
+    "Synthetic sentinel credentials only; no fleet stage or approval",
+    "Browser recording proves the offline synthetic fixture only, not deployed Mission Control QA",
+    "External browser egress intentionally unavailable; allowlisted proxy remains unsupported",
+    "Controller hard death needs dispatcher reconciliation of execution-labelled containers"
+  ]
+}

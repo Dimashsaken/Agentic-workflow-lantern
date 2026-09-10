@@ -226,3 +226,113 @@ that as authorization to proceed with the presented local implementation and
 disposable-schema tests. It is not a live pipeline approval row or deployment
 permission. No approved story, registered plan_signoff or other fleet record is
 fabricated. Live gates continue to require their existing mechanisms.
+
+## Increment 2 — isolated controller, recovery and execution evidence
+
+Implemented an opt-in host controller with isolated product/MCP workers, separate
+execution checkouts, pinned images, no network, no controller credentials/mounts,
+and descriptor-based worker file tools. Model-controlled writers stop before
+handoff and media collection. Output collection rejects linked files and stages
+upload bytes outside worker mounts. Product Git executes in ephemeral workers;
+raw binary Git output is preserved and replacement refs are disabled.
+
+Renewable run/child leases now fence completion, advancement, artifact and memory
+acceptance, usage and publication receipts. Each parallel child gets its own DB
+connection; host stages serialize while their environment helpers remain global.
+Expired attempts are held, not automatically replayed. Publication intent binds
+the exact destination and head; confirmed results can be reused, while ambiguous
+outcomes hold. Leased legacy Docker and babysitting are explicitly refused until
+they support the same lifecycle. These restrictions are documented pilot limits,
+not completed implementations of those paths.
+
+SDK callbacks fsync response usage and tool boundaries before the next turn.
+Completed response usage also reaches Postgres immediately. The actual crash
+test killed the controller after one Azure response: 7,955 input + 156 output =
+8,111 known tokens survived, tool events survived, execution 13 was held failed,
+the exact abandoned worker was removed, and no gate opened. The unfinished tail
+remains unknown. Recovery never resumes serialized SDK state. Available results
+from a returned SDK loop and streamed response counters are reconciled without
+double-counting. Success diagnostics follow cleanup and DB completion.
+
+Strict quality checks now use an independent read-only committed snapshot with
+fresh Git metadata and image-baked dependencies. This fixes the independently
+reproduced source-substitution flaw: before/after hashing had accepted a command
+that changed code, passed, and restored the original. The frozen worker rejects
+that command with a read-only-filesystem error. It also excludes ignored helpers.
+Host gate authority, manifests and command logs stay outside worker mounts.
+Requirement links are explicit plan data, and manifests bind identity, attempt,
+fence, source, image, quality policy, command outcomes and artifact digests.
+Harness fingerprints include uncommitted source rather than claiming HEAD alone
+was tested. These receipts establish observations, not semantic test coverage.
+
+Mission Control displays provenance from the controller's completed execution
+row, including tested commit/tree, image, manifest and planned test links. Missing
+or cross-execution receipts remain unverified. Long Windows trace paths use a
+deterministic shortened filename, with matching lookup behavior.
+
+### Evidence and confidence boundaries
+
+| Evidence | What actually ran |
+|---|---|
+| live-leased-isolated.json | Real Azure/Postgres research and story, executions 11/12, with leases and isolated tools; pending story gate. Windows trace-path failures were found here and subsequently fixed. |
+| live-leased-isolated-final.json | Real Azure/Postgres executions 14/15, both succeeded, both traces persisted, story_signoff pending, two actual disposable memory-tool rows. |
+| live-controller-recovery.json | Actual Azure controller process killed; fsynced diagnostics + known DB usage survived; lease recovery held the run and exact-label cleanup removed its worker. Tested source hashes included. |
+| lease-recovery-integration.json | Actual PostgreSQL migration/rollback, competing owners, renewal, stale writes, parallel child connections, process death after an fsynced local effect, duplicate holds/reconciliation, and unchanged approvals. The external effect is a disposable local file, not GitHub. |
+| isolated-worker-controls.json | Actual image shell/MCP controls, offline recorded browser, credentials/mount/egress denials, binary Git fidelity, and post-policy symlink-swap file-I/O controls. |
+| frozen-source-integration.json | Actual image quality command, ignored-dependency exclusion and modify/test/restore negative control; no Azure or database involved. |
+| live-trusted-evidence.log | Earlier actual image manifest prototype; superseded for source immutability by frozen-source-integration.json and its final rerun. |
+| ../04-qa-dev/provenance-browser-results-final.json | Recorded fixture desktop/mobile positive receipt and forged/stale/cross-run negatives. Positive receipt UI remains fixture coverage. |
+| ../04-qa-dev/provenance-live-results.json | Actual authenticated current Mission Control desktop/mobile on executions 11/12; database before/after snapshots identical, approval 4 pending. Story executions correctly have no coding manifest. |
+
+Independent post-coding review found and verified four additional fixes:
+central babysitter hold, lease/legacy-Docker refusal, child-fenced artifact writes,
+and success diagnostics after final lifecycle completion. Independent defensive
+security review closed source substitution, memory fencing, publication-target
+binding and checkout concurrency findings. Its final local-pilot verdict is
+conditional GO; staging remains NO-GO. Reports contain their source hashes and
+independent controls. Recorded QA found no new product bug in this increment.
+
+### Acceptance status and remaining work
+
+| Criterion | Current status |
+|---|---|
+| AC-7 | Verified for the offline isolated controller on the actual image. External browser egress, Paper transport and production least-privilege DB grants are not implemented or certified. |
+| AC-8 | Verified in the disposable host-controller path with real Azure/Postgres death and recovery controls. Unknown tail stays unknown; SDK resumption is deliberately disabled. |
+| AC-9 | Durable intent/fencing, duplicate holds and explicit reconciliation primitive implemented and tested on disposable effects. Actual GitHub reconciliation and fenced babysitting remain incomplete; strict mode holds these unsupported paths. |
+| AC-10 | Quality-command snapshot manifests and verifier negatives implemented. Video decoding/capture-identity primitives tested, but generic QA stage media is not yet fully sealed to deployment revision and requirement outcomes through that manifest path. No semantic coverage claim. |
+| AC-11 | Recorded current-app QA, explicit fixture provenance controls, and independent reviews complete as engineering evidence. This is not a registered pipeline signoff. |
+| AC-12 | Context-budget/structured-output experiments remain deferred until the remaining foundation/rollout acceptance is complete. No provider or orchestration-framework change. |
+
+The configured localhost:5432 database remains unavailable, so the missing durable
+manual memory append is still blocked. Actual tool rows in disposable runs do not
+satisfy it. Candidate learning: pre/post hashes cannot prove which mutable code a
+test executed; use a separate read-only committed snapshot and a negative
+modify/test/restore control. Additional reviewer learnings are in their reports.
+No rendered memory file or runboard was hand-edited.
+
+Operations, compatibility limits and rollback are in docs/EXECUTION-ISOLATION.md.
+Checkouts and evidence are retained; post-coding recorded retention debt
+LANTERN-DEBT-EXECUTION-GC. Git commands already in flight cannot be revoked, so
+partial mirror changes require explicit reconciliation. No S3 upload, GitHub
+publication, staging/prod deployment, merge, or human approval was performed.
+Live end-to-end work stops at the real pending story approvals. These remaining
+items prevent claiming the entire continuation plan or a production rollout is
+complete.
+
+### Final candidate verification
+
+The final current-source Azure run is `live-controller-final.json`: executions 16
+and 17 succeeded with leases, fenced memory, isolated file tools, writer quiescence
+and unique attempt checkouts; both traces persisted, two disposable memory-tool
+rows exist, and story_signoff remains pending. No downstream gate was bypassed.
+The final actual-image snapshot proof is `frozen-source-final.json` plus its full
+log: 25 tests passed in 123.989 seconds including the real Docker test. The
+modify/test/restore command is rejected on the read-only source, while the positive
+control passes; this proof uses no Azure or database.
+
+Final configured quality command: 532 unittest cases, plus standalone property scripts;
+2 explicit skips (Windows symlink privilege and opt-in live test). Test command
+passed in 164.3 seconds; lint/evals passed in 2.6 seconds. Full logs, source hashes
+and the quality-policy hash are in local-quality.json. Frozen eval plan coverage
+remains 1.00 on two examples; insufficient validator/QA paired data stays n/a.
+These frozen scores are not live model-quality measurements.

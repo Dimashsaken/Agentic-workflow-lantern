@@ -502,3 +502,10 @@ The shared server list lives in `.mcp.json` (repo root) as the single reference.
 
 Video recording stays harness-independent: it's a property of the Playwright browser
 context (`tools/qa-recorder`), so QA videos work identically under every option above.
+
+## Experimental isolated controller and execution leases
+
+The opt-in controller/worker, authority, lease and recovery contract is in
+[docs/EXECUTION-ISOLATION.md](../../docs/EXECUTION-ISOLATION.md). Read its unsupported
+paths and rollback limits before enabling any experimental flag. Live and injected
+evidence are separately labelled in the infrastructure engineering run.

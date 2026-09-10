@@ -313,3 +313,95 @@ without ever appearing in the review video." Any parent memory write has separat
 evidence and must not be inferred from these rendered drawer memory rows.
 
 Status: PASS-WITH-NOTES
+
+## Round 5 — execution provenance UI, 2026-09-10
+
+Independent QA of the continuation's AC-10/AC-11 display contract. This section
+is local engineering evidence, not a registered QA execution or gate decision.
+The test charter was extended before execution. Production drawer/CSS/renderers
+were exercised with explicit synthetic rows through the existing fixture harness;
+the fixture labels remain visible and no fixture database rows were inserted.
+
+Matching controller receipt: tested commit/tree, worker image, manifest SHA-256
+and requirement-to-test names render. A forged gate.json mirror, stale attempt
+receipt and cross-run receipt each retain the explicit no-verified-manifest label.
+Refresh/back retain that result. Unicode and HTML-shaped test names remain text.
+The mobile check requires the full evidence section and hashes inside the viewport,
+then repeats the visible section after a theme switch. All checks pass.
+
+Independent Python controls: `provenance-renderer-tests.py` ran 12 passing tests
+(nine existing drawer controls plus cross-run identity, malformed output string
+and literal test-link names), recorded in `provenance-renderer-tests.log`.
+These fixture/unit passes do not prove controller generation, semantic coverage,
+artifact integrity, recovery, or any deployed service's behavior.
+
+| Session | Video / trace | Recorded scenario offsets | Result |
+|---|---|---|---|
+| 12, initial fixture desktop | [video](media/provenance-fixture-desktop.webm) / [trace](media/provenance-fixture-desktop.zip) | 0:00–0:06 matching/forged/stale/cross-run receipts and refresh | Passed; final recording below repeats it |
+| 13, initial fixture mobile | [video](media/provenance-fixture-mobile.webm) / [trace](media/provenance-fixture-mobile.zip) | 0:00–0:03 mobile geometry, theme switch | Passed assertions; final screenshot initially returned to header after theme click |
+| 14, final fixture desktop | [video](media/provenance-fixture-desktop-final.webm) / [trace](media/provenance-fixture-desktop-final.zip) | 0:00.14 matching receipt; 0:01.23 forged mirror; 0:02.33 stale receipt; 0:03.42 cross-run; 0:04.56 refresh/back | Passed |
+| 15, final fixture mobile | [video](media/provenance-fixture-mobile-final.webm) / [trace](media/provenance-fixture-mobile-final.zip) | 0:00.18 mobile evidence geometry; 0:01.25 evidence scrolled into view after theme switch | Passed, screenshot visually inspected |
+
+`provenance-browser-results.json` and `provenance-browser-results-final.json`
+contain exact source hashes, video hashes and event times. Final videos fully
+decode with ffmpeg: VP8, 1280×720, desktop 7.12 seconds, mobile 4.12 seconds.
+The final mobile screenshot is [here](media/provenance-fixture-mobile-final.png).
+The fixture service was stopped. The screenshot correction changed only the
+recorder, not the product; no new product bug was discovered in this scope.
+
+The QA session has no exposed append_memory tool. No rendered memory file was
+edited and no insertion is claimed. Candidate pending the actual memory path:
+"2026-09-10: Pair negative provenance tests with a matching controller receipt
+and forged writable mirror, because an always-unverified UI can falsely pass
+negative checks without ever displaying valid evidence."
+
+### Round 5 actual authenticated application
+
+The integrator supplied credentials through the launcher process environment.
+`run-provenance-live.py` copied current source to a separate temporary harness,
+copied the existing Azure-produced run artifacts, generated process-only login
+credentials, and launched the actual Mission Control application against disposable
+Postgres. This was a real authenticated application session with real execution
+rows, distinct from the renderer fixture sessions above. No application response
+was stubbed and no receipt, approval or execution row was manufactured for QA.
+
+The desktop session verified anonymous access redirects to login, then logged in.
+Desktop and mobile opened executions 11 and 12 of
+`feat-20260910-live-inprocess-leased-isolated`, scrolled the evidence messages into
+the viewport, refreshed, and returned to the run. Both accurately display that no
+verified manifest was recorded. The succeeded story envelope and memory display
+remain separate from this unverified provenance label. The mobile screenshot was
+visually inspected; the label is fully visible.
+
+| Session | Video / trace | Recorded scenario offsets | Result |
+|---|---|---|---|
+| 16, actual desktop | [video](media/provenance-actual-desktop-leased.webm) / [trace](media/provenance-actual-desktop-leased.zip) | 0:00.73 login redirect; 0:01.97 authenticated; 0:02.93 execution 11; 0:05.66 execution 12; 0:08.60 return to run | Passed |
+| 17, actual mobile | [video](media/provenance-actual-mobile-leased.webm) / [trace](media/provenance-actual-mobile-leased.zip) | 0:02.04 execution 11; 0:04.56 execution 12; 0:07.02 return to run | Passed, visually inspected |
+
+`provenance-live-results.json` records exact UI source/video hashes, timestamps,
+zero browser errors, zero HTTP errors and zero blocked mutation attempts. Traces
+start after login to exclude the credential payload. Video records the masked
+password field. Both WebMs fully decode: VP8, 1280×720, desktop 9.36 seconds and
+mobile 7.32 seconds. [Mobile evidence screenshot](media/provenance-actual-mobile-12.png).
+
+`provenance-live-before.json` and `provenance-live-after.json` are identical:
+executions 11/12 remain succeeded, the run remains waiting_gate at 00-story.write,
+and approval 4 remains pending story_signoff with no deciding person or timestamp.
+The launcher stopped its service. Normal application startup ran against disposable
+data; this does not claim the application's startup has no database writes.
+
+The 20 existing Mission Control route tests also pass, including the execution
+trace badge test against factory-generated traces; see `provenance-route-tests.log`.
+Total final Python suite evidence in this round is 32 passing tests (12 drawer,
+20 routes), not a whole-repository check. An earlier standalone nine-test drawer
+run also passed and is included in the 12-test suite rather than counted twice.
+
+No new product bug was found. Six browser contexts were recorded in this round;
+four are fixture contexts and two use the actual application. No registered QA
+execution, fleet approval, deployment or QA memory insertion is claimed. Positive
+verified-provenance display is fixture coverage; these actual story executions
+establish the honest absence path only. Runtime manifest generation/tamper checks
+and recovery/Azure integration remain the integrator's separately identified
+evidence. This round does not certify changed runtime source after its snapshot.
+
+Status: PASS-WITH-NOTES

@@ -1,0 +1,47 @@
+{
+  "run": {
+    "id": "feat-20260910-live-inprocess-leased-isolated",
+    "status": "waiting_gate",
+    "current_stage": "00-story.write",
+    "updated_at": "2026-09-10 08:34:45.935877+00:00"
+  },
+  "approvals": [
+    {
+      "id": 4,
+      "gate": "story_signoff",
+      "status": "pending",
+      "decided_at": null,
+      "decided_by": null
+    }
+  ],
+  "executions": [
+    {
+      "id": 11,
+      "stage": "00-story.scout",
+      "status": "succeeded",
+      "attempt": 1,
+      "idempotency_key": "feat-20260910-live-inprocess-leased-isolated:00-story.scout:1",
+      "input_tokens": 47406,
+      "output_tokens": 2331,
+      "total_tokens": 49737,
+      "output": "{\"report\": \"workflow/runs/feat-20260910-live-inprocess-leased-isolated/00-story/report.md\", \"final_output\": \"Completed `00-story.scout` for `feat-20260910-live-inprocess-leased-isolated`.\\n\\nArtifacts written:\\n\\n- `00-story/research.md`\\n- `00-story/research.json`\\n- `00-story/report.md`\\n\\nStatus: **PASS-WITH-NOTES**. Durable learning recorded via `append_memory`.\"}"
+    },
+    {
+      "id": 12,
+      "stage": "00-story.write",
+      "status": "succeeded",
+      "attempt": 1,
+      "idempotency_key": "feat-20260910-live-inprocess-leased-isolated:00-story.write:1",
+      "input_tokens": 164839,
+      "output_tokens": 2778,
+      "total_tokens": 167617,
+      "output": "{\"report\": \"workflow/runs/feat-20260910-live-inprocess-leased-isolated/00-story/report.md\", \"final_output\": \"Completed `00-story.write` for `feat-20260910-live-inprocess-leased-isolated`.\\n\\n- Created `story.md`\\n- Created and verified `story.json` with 2 acceptance criteria\\n- Appended the Story phase to `report.md` with `Status: PASS`\\n- Recorded a durable learning via `append_memory`\\n- Story is ready for human `story_signoff`\"}"
+    }
+  ],
+  "source_sha256": {
+    "tools/mission-control/app.py": "87bf94dba0b42e3e89ab8a4fb2e09209a0cb83172f1174f9218ca606f08d601d",
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/drawer.py": "8efad548f5de7561e9e69b784a276ad6e45e23acfedddbb82dc6a6eba76cf084",
+    "tools/mission-control/traceability.py": "90852aa29a9cc9a1cac833d26b0b027eed7fb923e8327b52367e068603024d60"
+  }
+}

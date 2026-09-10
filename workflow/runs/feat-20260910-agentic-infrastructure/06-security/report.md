@@ -98,3 +98,111 @@ S-1 is **partially resolved**: candidate-container startup, live success/turn-li
 Recommendation remains **NO-GO for staging**. This supplement approves no plan, schema, gate or deployment, and does not claim that the future isolation/recovery/provenance work has been implemented.
 
 Status: BLOCKED
+
+
+## Increment 2 independent defensive review — 2026-09-10
+
+Review target: uncommitted increment 2 relative to `7f01faad1c9cfbef886026906f9a3e8631632a74` on `codex/agentic-infrastructure`. This appendix supersedes neither the historical evidence nor human gates. **Recommendation: NO-GO for staging.** Local remediation and verification can continue. The source is still changing; fixes below require a supplemental verification before closing findings.
+
+Read security charter, skills, memory, AGENTS.md, runboard, continuation plan, next-increment blast radius/schema/task plans and prior post-coding/security reports. Reviewed the entire runtime delta, including new worker/routing, lease/runtime, durable-diagnostics, evidence-manifest and trusted-authority modules; factory, pipeline, builders, review, orchestrator, read-only Git, schema, eval fingerprint and Mission Control changes. No new HTTP route or authorization handler was added. New drawer values pass through HTML escaping. `git diff HEAD --name-only -- '*lock*' '*requirements*' '*package.json'` returned no dependency or lockfile changes for this increment. The earlier image inventory/reproducibility condition still applies; this is not a fresh advisory scan of all installed dependencies.
+
+### Findings at this review cutoff
+
+| ID | Severity / status | Evidence | Concrete mitigation |
+|---|---|---|---|
+| S2-1 | **High — reproduced; remediation in progress** | `factory.run_quality_gate`, `trusted_evidence.seal_gate` and `evidence_manifest.capture_product_state` capture source before/after commands while the same product mount is writable. Independent actual local subprocess probe committed `value.txt=ORIGINAL_FAIL`; the command wrote `TEST_PASS`, asserted against that value, then restored the file. Result: `gate_passed=true`, provenance `verified`, restored value `ORIGINAL_FAIL`, and `check_quality_gate=[]`. This probe used the existing adapter fixture with injected worker identity/routing, not Docker/Azure/Postgres. It demonstrates a source-identity gap, separately from semantic coverage. | Execute quality commands on a separately constructed committed-only snapshot, inaccessible to the original worker and mounted read-only. Do not copy product Git hooks/config or ignored executable inputs. Verify exact tested bytes, image and command observations. Add positive and modify-test-restore negative controls in actual Docker. Fail explicitly for unsupported writable-source builds; never silently fall back. |
+| S2-2 | **Medium — open** | `orchestrator.make_append_memory` opens its own asyncpg connection, inserts into `role_memory` and renders it without checking a bound lease. A tool already in flight can finish after expiry and make stale learning available to future prompts. Existing stage completion fencing does not guard this insertion. The approved boundary discussion explicitly includes memory acceptance. | In lease mode, require the matching execution/run binding and fence the insertion transaction with the stage lease. Stale or absent ownership must fail; retain legacy manual behavior only when honestly outside leased execution. Add expired-owner negative control and normal append control. |
+| S2-3 | **Medium — open** | `pipeline.publish_coding_branch` keys intent by run/head and hashes run/head/branch, while `_publish_coding_branch` resolves repo/base separately afterward. Target repo/base is absent from the intent. A repointed run can reuse a confirmed result for a different target or publish against a target different from its recorded intent. | Capture canonical repo/base/work/head once, include them in the effect request, and use that same captured target for publication. Reject mismatches. Keep uncertain effects held until actual provider state is inspected. |
+| S2-4 | **Medium operational boundary — partly mitigated** | Initial review found shared process-global product environment across concurrent host stages and `product_checkout` reusing `checkouts/<run_id>`. The integrator added `INPROCESS_STAGE_LOCK` around the complete stage scope/setup/cleanup at `pipeline.py:521-529`; independently checked this source mitigation. Host stages now serialize, preventing that same-process environment race. Reusing the same checkout path still complicates retries if an old worker survives cleanup failure. | Keep serialization until product context is fully request scoped. Use execution-specific checkout paths and prove retry cannot mount/delete another attempt's tree. Do not describe host builders as concurrently isolated merely because their database connections and leases are separate. |
+| S2-5 | **Medium rollout incompleteness — open** | Strict worker networking is intentionally `none`; external QA and Paper are held. Lease mode disables automatic babysitting. Publication uses a thread whose in-flight Git/API effects cannot be revoked by task cancellation. The manifest library can validate video records, but this does not establish execution-bound trusted capture for every normal QA path. | Retain explicit opt-in limits. Complete reviewed egress/target access, fenced babysitting and provider-specific reconciliation before enabling the full production pipeline. Bind normal recorder sessions and accepted media to executions; inspect recorded QA against the final source. Never call a local ledger exercise exactly-once GitHub publication proof. |
+
+No host escape, credential exfiltration or approval bypass was demonstrated by this reviewer. Docker daemon and the configured image remain trusted infrastructure; absence of those exploit observations is not proof against arbitrary kernel/container vulnerabilities.
+
+### Independently executed checks and inspected live records
+
+Independently ran `test_execution_runtime.py`: **28 tests passed in 4.298 seconds**; `test_tool_execution.py`: **11 tests passed in 0.049 seconds**, using Python 3.12.10. These injected/local controls are not live database or Docker validation. The source-substitution probe above used a real local subprocess and disposable Git repository; its output was observed directly in this review. No external service mutation or approval decision was made.
+
+Inspected supplied records without repeating their Azure calls:
+
+- `03-coding/live-leased-isolated.json`: actual Azure/disposable-Postgres scout execution **11** and story execution **12** succeeded, with **49,737** and **167,617** total tokens; `story_signoff` remains pending, `decided_by=null`, and two disposable memory rows exist. These are not a formal engineering-run approval or durable configured-fleet learning.
+- `03-coding/live-controller-recovery.json`: actual controller kill after one completed Azure response retains **8,111** known tokens, fsynced partial tool diagnostics and `incomplete=true`. Execution **13** goes from running to failed; no gate opens; exact labelled container `3886407da45f00fa83425caf803d0096318296415f6f49aba5f17fb4c9a0bbfa` is removed. This supports a conservative hold and known-usage lower bound, not replay or external publication recovery.
+- `03-coding/isolated-worker-controls.json`: candidate image `sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756`; real shell and MCP transport controls report only product/media mounts, UID 1000, blocked sentinel authority paths and egress, no controller credential sentinels, successful scoped writes, binary Git transport, timeout/background cleanup and read-only product control. SDK MCP browser control is a container-local data URL; its VP8 1280x720 recording is **1.520 seconds**, digest `07e3566acd19ac6252787a013498a8de08cc8cfa2e44fba5d7fe4d6439f9b3e1`. It proves that offline fixture, not deployed target QA.
+- `03-coding/live-trusted-evidence.log` records an actual Docker quality command and tamper refusals, with no Azure/database use. It predates closure of S2-1 and cannot establish immutable test-time source on its own.
+
+The records identify source snapshots; later integration fixes require fresh targeted evidence. No measured production-size migration lock duration, staging configuration validation, normal external authenticated QA under strict isolation, or live GitHub reconciliation proof is claimed. Formal fleet inputs and recorded human gates remain absent for this engineering folder.
+
+### Deploy-day checklist for a later human release
+
+- [ ] Resolve S2-1 through S2-3 with independent regression review; document/close S2-4 and S2-5 according to the enabled scope.
+- [ ] Freeze release commit and image digest; rerun configured checks/evals and recorded QA after the final runtime changes. Preserve exact source/evidence hashes.
+- [ ] Verify target Azure deployments, durable Postgres, scoped QA connectivity and authority/diagnostic filesystem permissions from the candidate environment without logging credentials.
+- [ ] Drain all old dispatchers/workers; inventory existing active rows and ambiguous effects. Mixed unfenced/fenced dispatchers are unsupported. Apply only the human-approved additive migration with bounded locks/timeouts and measured row counts.
+- [ ] Enable only the tested executor/flags and use a disposable canary that reaches its actual pending human gate. Verify report, memory, known usage, manifest and child/run ownership agree.
+- [ ] Stop dispatch on stale acceptance, source mismatch, wrong-target publication or failed worker cleanup. Preserve the effect ledger and diagnostics; reconcile external state before retry. Roll runtime back only after draining; retain additive schema/effect records unless their removal is separately approved.
+- [ ] Keep staging deployment, production signoff and merge actions with the human through existing gates. This review decides none of them.
+
+### Memory postcondition
+
+Candidate learning: **2026-09-10: Before/after source hashes cannot establish what a test executed when that source remains writable; use a separate read-only committed snapshot and separately fence every future-authoritative write, including role memory.**
+
+Sent to the integrator for the actual `append_memory` path. Configured durable Postgres at localhost:5432 remains unavailable, and this review has no registered execution to impersonate. No rendered memory edit, fake execution or successful durable append is claimed. This postcondition remains blocked.
+
+Status: BLOCKED
+
+
+## Supplemental verification of increment 2 fixes — 2026-09-10
+
+Independently read the snapshot construction and verification implementation, then reran the opt-in real Docker regression: `test_trusted_evidence.py FactoryGateHooks.test_real_isolated_worker_quality_gate_and_tamper_controls -v`, with `LANTERN_LIVE_EVIDENCE_TEST=1` and the candidate image. **1 actual Docker test passed in 90.239 seconds.** No Azure or database was used by this test.
+
+**S2-1 is resolved for the tracked-source quality gate.** `trusted_evidence.quality_snapshot` builds a separate committed-only tree, checks blob/tree/commit hashes, writes fresh minimal Git metadata, excludes ignored dependencies and stops the writable preparation worker before running any quality command with a read-only source mount. The original worker cannot access the new source/output directories. `seal_gate` requires this controller-created snapshot, and verification rejects earlier manifests lacking the snapshot record. There is no writable-source fallback.
+
+The independent Docker observation recorded:
+
+- Image `sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756`.
+- Tested commit `96d1d540e74d6e6f2ee942db5138cf8ed1b4ea2e`, tree `331abb9014a861416a20f39b17458bff77879fe3`, worktree digest `6ea129319f1d048bf7715354827301c517efd67a24679f4ce4ac17903e683be7`.
+- Manifest digest `ea78e4cd3b51eb2a4dfc0a9d638d4b0944f59006eadfae85cdb1328e8821eb65`; harness dirty-source fingerprint `1e7951cafd223789f5f2b4f6bc6c9515053c7ef9e99ad1bec149e8c6dc971b53`.
+- Positive command `python source.py` exited zero; ignored helper excluded; manifest/source tampering rejected. The same modify/test/restore command passed against the mutable worker and failed against the snapshot with `OSError: [Errno 30] Read-only file system`; the original source remained intact for the fix loop.
+
+**S2-2 and S2-3 are resolved in the reviewed source.** `make_append_memory` now inserts inside the current child-fenced transaction and verifies run/stage/execution-key identity. Publication intent now includes repo/base/work and passes the expected target to the helper; changed targets stop before starting the publication thread, and a changed handoff head is rejected. This still does not revoke in-flight provider requests or prove live GitHub reconciliation.
+
+**S2-4 is resolved for the supported serialized host executor.** Runtime checkout paths use the full execution-key hash and refuse reuse rather than deleting a previous attempt's mount. The complete host stage is serialized around its remaining process-global environment. Independent `test_recovery_acceptance.py` run: **6 tests passed in 1.020 seconds**; it checks unowned/wrong-key memory refusal and valid insertion, target mismatch before publication, distinct attempt checkouts, stage serialization, child artifact ownership and unsupported leased Docker/babysitter refusal. These are local/injected controls, with real disposable Git checkout operations; they are not live Postgres fence tests.
+
+Additional stage-file hardening was reviewed: policy-approved product/media reads, writes, appends and directory listing now run inside the worker through an isolated Python helper using directory descriptors, `O_NOFOLLOW`, nonblocking opens and regular single-link-file checks. Reads/output are bounded. Independent `test_tool_execution.py` run after these additions: **15 tests passed in 0.034 seconds**. Supplied `isolated-worker-controls.json` includes actual Docker post-policy file/directory substitution refusals and an unchanged synthetic controller sentinel; this reviewer inspected the implementation and unit controls, without repeating that separate live race fixture.
+
+Final local-pilot recommendation remains pending the in-progress output-collection review: model/MCP writers must be gone before bundle export and media reads, and planted links must be refused before any host-side upload. S2-5 and the staging prerequisites remain open. **Staging recommendation remains NO-GO.** Durable memory append remains blocked as previously recorded; no append or approval is claimed.
+
+Status: BLOCKED
+
+
+## Final bounded local-pilot verdict — 2026-09-10
+
+**GO with conditions for the limited local pilot; NO-GO for staging.** No confirmed unmitigated high finding remains in the reviewed strict host-executor scope. S2-1 through S2-4 are closed as described above. S2-5, durable configured-memory completion and the target-environment release prerequisites remain open. This is an independent engineering recommendation, not a fleet stage signoff or human approval.
+
+The final output-collection boundary was independently checked in source. After the last SDK/fix-loop turn, the controller cleans MCP and stops the original worker before finalization/export/postconditions. A separate, never-started worker object permits only controller-issued ephemeral inspection commands; each command is removed before its result is consumed. Final cleanup removes that worker before upload. Media collection uses the exact execution output root for strict stages, confines every candidate, refuses nonregular/multiple-link files and stages upload bytes in a private controller directory. Upload metadata records execution key and content digest. No actual S3 upload was performed; this is source and local regression verification. No live GitHub publication was performed.
+
+The source hash reader now uses bounded, nonblocking regular-file reads; product policy reads have a 1 MB limit and source hashing a 64 MB per-file limit. Invalid/special/linked files fail closed. Quality snapshot capture retains its committed-object hash checks. Stage tools use the separately tested worker descriptor path. These checks support the stated isolation boundary; they do not certify arbitrary container escape resistance or semantic test coverage.
+
+Final independent regression runs: **8 recovery-acceptance tests passed in 0.766 seconds**, and **17 execution-journal tests passed in 5.004 seconds**. The journal suite includes writer shutdown before postconditions/media; recovery controls cover attempt scoping, linked-media refusal and bounded source inputs. An earlier run of the new media test reported an exception-type mismatch: the implementation correctly refused a hard link with `PermissionError`, while the test expected `ValueError`. The assertion was corrected and the complete eight-test rerun passed. `git diff --check` passed. These local controls are distinct from the independent 90.239-second Docker snapshot proof above.
+
+Conditions for the local pilot:
+
+1. Use the reviewed strict host executor, the tested image digest and disposable database/product runs. Keep worker network disabled; Azure remains on the controller. Do not enable untested external publication, S3 upload, external QA/Paper or leased babysitting as part of this recommendation.
+2. Keep host-stage serialization and unique attempt checkouts; stop and investigate any worker cleanup failure. Retention/garbage collection must avoid live mounts and remains a tracked operational task before sustained operation.
+3. Complete the integrator's final full gate/eval and current-source Azure smoke before calling the increment complete. Those checks were in progress at this cutoff; this report does not predeclare their results. Re-review changes to the boundaries listed below.
+4. Preserve every human gate. Before staging, close S2-5 and the deployment checklist, verify target configuration and migration behavior, finish recorded target QA and independent validation, and obtain the actual required human decisions.
+
+Reviewed boundary source hashes at this cutoff:
+
+| File | SHA-256 |
+|---|---|
+| `tools/azure-runner/pipeline.py` | `e9bfd71be2f12b8235ac650e822f1b98e5614c30571a6fb282997cae53db5bda` |
+| `tools/azure-runner/orchestrator.py` | `4e474f99d4c34dd9b35bea8c6dc26b51ce59db3325358e407043c37937223ee0` |
+| `tools/azure-runner/tool_execution.py` | `69fb952682dfece9e5d7aa09abb95bdbed0af42f9199ab9d3ca59c865a2fa33b` |
+| `tools/azure-runner/isolated_tools.py` | `ee731cdb276d01ec3fac2646059ef9c6a394398a4906a0f5f401e30454f54970` |
+| `tools/azure-runner/factory.py` | `d850780e3d03ec1ec41c8a619ba40632cd3afb4a14b5574cc41ee08129133cb8` |
+| `tools/azure-runner/trusted_evidence.py` | `8f71f3b7dc12ed1ef124314e82f13c7c96dbacd0ce5bc26a941f8241647d16bc` |
+| `tools/azure-runner/evidence_manifest.py` | `fe535050b67586a064cd068a34ad56b637d60b0a7cac551c7f12c38415a3fc11` |
+
+Memory candidate remains the dated learning above. The actual durable `append_memory` insertion is still blocked by the configured database; rendered memory was not edited and no success is claimed.
+
+Status: BLOCKED (formal stage / staging); bounded local pilot GO with conditions

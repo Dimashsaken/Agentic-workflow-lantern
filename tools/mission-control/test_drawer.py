@@ -92,6 +92,25 @@ class DrawerTests(unittest.TestCase):
 
     # ── the trace half ───────────────────────────────────────────────────────
 
+    def test_provenance_comes_from_execution_row_not_gate_mirror(self):
+        run = run_row(id=RUN, status="waiting_gate", current_stage="04-qa-dev")
+        e = self.qa_exec()
+        forged = {"status": "verified", "identity": {"execution_key": self.key, "run_id": RUN}}
+        (self.root / "04-qa-dev/gate.json").write_text(json.dumps({"provenance": forged}))
+        m = self.load(run, e)
+        self.assertIsNone(m["provenance"])
+        forged["identity"]["product"] = {"head_sha": "abc123", "tree_sha": "tree123"}
+        forged["test_links"] = {"AC-1": ["quality:test"]}
+        e["output"] = json.dumps({"provenance": forged})
+        html = drawer.render_drawer(self.load(run, e), mc.render_markdown, mc.STAGE_META)
+        self.assertIn("Controller verified at completion", html)
+        self.assertIn("abc123", html)
+        self.assertIn("AC-1: quality:test", html)
+        forged["identity"]["execution_key"] = "other-execution"
+        e["output"] = json.dumps({"provenance": forged})
+        html = drawer.render_drawer(self.load(run, e), mc.render_markdown, mc.STAGE_META)
+        self.assertIn("No verified manifest recorded", html)
+
     def test_prompt_tool_calls_and_usage_from_the_trace(self):
         m = self.load(run_row(id=RUN, status="waiting_gate", current_stage="04-qa-dev"), self.qa_exec())
         self.assertIsNotNone(m["trace"])

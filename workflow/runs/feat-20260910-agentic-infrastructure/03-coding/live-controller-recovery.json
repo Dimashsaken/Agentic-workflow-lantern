@@ -1,0 +1,116 @@
+{
+  "kind": "real_azure_controller_kill_and_postgres_recovery",
+  "run_id": "feat-20260910-live-inprocess-rk1",
+  "started_at": "2026-09-10T08:45:46.076260+00:00",
+  "sdk_replay": false,
+  "diagnostics": {
+    "path": "C:\\Users\\dimas\\AppData\\Local\\Temp\\lantern-rk1\\diagnostics\\a7edb3a94342111f8d39c45047e49c608a0ab2f7529a7f4bec0b9e3176b70bd3.jsonl",
+    "sha256": "4816da69f63fa047d9c3f6c9fc5828f34ecb83450c6ce33fc3770cc1f27ea884",
+    "usage": {
+      "requests": 1,
+      "input_tokens": 7955,
+      "output_tokens": 156,
+      "total_tokens": 8111,
+      "cached_input_tokens": 0
+    },
+    "incomplete": true,
+    "event_kinds": [
+      "execution_started",
+      "model_started",
+      "model_completed",
+      "tool_started",
+      "tool_started",
+      "tool_started",
+      "tool_started",
+      "tool_started",
+      "tool_completed",
+      "tool_completed",
+      "tool_completed"
+    ]
+  },
+  "before_recovery": [
+    {
+      "id": 13,
+      "status": "running",
+      "requests": 1,
+      "input_tokens": 7955,
+      "output_tokens": 156,
+      "total_tokens": 8111,
+      "idempotency_key": "feat-20260910-live-inprocess-rk1:00-story.scout:1"
+    }
+  ],
+  "recovery": [
+    {
+      "run_id": "feat-20260910-live-inprocess-rk1",
+      "status": "failed",
+      "ambiguous_effects": false,
+      "execution_ids": [
+        13
+      ],
+      "sdk_replay": false
+    }
+  ],
+  "after_recovery": [
+    {
+      "id": 13,
+      "status": "failed",
+      "requests": 1,
+      "input_tokens": 7955,
+      "output_tokens": 156,
+      "total_tokens": 8111,
+      "idempotency_key": "feat-20260910-live-inprocess-rk1:00-story.scout:1"
+    }
+  ],
+  "gates": [],
+  "run_status": "failed",
+  "cleanup": [
+    [
+      "3886407da45f00fa83425caf803d0096318296415f6f49aba5f17fb4c9a0bbfa"
+    ]
+  ],
+  "passed": true,
+  "limits": "Unfinished response/tool tail is unknown; persisted usage is a lower bound. Recovery holds for explicit retry; no SDK resumption or external publication was tested.",
+  "finished_at": "2026-09-10T08:46:18.144713+00:00",
+  "harness_source_sha256": {
+    "tools/azure-runner/brief_composer.py": "be56ec1fc93e0b5651261248517d3f3b4b0595edf125fb139596d11b6731b3f9",
+    "tools/azure-runner/builders.py": "9d61a1f06f8e2ba7f917f33f40c9b09f4916be8279f92805e86392282451f51d",
+    "tools/azure-runner/chat_service.py": "a04abf8946042e8c3b1d86978029528ae1b31cbae2043a06f66b2b0286bf5d31",
+    "tools/azure-runner/docker_isolation_validation.py": "0f0ef4856326b47b40e19cec13e6daeaf09aa28c1544094368537d385c8a65df",
+    "tools/azure-runner/durable_execution.py": "b966e50160b99b6adbd0b6e560a27a0d45b04d32c13b6ff2b573fbb6bdbc6caf",
+    "tools/azure-runner/evidence.py": "d6c6528bdf7844a4ead59e2562c5aaf25f30b62909d088496cca0dfbd9cd1eea",
+    "tools/azure-runner/evidence_manifest.py": "b3b3866913bc4382c8979caccde0bc0efad20e0866894e014c0977d2b4934e7d",
+    "tools/azure-runner/execution_leases.py": "45719ccdf522284eed7434159b6db464b5730b4787b7edc50157cf5d947083e9",
+    "tools/azure-runner/execution_runtime.py": "e9344d7e1862f26b96097620fc77751fd130fd216ae2412cda0630816efd5783",
+    "tools/azure-runner/factory.py": "d39e734af309441ba895d2bef985db6f224e8c37bbf04c6db3cf9103026af9a9",
+    "tools/azure-runner/init_product.py": "21059f5306a42208c7955dfb2ea05ed3c68ebe2614aa1da178ff808c050ca500",
+    "tools/azure-runner/intake.py": "61ac5809c66d8e2a4f7294391d2e7b5f843dff06bf8fde9fe3823f92af4e31c0",
+    "tools/azure-runner/integration_validation.py": "b068522c01dec4767dc1b5b6e55fc75a8de00922747f469382861204ad086cdc",
+    "tools/azure-runner/isolated_tools.py": "ee731cdb276d01ec3fac2646059ef9c6a394398a4906a0f5f401e30454f54970",
+    "tools/azure-runner/orchestrator.py": "1618fe7721e260deeb2688deba01c99ecdc6063b377407ac7de183236714687c",
+    "tools/azure-runner/pipeline.py": "f8205a0f600951e827b143719c10f80d36ab679be0bee0478fcb2900cbe6039b",
+    "tools/azure-runner/readonly_git.py": "4075e6e2d48cf32047a9a21bbb9a7ff3e5b4700541c10f2a9219594002d90d1a",
+    "tools/azure-runner/review.py": "3f6ad3e42df241df7ce305883770e7a1ae6ed639399a3e3eceed0ae5ae11b51b",
+    "tools/azure-runner/smoke_test.py": "8b4b41a79477d8e07f3f4ddd85ff820254cb18cb359becedd5168a9cfe120d9c",
+    "tools/azure-runner/test_brief_parsing.py": "bd2181362ba1898a4e68d9141051afe16d2bf06c45f16581ca78377132b2529a",
+    "tools/azure-runner/test_builders.py": "58d59496db3971b988222ff8707261396c49001dd35a7a7eea620d1163e07393",
+    "tools/azure-runner/test_chat_service.py": "4678219427ebf89705efe159445e779c942b832a2eec960b9ad6748bb1e2fbf1",
+    "tools/azure-runner/test_chat_tools.py": "718ac1924292b7ea2b3469bc91aa7d217b8e6daf4a5c76cb1fde8e0519e08966",
+    "tools/azure-runner/test_coding_stage.py": "9c589ccf1640463d99aae3bf3783d7cf18d15b8bfde2100959bae0dc0cf1cc84",
+    "tools/azure-runner/test_evidence.py": "ed0af9da25683d03a2b17b389233d4bcd91d6f3dcdc20c34186538581c49fd72",
+    "tools/azure-runner/test_execution_journal.py": "8220b0f6aabd6c5d850e2ee7c874e46795c82e1d899bac746e921b3cc1cfdcaf",
+    "tools/azure-runner/test_factory.py": "0d6980e3752b05f060d79cfeb66a54f1ddcd51983e4bc26628ae46baebc3001b",
+    "tools/azure-runner/test_gate_integrity.py": "049fdeedfa297a122dcd08773896f8eecc31f230e95e55dec255f26e691c12e3",
+    "tools/azure-runner/test_init_product.py": "bc76b9c11ada3d9a9557b99e20e66c9c4aad74a45f091aaee2745f32c636a2bf",
+    "tools/azure-runner/test_intake.py": "be7e77938edf0fd599e8208fabb7dd80ddb91639cd63ffbf061defd48f260258",
+    "tools/azure-runner/test_model_stack.py": "a9d96afc92aa7acbd3d244171c043498198ccdd588c7036dec167c02dc74e8ad",
+    "tools/azure-runner/test_product_access.py": "75c59db5cdf4d5cb82d26ad64134f8eb8954b06718f4fc6ceb1075c3fed557f3",
+    "tools/azure-runner/test_review.py": "91eab766a8cc529a1c148d0bba8ca67f7b0a068e2cc50c8d0c0f7eb2fcf895d5",
+    "tools/azure-runner/test_status_json.py": "df511bc54f87848b994c1821fdb0939400d3e8f9d21eb25294c6ad1322f391f5",
+    "tools/azure-runner/test_tool_policy.py": "0719308e0a85274f50cf54ae97ecad8ecb7b44db4ce40ce1808c5dc4dc994c01",
+    "tools/azure-runner/test_trace.py": "1f729b6b53a9f5bc9d3edc98440bbcf512626ae69f2c4fe033021412cdc5864e",
+    "tools/azure-runner/test_verification.py": "e00f42efd09f068eb4f05f721bdb9220650c560de4fd5349b170a83ced076b68",
+    "tools/azure-runner/tool_execution.py": "19b33193daea0906596f1595e0b7125b533d9cb9569f603d15509aa8d8e37413",
+    "tools/azure-runner/tool_policy.py": "47d1e43616682bb8b4b5dadec5a513af296cf713e847f4dec6f1c20887989030",
+    "tools/azure-runner/trusted_evidence.py": "d90adee30ab4425e43a3eab77a7b5b1132f55146e6381776c489e94dfbcd729b"
+  }
+}

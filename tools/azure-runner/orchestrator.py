@@ -36,6 +36,7 @@ import review   # D19: review-round / fix-execution task blocks (pure — no SDK
 import intake  # D20: the debug lifecycle — its envelopes register into factory on import
 import tool_policy
 import readonly_git
+import tool_execution
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -272,6 +273,16 @@ def playwright_mcp_server(run_id: str | None = None, stage: str | None = None) -
     regression check for that behavior after any MCP bump.
     """
     import shlex
+    worker = tool_execution.CURRENT.get()
+    if worker is not None:
+        cfg = {"browser": {"contextOptions": {"recordVideo": {"dir": "/work/media"}}}}
+        config = worker.output_root / "mcp-recording.json"
+        config.write_text(json.dumps(cfg), encoding="utf-8")
+        cmd = worker.mcp_command(["playwright-mcp", "--headless", "--isolated", "--browser", "chromium",
+                                  "--config", "/work/media/mcp-recording.json", "--output-dir", "/work/media"])
+        return MCPServerStdio(params={"command": cmd[0], "args": cmd[1:]}, name="playwright")
+    if tool_execution.enabled():
+        raise RuntimeError("isolated MCP execution requires a bound worker")
     cmd = shlex.split(os.environ.get(
         "LANTERN_PLAYWRIGHT_MCP", "npx -y @playwright/mcp@latest"))
     if run_id and stage and is_qa_video_stage(stage):
@@ -689,10 +700,18 @@ def make_append_memory(role: str, run_id: str, stage: str, execution_key: str):
         """
         conn = await asyncpg.connect(db_urls()[1])
         try:
-            await conn.execute(
-                """INSERT INTO role_memory (role, run_id, stage, execution_key, entry)
-                   VALUES ($1, $2, $3, $4, $5)""",
-                role, run_id, stage, execution_key, entry.strip())
+            import execution_runtime as ownership
+            async with ownership.mutation(conn, stage=True):
+                if ownership.enabled():
+                    child = ownership.STAGE.get()
+                    if child.lease.run_id != run_id or not await conn.fetchval(
+                        "SELECT EXISTS(SELECT 1 FROM stage_executions WHERE id=$1 AND run_id=$2 AND stage=$3 AND idempotency_key=$4)",
+                        child.lease.execution_id, run_id, stage, execution_key):
+                        raise ownership.leases.LeaseLost("memory does not match the owned stage execution")
+                await conn.execute(
+                    """INSERT INTO role_memory (role, run_id, stage, execution_key, entry)
+                       VALUES ($1, $2, $3, $4, $5)""",
+                    role, run_id, stage, execution_key, entry.strip())
             await render_role_memory(conn, role)
         finally:
             await conn.close()
@@ -744,7 +763,7 @@ def _product_git(subcommand: str, args: list[str] | None = None, *, root: Path |
         raise FileNotFoundError(PRODUCT_HINT)
     argv = readonly_git.argv(subcommand, args, root=root)
     try:
-        r = subprocess.run(argv, cwd=root, timeout=120, env=readonly_git.environment(),
+        r = tool_execution.run(argv, cwd=root, timeout=120, env=readonly_git.environment(),
                            capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         raise TimeoutError("git command took over 120s — narrow it (add a path or -n limit)")
@@ -788,9 +807,12 @@ def _product_shell(command: str, timeout_s: int | None = None, *,
     if os.name == "nt":
         shell = ["bash", "-c", command]  # Git Bash on a laptop; -l would source profiles
     try:
-        r = subprocess.run(shell, cwd=access.product if access else product_root(), timeout=timeout, env=env,
-                           capture_output=True, text=True, errors="replace",
-                           stdin=subprocess.DEVNULL)
+        root = access.product if access else product_root()
+        r = tool_execution.shell(command, root, timeout)
+        if r is None:
+            r = subprocess.run(shell, cwd=root, timeout=timeout, env=env,
+                               capture_output=True, text=True, errors="replace",
+                               stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         raise TimeoutError(
             f"command ran over {timeout}s and was killed — run long tasks in smaller "
@@ -828,8 +850,33 @@ def product_shell(command: str, timeout_s: int = 600) -> str:
 
 
 def _git_out(args: list[str], cwd: Path, timeout: int = 300) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=cwd, timeout=timeout, capture_output=True,
-                          text=True, errors="replace", env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    worker = tool_execution.worker_for(cwd)
+    transfers = []
+    mapped = list(args)
+    if worker:
+        for i, arg in enumerate(args):
+            path = Path(arg)
+            if path.is_absolute() and path.suffix == ".bundle" and not path.is_relative_to(worker.product_root):
+                scratch = worker.output_root / ("transfer-" + uuid4().hex + ".bundle")
+                exporting = args[:2] == ["bundle", "create"]
+                if not exporting:
+                    shutil.copyfile(path, scratch)
+                mapped[i] = str(scratch)
+                transfers.append((scratch, path, exporting))
+    try:
+        result = tool_execution.run(["git", *mapped], cwd=cwd, timeout=timeout, capture_output=True,
+                                   text=True, errors="replace", env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+        for scratch, target, exporting in transfers:
+            if exporting and result.returncode == 0:
+                tool_policy.confined(worker.output_root, (scratch.name,))
+                if scratch.stat().st_size > 100_000_000:
+                    raise ValueError("coding bundle exceeds the 100 MB transfer limit")
+                shutil.copyfile(scratch, target)
+        return result
+    finally:
+        for scratch, _, _ in transfers:
+            if scratch.is_file() and not scratch.is_symlink():
+                scratch.unlink()
 
 
 # D6 constrains the ref namespace an agent may push to. D15 lets a run continue on an
@@ -1055,7 +1102,7 @@ def _git_quiet(args: list[str], timeout: int = 30) -> str:
         # encoding is explicit: git emits UTF-8, and letting Windows decode commit
         # subjects with the locale codepage turns every em-dash into mojibake in the
         # prompt the model actually reads.
-        r = subprocess.run(["git", *args], cwd=product_root(), timeout=timeout,
+        r = tool_execution.run(["git", *args], cwd=product_root(), timeout=timeout,
                            capture_output=True, text=True, encoding="utf-8",
                            errors="replace")
         return r.stdout.strip() if r.returncode == 0 else ""
@@ -1124,9 +1171,12 @@ def product_docs_block() -> str:
             break
         f = root / name
         try:
-            if not f.is_file() or f.stat().st_size > PRODUCT_DOC_STAT_MAX:
-                continue
-            text = f.read_text(encoding="utf-8", errors="replace")
+            if tool_execution.file_route(f, product_root=root):
+                text = tool_execution.file_io("read", f, max_bytes=PRODUCT_DOC_FILE_MAX * 4 + 4, truncate=True)
+            else:
+                if not f.is_file() or f.stat().st_size > PRODUCT_DOC_STAT_MAX:
+                    continue
+                text = f.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         if not text.strip():
@@ -1440,7 +1490,10 @@ def stage_tools(role: str, run_id: str, stage: str, execution_key: str, paper=No
     @function_tool
     def read_file(path: str) -> str:
         """Read a non-secret file in the Lantern repo, this run, or product/."""
-        return access.read(path).read_text(encoding="utf-8")
+        target = access.read(path)
+        if tool_execution.file_route(target, product_root=access.product):
+            return tool_execution.file_io("read", target)
+        return target.read_text(encoding="utf-8")
 
     @function_tool
     def list_dir(path: str) -> str:
@@ -1448,6 +1501,10 @@ def stage_tools(role: str, run_id: str, stage: str, execution_key: str, paper=No
         target = access.read(path)
         if target == (access.repo / "workflow/runs").resolve():
             return run_id + "/"
+        if tool_execution.file_route(target, product_root=access.product):
+            entries = tool_execution.file_io("list", target)
+            return "\n".join(sorted(x["name"] + ("/" if x["is_dir"] else "")
+                                   for x in entries if not tool_policy.is_secret((x["name"],))))
         return "\n".join(sorted(x.name + ("/" if x.is_dir() else "")
                                 for x in target.iterdir() if not tool_policy.is_secret((x.name,))))
 
@@ -1455,17 +1512,23 @@ def stage_tools(role: str, run_id: str, stage: str, execution_key: str, paper=No
     def write_file(path: str, content: str) -> str:
         """Write your stage's text artifacts, or approved product files when coding."""
         target = access.write(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        if tool_execution.file_route(target, product_root=access.product):
+            tool_execution.file_io("write", target, content=content)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
         return f"wrote {path}"
 
     @function_tool
     def append_file(path: str, content: str) -> str:
         """Append your section to a report or other permitted text artifact."""
         target = access.write(path, append=True)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("a", encoding="utf-8") as stream:
-            stream.write(content)
+        if tool_execution.file_route(target, product_root=access.product):
+            tool_execution.file_io("append", target, content=content)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("a", encoding="utf-8") as stream:
+                stream.write(content)
         return f"appended to {path}"
 
     @function_tool

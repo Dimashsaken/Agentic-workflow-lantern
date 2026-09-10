@@ -115,6 +115,18 @@ class TraceTests(unittest.TestCase):
         self.assertEqual(data["execution_key"], KEY)
         self.assertIsNone(factory.read_trace(RUN, STAGE, f"{RUN}:{STAGE}:9"))
 
+    def test_long_windows_trace_path_uses_shared_short_lookup(self):
+        factory.REPO = self.tmp / ("workspace-" + "x" * 28)
+        run_id = "feat-20260910-" + "infrastructure-" * 3
+        key = run_id + ":00-story.scout:12"
+        traditional = factory.run_dir(run_id) / "00-story" / "trace" / factory.trace_filename(key)
+        self.assertGreaterEqual(len(str(traditional)), 240)
+        path = factory.write_trace(run_id, "00-story.scout", key, "prompt", "begin", [result([])])
+        self.assertIsNotNone(path)
+        self.assertEqual(len(path.name), 29)
+        self.assertLess(len(str(path)), len(str(traditional)))
+        self.assertEqual(factory.read_trace(run_id, "00-story.scout", key)["execution_key"], key)
+
     # ── redaction ────────────────────────────────────────────────────────────
 
     def test_qa_target_section_is_dropped_and_the_password_never_lands(self):

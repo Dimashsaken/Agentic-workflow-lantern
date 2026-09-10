@@ -308,13 +308,39 @@ def default_deps(execute: Callable | None = None) -> Deps:
 
 
 async def _mark_failed(conn, run_id: str, stage: str, err: Exception) -> None:
-    """A sub-stage execution that raised inside our loop is not step_run's to close —
-    it only knows the run's current stage. Close its row here, never raise."""
+    """Close legacy failed sub-stages; leased attempts are scoped to their parent.
+
+    Lost ownership propagates: a stale review must not continue toward a gate.
+    The stage wrapper normally already finalized the exact leased child.
+    """
+    import execution_runtime as ownership
+
     try:
+        if ownership.enabled():
+            parent = ownership.RUN.get()
+            if parent is None or parent.lease.run_id != run_id:
+                raise ownership.leases.LeaseLost("review failure has no matching run ownership")
+            async with ownership.mutation(conn):
+                rows = await conn.fetch("""SELECT id, lease_fence FROM stage_executions
+                    WHERE run_id=$1 AND stage=$2 AND status='running'
+                      AND lease_owner=$3 AND input->>'parent_run_fence'=$4
+                    ORDER BY id FOR UPDATE""", run_id, stage, parent.lease.owner, str(parent.lease.fence))
+                for row in rows:
+                    child = ownership.leases.Lease(run_id, parent.lease.owner,
+                        row['lease_fence'], row['id'], parent.lease.fence)
+                    await ownership.leases.assert_current(conn, child)
+                    await conn.execute("""UPDATE stage_executions SET status='failed',
+                        error=concat_ws(E'\\n',NULLIF(error,''),$2::text), error_class=$3,
+                        finished_at=clock_timestamp(), lease_owner=NULL, lease_expires_at=NULL
+                        WHERE id=$1 AND status='running'""", row['id'],
+                        factory.redact(str(err))[:4000], factory.classify_error(err))
+            return
         await conn.execute(
             """UPDATE stage_executions SET status = 'failed', error = $1, error_class = $4, finished_at = now()
                WHERE run_id = $2 AND stage = $3 AND status = 'running'""",
             factory.redact(str(err))[:4000], run_id, stage, factory.classify_error(err))
+    except ownership.leases.LeaseLost:
+        raise
     except Exception as e:  # noqa: BLE001
         print(f"[{run_id}] could not mark {stage} failed: {e}", file=sys.stderr)
 
@@ -694,6 +720,9 @@ async def babysit_run(conn, run_id: str, runner: str = "ec2", deps: Deps | None 
     """One babysitting pass over one run. Returns {'outcome': …} — one of
     no_product | no_branch | merged | pr_closed | up_to_date | waiting_for_base | conflict |
     push_refused | updated | fixed | failed."""
+    import execution_runtime
+    if execution_runtime.enabled():
+        raise RuntimeError("babysitting is held in lease mode until it has a fenced operation and effect reconciliation")
     deps = deps or default_deps()
     repo, base, branch = await deps.product(conn, run_id)
     if not repo or not branch:

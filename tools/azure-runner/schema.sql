@@ -44,6 +44,36 @@ CREATE TABLE IF NOT EXISTS stage_executions (
 CREATE INDEX IF NOT EXISTS idx_stage_exec_run ON stage_executions(run_id, stage);
 CREATE INDEX IF NOT EXISTS idx_stage_exec_started ON stage_executions(started_at);
 
+-- Execution ownership/effects: additive recovery migration, approved local plan.
+-- Activate only after draining old dispatchers; no mixed-version worker rollout.
+ALTER TABLE runs
+  ADD COLUMN IF NOT EXISTS lease_owner text,
+  ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz,
+  ADD COLUMN IF NOT EXISTS lease_fence bigint NOT NULL DEFAULT 0;
+ALTER TABLE stage_executions
+  ADD COLUMN IF NOT EXISTS lease_owner text,
+  ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz,
+  ADD COLUMN IF NOT EXISTS lease_fence bigint NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS execution_effects (
+  operation_key text PRIMARY KEY,
+  run_id text NOT NULL REFERENCES runs(id),
+  stage_execution_id bigint NOT NULL REFERENCES stage_executions(id),
+  lease_fence bigint NOT NULL,
+  kind text NOT NULL,
+  request_sha256 text NOT NULL,
+  status text NOT NULL CHECK (status IN ('intended', 'confirmed', 'uncertain')),
+  external_ref text,
+  result jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_runs_active_lease
+  ON runs(lease_expires_at) WHERE status = 'executing';
+CREATE INDEX IF NOT EXISTS idx_stage_active_lease
+  ON stage_executions(lease_expires_at) WHERE status = 'running';
+CREATE INDEX IF NOT EXISTS idx_execution_effects_run
+  ON execution_effects(run_id, created_at);
+
 CREATE TABLE IF NOT EXISTS approvals (
     id                 bigserial PRIMARY KEY,
     run_id             text NOT NULL REFERENCES runs(id),

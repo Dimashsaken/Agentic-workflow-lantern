@@ -1,0 +1,62 @@
+{
+  "kind": "local_fixture_provenance_renderer",
+  "fleet_execution": false,
+  "live_dev": false,
+  "recorded_at": "2026-09-10T08:51:58.392Z",
+  "source_sha256": {
+    "tools/mission-control/drawer.py": "8efad548f5de7561e9e69b784a276ad6e45e23acfedddbb82dc6a6eba76cf084",
+    "tools/mission-control/ui.py": "6f08fcc730978c59075587b5a1df93a388a7286665b6e0e39c2c1f0406db0807",
+    "tools/mission-control/app.py": "87bf94dba0b42e3e89ab8a4fb2e09209a0cb83172f1174f9218ca606f08d601d",
+    "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/local-browser-fixtures.py": "61134cf707938546d2ab02d47ca6fa4c0479b24f33d0090ae14fe3827c39b0ab"
+  },
+  "results": [
+    {
+      "name": "provenance-fixture-desktop",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.25,
+          "title": "verified: evidence section visible"
+        },
+        {
+          "seconds": 1.36,
+          "title": "forged-mirror: evidence section visible"
+        },
+        {
+          "seconds": 2.51,
+          "title": "stale: evidence section visible"
+        },
+        {
+          "seconds": 3.66,
+          "title": "cross-run: evidence section visible"
+        },
+        {
+          "seconds": 4.88,
+          "title": "Back and refresh retain stale receipt refusal"
+        }
+      ],
+      "errors": [],
+      "video": "media/provenance-fixture-desktop.webm",
+      "trace": "media/provenance-fixture-desktop.zip",
+      "video_sha256": "bec19b04c0c6329d1bb45c80f8ae649be53325bcc8ccf555cbb60241e50d5b0a"
+    },
+    {
+      "name": "provenance-fixture-mobile",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.22,
+          "title": "Verified hashes and test links fit mobile viewport"
+        },
+        {
+          "seconds": 1.27,
+          "title": "Theme change preserves provenance readability"
+        }
+      ],
+      "errors": [],
+      "video": "media/provenance-fixture-mobile.webm",
+      "trace": "media/provenance-fixture-mobile.zip",
+      "video_sha256": "b8a980166ce7afd1f24a31298a3b4749eb71ec33992cbc530dbf0e300310a994"
+    }
+  ]
+}

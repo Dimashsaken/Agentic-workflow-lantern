@@ -74,7 +74,7 @@
   ok    read-only again once the execution env is gone
 
 all auto-coding properties hold
-[feat-20260908-review-proof] feat/20260908-review-proof updated with main (15ebfd9ed3dc) — gate green
+[feat-20260908-review-proof] feat/20260908-review-proof updated with main (112ee7d4bc61) — gate green
 [feat-20260908-review-proof] feat/20260908-review-proof is merged into main (git) — babysitting ends
 [feat-20260908-review-proof] feat/20260908-review-proof updated with main and fixed — head cccccccccccc
 [feat-20260908-review-proof] review round 1/2: request_changes (1 finding(s), must-fix 1)
@@ -87,15 +87,15 @@ all auto-coding properties hold
 [feat-20260908-review-proof] review rounds exhausted with request_changes — a human decides
 [feat-20260908-review-proof] review round 1/2: approve (0 finding(s), must-fix 0)
 [feat-20260908-review-proof] review round 1/2: approve (0 finding(s), must-fix 0)
-Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmpm7nrxmh9  (dry run)
+Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmp2tcuj2w2  (dry run)
   stack rust    (Cargo.toml): test=cargo test, typecheck=cargo check
   lantern.toml: created
   AGENTS.md:    created
 
 Point a run at this repo:
-  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmpm7nrxmh9
-  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmpm7nrxmh9" [--coding-mode auto]
-  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmpm7nrxmh9" --branch main
+  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmp2tcuj2w2
+  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmp2tcuj2w2" [--coding-mode auto]
+  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmp2tcuj2w2" --branch main
   - from Chat:    ask Lantern to start a run and name this path as the product repo
   - in Mission Control: /run/<run-id>/repo (the picker offers repos under LANTERN_WORKSPACE_ROOTS)
 
@@ -120,16 +120,16 @@ typecheck = "cargo check"
 # build = "..."                     # optional
 timeout_s = 900                            # per command
 
-Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmpu_4g6341  (dry run)
+Lantern software factory -> C:\Users\dimas\AppData\Local\Temp\tmp_qqixdtn  (dry run)
   stack: none detected
   lantern.toml: created
   AGENTS.md:    created
   note: no known stack detected (package.json, pyproject.toml/setup.py, go.mod, Cargo.toml) — lantern.toml carries a TODO test command
 
 Point a run at this repo:
-  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmpu_4g6341
-  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmpu_4g6341" [--coding-mode auto]
-  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmpu_4g6341" --branch main
+  - in a brief:   - **Product repo:** C:\Users\dimas\AppData\Local\Temp\tmp_qqixdtn
+  - on the CLI:   python pipeline.py run workflow/briefs/<slug>.md --product-repo "C:\Users\dimas\AppData\Local\Temp\tmp_qqixdtn" [--coding-mode auto]
+  - existing run: python pipeline.py set-product <run-id> --repo "C:\Users\dimas\AppData\Local\Temp\tmp_qqixdtn" --branch main
   - from Chat:    ask Lantern to start a run and name this path as the product repo
   - in Mission Control: /run/<run-id>/repo (the picker offers repos under LANTERN_WORKSPACE_ROOTS)
 
@@ -203,6 +203,10 @@ orientation blocks (D15):
   ok    read-only note does not offer product_shell
 
 all product-access properties hold
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] stage 3 fans out into 2 builder(s) (one, two), 2 at a time, from aaaaaaaaaaaa
+[run-a] merged 2 builder branch(es) into feat/test @ bbbbbbbbbbbb — integrating
 
 [stderr]
 test_blank_value_counts_as_unset (__main__.DeploymentResolution.test_blank_value_counts_as_unset) ... [model-stack] LANTERN_MODEL_CODING unset — the coding tier uses the reasoning deployment 'r'
@@ -226,7 +230,7 @@ test_judgement_roles_are_reasoning (__main__.TierRouting.test_judgement_roles_ar
 test_volume_work_is_fast (__main__.TierRouting.test_volume_work_is_fast) ... ok
 
 ----------------------------------------------------------------------
-Ran 14 tests in 0.007s
+Ran 14 tests in 0.008s
 
 OK
 test_checkpoint_is_reachable_by_ref (__main__.Checkpoints.test_checkpoint_is_reachable_by_ref) ... ok
@@ -278,7 +282,7 @@ test_check_write_scope_reads_the_plan (__main__.WriteScope.test_check_write_scop
 test_glob_semantics (__main__.WriteScope.test_glob_semantics) ... ok
 
 ----------------------------------------------------------------------
-Ran 47 tests in 14.357s
+Ran 47 tests in 16.389s
 
 OK
 test_batches_split_in_plan_order (__main__.Batching.test_batches_split_in_plan_order) ... ok
@@ -321,7 +325,7 @@ test_no_builders_key_is_still_valid (__main__.PlanValidation.test_no_builders_ke
 test_the_integrator_name_is_reserved (__main__.PlanValidation.test_the_integrator_name_is_reserved) ... ok
 
 ----------------------------------------------------------------------
-Ran 36 tests in 15.343s
+Ran 36 tests in 18.341s
 
 OK
 test_base_moves_ahead_branch_is_updated_and_regated (__main__.Babysitter.test_base_moves_ahead_branch_is_updated_and_regated) ... ok
@@ -364,7 +368,7 @@ test_request_body_is_one_comment_review_with_inline_findings (__main__.PullReque
 test_stage_maps_and_the_task_block_hook (__main__.Wiring.test_stage_maps_and_the_task_block_hook) ... ok
 
 ----------------------------------------------------------------------
-Ran 35 tests in 12.653s
+Ran 35 tests in 14.314s
 
 OK
 test_a_turn_without_a_signed_in_human_gets_no_write_tools (__main__.AgentWiring.test_a_turn_without_a_signed_in_human_gets_no_write_tools) ... ok
@@ -400,7 +404,7 @@ test_an_idea_without_a_repo_asks_instead_of_guessing (__main__.StartRunCompositi
 test_exactly_one_of_idea_or_brief_path (__main__.StartRunComposition.test_exactly_one_of_idea_or_brief_path) ... ok
 
 ----------------------------------------------------------------------
-Ran 31 tests in 0.086s
+Ran 31 tests in 0.115s
 
 OK
 test_a_missing_directory_is_an_error_not_a_traceback (__main__.CommandLine.test_a_missing_directory_is_an_error_not_a_traceback) ... C:\Users\dimas\AppData\Local\Temp\no-such-repo-xyz is not a directory
@@ -425,7 +429,7 @@ test_optional_commands_the_repo_lacks_stay_commented_examples (__main__.WhatItWr
 test_running_twice_changes_nothing_the_second_time (__main__.WhatItWrites.test_running_twice_changes_nothing_the_second_time) ... ok
 
 ----------------------------------------------------------------------
-Ran 19 tests in 0.038s
+Ran 19 tests in 0.044s
 
 OK
 test_a_slow_pipeline_call_does_not_delay_the_ack (__main__.AckTiming.test_a_slow_pipeline_call_does_not_delay_the_ack) ... ok
@@ -471,12 +475,12 @@ Ran 36 tests in 0.354s
 OK
 .........................................
 ----------------------------------------------------------------------
-Ran 41 tests in 0.309s
+Ran 41 tests in 0.407s
 
 OK
 No active span; trace error was not attached
 No active span; trace error was not attached
-......No active span; trace error was not attached
+........No active span; trace error was not attached
 No active span; trace error was not attached
 No active span; trace error was not attached
 No active span; trace error was not attached
@@ -485,24 +489,67 @@ No active span; trace error was not attached
 ..No active span; trace error was not attached
 .s.........
 ----------------------------------------------------------------------
-Ran 19 tests in 3.187s
+Ran 21 tests in 4.652s
 
 OK (skipped=1)
 ........
 ----------------------------------------------------------------------
-Ran 8 tests in 1.737s
+Ran 8 tests in 2.624s
 
 OK
 ...........
 ----------------------------------------------------------------------
-Ran 11 tests in 2.492s
+Ran 11 tests in 3.540s
 
 OK
-..............
+.................
 ----------------------------------------------------------------------
-Ran 14 tests in 2.406s
+Ran 17 tests in 3.966s
 
 OK
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.162s
+
+OK
+Executing <Task pending name='Task-2' coro=<Builders.test_host_seed_and_merge_have_before_and_after_fences() running at C:\Users\dimas\OneDrive\Documents\GitHub\Agentic-workflow-lantern\tools\azure-runner\test_execution_runtime.py:401> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\futures.py:389, Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 2.172 seconds
+............................
+----------------------------------------------------------------------
+Ran 28 tests in 2.905s
+
+OK
+..No active span; trace error was not attached
+No active span; trace error was not attached
+......
+----------------------------------------------------------------------
+Ran 8 tests in 0.695s
+
+OK
+....
+----------------------------------------------------------------------
+Ran 4 tests in 2.327s
+
+OK
+..................
+----------------------------------------------------------------------
+Ran 18 tests in 0.111s
+
+OK
+...............
+----------------------------------------------------------------------
+Ran 15 tests in 0.050s
+
+OK
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 19.081s
+
+OK
+....s....................
+----------------------------------------------------------------------
+Ran 25 tests in 22.536s
+
+OK (skipped=1)
 test_a_dictionary_word_password_does_not_scrub_the_whole_trace (__main__.TraceTests.test_a_dictionary_word_password_does_not_scrub_the_whole_trace)
 The local dev database password is literally "lantern". Masking it wherever it ... ok
 test_a_failing_disk_only_prints (__main__.TraceTests.test_a_failing_disk_only_prints) ... ok
@@ -512,6 +559,8 @@ test_dict_arguments_and_non_string_outputs_are_serialised (__main__.TraceTests.t
 test_file_lands_in_the_stage_trace_dir_with_a_safe_name (__main__.TraceTests.test_file_lands_in_the_stage_trace_dir_with_a_safe_name) ... ok
 test_garbage_never_raises (__main__.TraceTests.test_garbage_never_raises) ... ok
 test_known_env_secret_values_are_scrubbed_even_without_a_keyword (__main__.TraceTests.test_known_env_secret_values_are_scrubbed_even_without_a_keyword) ... ok
+test_long_windows_trace_path_uses_shared_short_lookup (__main__.TraceTests.test_long_windows_trace_path_uses_shared_short_lookup) ... [trace] C:/Users/dimas/AppData/Local/Temp/lantern-trace-vr3d3dhs/workspace-xxxxxxxxxxxxxxxxxxxxxxxxxxxx/workflow/runs/feat-20260910-infrastructure-infrastructure-infrastructure-/00-story/trace/6b413697c4465cde46667880.json (0 tool calls, 1 turn(s))
+ok
 test_password_in_a_tool_output_or_args_is_masked (__main__.TraceTests.test_password_in_a_tool_output_or_args_is_masked) ... ok
 test_prose_mentioning_tokens_stays_readable (__main__.TraceTests.test_prose_mentioning_tokens_stays_readable) ... ok
 test_qa_target_section_is_dropped_and_the_password_never_lands (__main__.TraceTests.test_qa_target_section_is_dropped_and_the_password_never_lands) ... ok
@@ -521,7 +570,7 @@ test_turn_numbers_and_usage_merge_across_fix_rounds (__main__.TraceTests.test_tu
 test_url_credentials_and_short_values (__main__.TraceTests.test_url_credentials_and_short_values) ... ok
 
 ----------------------------------------------------------------------
-Ran 15 tests in 0.050s
+Ran 16 tests in 0.055s
 
 OK
 test_builder_handoffs_are_read_too (__main__.MatrixTests.test_builder_handoffs_are_read_too) ... ok
@@ -535,21 +584,35 @@ test_structured_evidence_locations_render_and_escape (__main__.MatrixTests.test_
 test_unplanned_and_untraced_are_gaps_once_the_stage_ran (__main__.MatrixTests.test_unplanned_and_untraced_are_gaps_once_the_stage_ran) ... ok
 
 ----------------------------------------------------------------------
-Ran 9 tests in 0.030s
+Ran 9 tests in 0.038s
+
+OK
+test_actions_follow_the_pipeline_rules (__main__.DrawerTests.test_actions_follow_the_pipeline_rules) ... ok
+test_envelope_valid_and_invalid (__main__.DrawerTests.test_envelope_valid_and_invalid) ... ok
+test_execution_without_a_trace_says_so (__main__.DrawerTests.test_execution_without_a_trace_says_so) ... ok
+test_gate_json_belongs_to_this_execution_or_not (__main__.DrawerTests.test_gate_json_belongs_to_this_execution_or_not) ... ok
+test_memory_entries_are_listed (__main__.DrawerTests.test_memory_entries_are_listed) ... ok
+test_never_decides_a_gate (__main__.DrawerTests.test_never_decides_a_gate) ... ok
+test_prompt_tool_calls_and_usage_from_the_trace (__main__.DrawerTests.test_prompt_tool_calls_and_usage_from_the_trace) ... ok
+test_provenance_comes_from_execution_row_not_gate_mirror (__main__.DrawerTests.test_provenance_comes_from_execution_row_not_gate_mirror) ... ok
+test_rendered_drawer_never_shows_the_qa_password (__main__.DrawerTests.test_rendered_drawer_never_shows_the_qa_password) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.079s
 
 OK
 ...............
 ----------------------------------------------------------------------
-Ran 15 tests in 1.683s
+Ran 15 tests in 2.158s
 
 OK
 ----------------------------------------------------------------------
-Ran 5 tests in 0.002s
+Ran 5 tests in 0.003s
 
 OK
 gate latency query failed: aggregate blew up
 ----------------------------------------------------------------------
-Ran 35 tests in 0.019s
+Ran 35 tests in 0.020s
 
 OK
 ----------------------------------------------------------------------

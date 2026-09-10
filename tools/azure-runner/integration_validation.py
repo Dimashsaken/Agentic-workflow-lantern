@@ -90,7 +90,9 @@ async def validate(args):
               "engineering_run_approval": False, "started_at": datetime.now(timezone.utc).isoformat(),
               "source_head": git(source, "rev-parse", "HEAD"), "source_sha256": source_hashes,
               "product_revision": git(product, "rev-parse", "HEAD"), "run_id": run_id}
-    if args.executor == "docker":
+    record["execution_leases"] = os.environ.get("LANTERN_EXECUTION_LEASES") == "1"
+    record["isolated_tools"] = os.environ.get("LANTERN_ISOLATED_TOOLS") == "1"
+    if args.executor == "docker" or record["isolated_tools"]:
         record["image_id"] = subprocess.check_output(
             ["docker", "image", "inspect", args.image, "--format", "{{.Id}}"], text=True).strip()
     async def kill_control():
@@ -128,6 +130,10 @@ async def validate(args):
         record["gates"] = [dict(r) for r in await conn.fetch(
             "SELECT gate,status,decided_by FROM approvals WHERE run_id=$1", run_id)]
         record["memory_count"] = await conn.fetchval("SELECT count(*) FROM role_memory WHERE run_id=$1", run_id)
+        record["traces"] = [
+            {"execution_key": value.get("execution_key"), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            for path in (harness / "workflow/runs" / run_id / "00-story/trace").glob("*.json")
+            if isinstance((value := json.loads(path.read_text(encoding="utf-8"))), dict)]
         record["passed"] = (record["run"]["status"] == "waiting_gate" and
             record["gates"] == [{"gate": "story_signoff", "status": "pending", "decided_by": None}] and
             len(record["executions"]) == 2 and all(r["status"] == "succeeded" for r in record["executions"]))

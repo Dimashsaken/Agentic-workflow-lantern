@@ -100,6 +100,16 @@ def load_execution(run, e, run_root: Path, memory_rows, now: datetime,
         "envelope": None, "gate": None, "gate_md": None, "memory": [],
         "actions": {"retry": False, "rework_to": []},
     }
+    # This receipt comes from the controller's completed execution row. A
+    # worker-writable gate.json cannot establish provenance in the drawer.
+    recorded = _g(e, "output", {})
+    if isinstance(recorded, str):
+        try:
+            recorded = json.loads(recorded)
+        except ValueError:
+            recorded = {}
+    provenance = recorded.get("provenance") if isinstance(recorded, dict) else None
+    model["provenance"] = provenance if isinstance(provenance, dict) else None
     spec = factory.ENVELOPES.get(stage)
     if spec:
         kind, json_name, md_name = spec
@@ -280,6 +290,24 @@ def render_drawer(m: dict, render_markdown, stage_meta: dict, fragment: bool = T
                      + (f"<details class='dfold'><summary>gate.md</summary><div class='inner prose'>"
                         f"{render_markdown(m['gate_md'])}</div></details>" if m["gate_md"] else "")
                      + "</div>")
+
+    provenance = m.get("provenance") or {}
+    identity = provenance.get("identity") or {}
+    if (provenance.get("status") == "verified" and identity.get("execution_key") == m["execution_key"]
+            and identity.get("run_id") == m["run_id"]):
+        product = identity.get("product") or {}
+        rows = [("Tested commit", product.get("head_sha")), ("Tested tree", product.get("tree_sha")),
+                ("Worker image", identity.get("image_digest")),
+                ("Manifest SHA-256", (provenance.get("manifest") or {}).get("sha256"))]
+        cells = "".join(f"<tr><th>{H(label)}</th><td><code style='overflow-wrap:anywhere'>{H(str(value or 'unavailable'))}</code></td></tr>" for label, value in rows)
+        links = provenance.get("test_links") or {}
+        tests = "".join(f"<li>{H(str(requirement))}: {H(', '.join(map(str, names)))}</li>" for requirement, names in links.items())
+        parts.append("<div class='dsect'><h3>Execution evidence</h3>"
+                     "<p class='dnote'>Controller verified at completion. Recorded commands and file hashes; semantic coverage still requires review.</p>"
+                     f"<table class='tcalls'>{cells}</table><ul>{tests}</ul></div>")
+    else:
+        parts.append("<div class='dsect'><h3>Execution evidence</h3><p class='dnote'>"
+                     "No verified manifest recorded for this execution. Artifact existence and a green gate alone do not establish provenance.</p></div>")
 
     # memory
     if m["memory"]:

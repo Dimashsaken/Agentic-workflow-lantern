@@ -35,6 +35,7 @@ import os
 import random
 import re
 import subprocess
+import tool_execution
 import sys
 import tempfile
 import time
@@ -44,6 +45,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import evidence
+import trusted_evidence
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -273,6 +275,17 @@ def _check_plan(data: dict, run_id: str, product_root: Path | None) -> list[str]
         p.append("deferred_criteria must be a list of {id, reason}")
         deferred = []
     story_ids = story_criteria(run_id)
+    links = data.get("requirement_tests")
+    if links is not None:
+        if not isinstance(links, dict):
+            p.append("requirement_tests must map criterion IDs to explicit quality command test IDs")
+        else:
+            for criterion, test_ids in links.items():
+                if not isinstance(criterion, str) or not AC_ID.fullmatch(criterion) or (story_ids is not None and criterion not in story_ids):
+                    p.append("requirement_tests contains an unknown criterion")
+                if not _str_list(test_ids) or not test_ids or len(set(test_ids)) != len(test_ids) or any(
+                        test_id not in {"quality:" + key for key in QUALITY_KEYS} for test_id in test_ids):
+                    p.append("requirement_tests must name unique executed quality:test/lint/typecheck/build commands")
     if story_ids is not None:
         unknown = sorted(referenced - set(story_ids))
         if unknown:
@@ -682,7 +695,7 @@ def quality_config(root: Path) -> dict:
         return cfg
     try:
         from tool_policy import confined
-        content = confined(root, ("lantern.toml",)).read_bytes()
+        content = trusted_evidence.manifests.source_bytes(confined(root, ("lantern.toml",)), 1_000_000)
         cfg["sha256"] = hashlib.sha256(content).hexdigest()
         data = tomllib.loads(content.decode("utf-8"))
     except (OSError, ValueError, UnicodeError) as e:
@@ -725,7 +738,7 @@ def run_command(cmd: str, root: Path, timeout_s: int) -> dict:
     shell = ["bash", "-c", cmd] if os.name == "nt" else ["bash", "-lc", cmd]
     t0 = time.monotonic()
     try:
-        r = subprocess.run(shell, cwd=root, timeout=timeout_s, env=_gate_env(),
+        r = tool_execution.run(shell, cwd=root, timeout=timeout_s, env=_gate_env(),
                            capture_output=True, text=True, errors="replace",
                            stdin=subprocess.DEVNULL)
         out = (r.stdout or "") + (("\n[stderr]\n" + r.stderr) if r.stderr.strip() else "")
@@ -749,7 +762,7 @@ def changed_files_since(root: Path, since_sha: str | None) -> list[str]:
         commands.insert(0, ["diff", "--name-only", "--no-renames", "-z", f"{since_sha}..HEAD", "--"])
     files: list[str] = []
     for args in commands:
-        r = subprocess.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", *options, *args],
+        r = tool_execution.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", *options, *args],
                            cwd=root, capture_output=True, env=environment(),
                            stdin=subprocess.DEVNULL, timeout=30)
         if r.returncode:
@@ -761,6 +774,20 @@ def changed_files_since(root: Path, since_sha: str | None) -> list[str]:
 def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, round_no: int,
                      since_sha: str | None = None, restored_from: int | None = None,
                      contract: dict | None = None) -> dict:
+    """Strict evidence executes quality commands on a private read-only snapshot."""
+    arguments = (run_id, stage, root, execution_key, round_no, since_sha, restored_from, contract)
+    if trusted_evidence.enabled():
+        try:
+            with trusted_evidence.quality_snapshot(root) as snapshot:
+                return _run_quality_gate(*arguments, snapshot=snapshot)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+            return _run_quality_gate(*arguments, snapshot_error=str(error))
+    return _run_quality_gate(*arguments)
+
+
+def _run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, round_no: int,
+                      since_sha: str | None = None, restored_from: int | None = None,
+                      contract: dict | None = None, *, snapshot=None, snapshot_error=None) -> dict:
     """Run the product's quality commands + the write-scope check; write gate.json/gate.md.
 
     Always writes the files. Missing tests and invalid configuration fail closed.
@@ -773,11 +800,29 @@ def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, ro
     current = quality_config(root)
     cfg = dict(contract) if contract is not None else current
     results = []
+    evidence_before = None
+    if trusted_evidence.enabled():
+        try:
+            if snapshot_error:
+                raise ValueError(snapshot_error)
+            evidence_before = snapshot.before
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+            cfg["error"] = f"trusted evidence pre-test capture failed: {exc}"
     if contract is not None and current != contract:
         cfg["error"] = "lantern.toml changed during this execution — restore the approved quality policy"
     for name, cmd in ([] if cfg.get("error") else cfg["commands"]):
-        res = run_command(cmd, root, cfg["timeout_s"])
+        if snapshot is not None:
+            with snapshot.bind():
+                res = run_command(cmd, snapshot.root, cfg["timeout_s"])
+        else:
+            res = run_command(cmd, root, cfg["timeout_s"])
         results.append({"name": name, "command": cmd, **res})
+    if snapshot is not None:
+        try:
+            if trusted_evidence.capture_before(root) != evidence_before:
+                raise ValueError('original source changed while snapshot quality commands ran')
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+            cfg['error'] = f'trusted evidence source changed: {exc}'
     if not cfg.get("error") and quality_config(root) != (contract if contract is not None else current):
         cfg["error"] = "lantern.toml changed while quality commands ran — gate policy is not stable"
     builder = builder_of(stage) or current_builder()          # D18
@@ -810,6 +855,15 @@ def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, ro
                                 "passed": False, "seconds": 0.0, "output_tail": cfg["error"]})
     d = run_dir(run_id) / exec_dir(stage_dir(stage), builder)   # D18: a builder's own subdir
     d.mkdir(parents=True, exist_ok=True)
+    if trusted_evidence.enabled():
+        plan = plan_data(run_id) or {}
+        if snapshot is not None:
+            with snapshot.bind():
+                gate = trusted_evidence.seal_gate(gate, snapshot.root, contract or current, evidence_before,
+                                                  plan.get("requirement_tests"), story_criteria(run_id), d)
+        else:
+            gate = trusted_evidence.seal_gate(gate, root, contract or current, evidence_before,
+                                              plan.get("requirement_tests"), story_criteria(run_id), d)
     (d / GATE_FILE).write_text(json.dumps(gate, indent=2), encoding="utf-8")
     (d / "gate.md").write_text(render_gate_md(gate), encoding="utf-8")
     return gate
@@ -869,11 +923,23 @@ def check_quality_gate(run_id: str, sdir: str, execution_key: str,
     """
     sdir = exec_dir(sdir, builder)                       # D18: a builder's own subdir
     gp = run_dir(run_id) / sdir / GATE_FILE
-    if not gp.is_file():
+    if trusted_evidence.enabled():
+        gate, err = trusted_evidence.load_gate(run_id, execution_key)
+        if err:
+            return [err]
+        worker = tool_execution.CURRENT.get()
+        if worker is None:
+            return ["trusted evidence verification requires the execution's bound isolated worker"]
+        problems = trusted_evidence.verify_gate(gate, worker.product_root, run_id, execution_key,
+                                                story_criteria(run_id))
+        if problems:
+            return problems
+    elif not gp.is_file():
         return [f"{sdir}/{GATE_FILE} absent — this execution has no verifiable quality gate"]
-    gate, err = _load_json(gp)
-    if err:
-        return [f"{sdir}/{err}"]
+    else:
+        gate, err = _load_json(gp)
+        if err:
+            return [f"{sdir}/{err}"]
     if gate.get("execution_key") != execution_key:
         return [f"{sdir}/{GATE_FILE} belongs to execution {gate.get('execution_key')!r}, not "
                 f"this one — the gate did not run for this attempt"]
@@ -1130,7 +1196,7 @@ _CHECKPOINT_IDENTITY = {
 
 def _git(root: Path, *args: str, env: dict | None = None,
          stdin: str | None = None) -> tuple[int, str]:
-    r = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
+    r = tool_execution.run(["git", *args], cwd=root, capture_output=True, text=True,
                        errors="replace", input=stdin,
                        env={**os.environ, **env} if env else None)
     return r.returncode, (r.stdout or "").strip()
@@ -1149,9 +1215,13 @@ def checkpoint_tree(root: Path, execution_key: str, round_no: int) -> str | None
     """
     tmp_index = None
     try:
-        fd, tmp_index = tempfile.mkstemp(prefix="lantern-index-")
-        os.close(fd)
-        os.unlink(tmp_index)                  # git wants to create it itself
+        if tool_execution.worker_for(root):
+            from uuid import uuid4
+            tmp_index = str(root / ".git" / ("lantern-index-" + uuid4().hex))
+        else:
+            fd, tmp_index = tempfile.mkstemp(prefix="lantern-index-")
+            os.close(fd)
+            os.unlink(tmp_index)              # git wants to create it itself
         env = {**_CHECKPOINT_IDENTITY, "GIT_INDEX_FILE": tmp_index}
         if _git(root, "read-tree", "HEAD", env=env)[0] != 0:
             return None                       # no HEAD yet — nothing to snapshot against
@@ -1171,7 +1241,9 @@ def checkpoint_tree(root: Path, execution_key: str, round_no: int) -> str | None
     except OSError:
         return None
     finally:
-        if tmp_index and os.path.exists(tmp_index):
+        if tmp_index and tool_execution.worker_for(root):
+            tool_execution.run(["rm", "-f", tmp_index], cwd=root, capture_output=True, text=True)
+        elif tmp_index and os.path.exists(tmp_index):
             try:
                 os.unlink(tmp_index)
             except OSError:
@@ -1318,7 +1390,12 @@ def trace_filename(execution_key: str) -> str:
 
 
 def trace_path(run_id: str, stage: str, execution_key: str) -> Path:
-    return run_dir(run_id) / stage_dir(stage) / TRACE_DIR / trace_filename(execution_key)
+    directory = run_dir(run_id) / stage_dir(stage) / TRACE_DIR
+    path = directory / trace_filename(execution_key)
+    # Reserve margin below Windows MAX_PATH; read and write share this helper.
+    if len(str(path)) >= 240:
+        path = directory / (hashlib.sha256(execution_key.encode()).hexdigest()[:24] + ".json")
+    return path
 
 
 def secret_values(env: dict | None = None) -> list[str]:

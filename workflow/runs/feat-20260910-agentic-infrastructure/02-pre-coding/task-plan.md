@@ -95,3 +95,13 @@ Do not require every infrastructure invariant to fail on the old revision.
 - Durable memory uses the actual append tool; no rendered view hand-edit.
 - Rollout/rollback and unresolved environment blockers are explicit; no deployment
   or merge claimed without human action.
+
+## Implementation decomposition
+
+The approved local tasks are extracted into execution_leases.py (SQL ownership),
+execution_runtime.py (dispatcher contexts), durable_execution.py (SDK diagnostics),
+isolated_tools.py and tool_execution.py (worker boundary), evidence_manifest.py and
+trusted_evidence.py (controller receipts and quality snapshots), plus directly
+associated tests/integration drivers. This decomposition does not alter the fixed
+pipeline or grant live approvals. Operational pilot limits and rollback are in
+docs/EXECUTION-ISOLATION.md.

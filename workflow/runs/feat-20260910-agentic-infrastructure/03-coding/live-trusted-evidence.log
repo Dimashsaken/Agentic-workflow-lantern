@@ -1,0 +1,7 @@
+test_real_isolated_worker_quality_gate_and_tamper_controls (test_trusted_evidence.FactoryGateHooks.test_real_isolated_worker_quality_gate_and_tamper_controls) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 36.155s
+
+OK
+{"kind": "real-isolated-quality-evidence", "image_digest": "sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756", "tested_product": {"head_sha": "cb3ff97046d868966ee71ffc2387933af95cc43b", "tree_sha": "d0b373f00e6496a3d5543b92c0ecc5601900c19e", "worktree_sha256": "96f29e288358f10f677a25905521cc169ace64412f40510372c1d81445b9a074"}, "harness_state": {"revision": "7f01faad1c9cfbef886026906f9a3e8631632a74", "dirty": true, "source_sha256": "1b4d3cf70158a8eebe75b10969f097285b8bc23461aa172fc457346a19b69e3e", "source_scope": ["tools/azure-runner source", "infra/sandbox source", "agents", "workflow/templates"]}, "execution_key": "feat-test:03-coding:1", "manifest_sha256": "69aa2cdaabc494215a99f562d050cc3d6e7dd83f7adac2e12513c0c65f908503", "command": {"command": "python source.py", "exit_code": 0, "id": "quality:test", "observed_at": "2026-09-10T08:45:35+00:00", "outcome": "pass", "seconds": 0.9}, "valid_gate": true, "changed_manifest_rejected": true, "changed_source_rejected": true, "azure_used": false, "database_used": false}

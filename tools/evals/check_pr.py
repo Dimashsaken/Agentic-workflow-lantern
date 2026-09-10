@@ -35,6 +35,14 @@ WATCHED_PATHS = (
     "tools/azure-runner/tool_policy.py",
     "tools/azure-runner/readonly_git.py",
     "tools/azure-runner/evidence.py",
+    "tools/azure-runner/evidence_manifest.py",
+    "tools/azure-runner/trusted_evidence.py",
+    "tools/azure-runner/execution_leases.py",
+    "tools/azure-runner/execution_runtime.py",
+    "tools/azure-runner/durable_execution.py",
+    "tools/azure-runner/isolated_tools.py",
+    "tools/azure-runner/tool_execution.py",
+
     "tools/evals/scorers.py",
     "tools/evals/integrity.py",
 )
@@ -48,7 +56,7 @@ PROMPT_BUILDERS = (
 GATE_FUNCS = (
     "check_postconditions", "check_claimed_artifacts", "check_coding_handoff",
     "check_stage_inputs", "report_blocker", "finalize_coding",
-    "stage_tools", "_resolve_read", "_writable", "_product_git", "make_collect_jsx",
+    "stage_tools", "make_append_memory", "_resolve_read", "_writable", "_product_git", "make_collect_jsx",
 )
 WATCHED_UNITS = PROMPT_BUILDERS + GATE_FUNCS
 FINGERPRINT_MARK = "lantern-evals-fingerprint:"
