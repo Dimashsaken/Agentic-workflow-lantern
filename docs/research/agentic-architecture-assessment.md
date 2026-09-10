@@ -202,11 +202,18 @@ bug-lifecycle stages the task block is vacuous — it contains nothing about the
 
 ---
 
-## 4. The plan (D23–D28)
+## 4. The plan (D24–D29)
 
 Ordered by payoff per unit of effort. Every step is shippable alone. No new infrastructure.
 
-### D23 — Close the containment holes *(hours)*
+> **Shipped since this was written: D23** — the inner-loop hardening (worktree checkpoints so a
+> worse fix round is discarded rather than handed off, retry/backoff with terminal-vs-retryable
+> classification, per-role turn ceilings). See `docs/DECISIONS.md` D23. It covers the two cheap
+> items that were in D27 below plus the coherence-collapse fix; the rest of D27 — `output_type`,
+> guardrails, `RunState` gate resumption, tracing via Azure Monitor — is untouched, because each
+> needs a live Azure run to prove and none can be validated on frozen data.
+
+### D24 — Close the containment holes *(hours)*
 `orchestrator.py`
 1. `PRODUCT_GIT_DENY += ("--open-files-in-pager", "--pager", "-P")`; set `GIT_PAGER=cat` and
    `-c core.pager=cat` in `_product_git`'s subprocess env.
@@ -218,7 +225,7 @@ Ordered by payoff per unit of effort. Every step is shippable alone. No new infr
 4. Make `stage_tools` actually branch on `role`, and make `docs/AGENT-TOOLING.md` §6 a table
    generated from that code so the doc can never drift again.
 
-### D24 — Evidence must resolve *(days — the highest-value item here)*
+### D25 — Evidence must resolve *(days — the highest-value item here)*
 `factory.py`, `orchestrator.py`
 1. Call `_paths_exist` (factory.py:163) from **every** envelope checker, not just `_check_research`.
 2. `_check_review`: a finding's `file:line` must resolve **inside the diff of the branch under
@@ -232,7 +239,7 @@ Ordered by payoff per unit of effort. Every step is shippable alone. No new infr
    answer key preceded the reason key. Our review and validation envelopes already get this right
    (findings first, verdict computed in Python); copy that shape.
 
-### D25 — Make the verifier prove itself *(days)*
+### D26 — Make the verifier prove itself *(days)*
 `factory.py`, `tools/evals/`
 1. **FAIL_TO_PASS**: run the acceptance tests against the merge-base commit and **refuse** to
    proceed unless they fail there. A test that passes before the feature is not evidence.
@@ -248,7 +255,7 @@ Ordered by payoff per unit of effort. Every step is shippable alone. No new infr
 5. Score what the factory actually sells: **false-green rate** (gate passed, human rejected) and
    false-red rate. No public benchmark measures this and it is our product.
 
-### D26 — Use the SDK we already pay for *(days)*
+### D27 — Use the SDK we already pay for *(days)*
 `orchestrator.py`, `pipeline.py`
 1. `output_type=` on every enveloped stage. Azure's Responses API supports structured outputs;
    since SDK v0.15.0 refusals raise `ModelRefusalError` instead of silently looping. One schema
@@ -266,7 +273,7 @@ Ordered by payoff per unit of effort. Every step is shippable alone. No new infr
 5. Turn tracing back on via **OpenTelemetry → Azure Monitor** (`OpenAIAgentsInstrumentor`), which
    is the documented path when there is no platform.openai.com key *(researched)*.
 
-### D27 — Make the fan-out decision mechanical *(days)*
+### D28 — Make the fan-out decision mechanical *(days)*
 `builders.py`, `factory.py`
 1. Refuse to fan out unless the plan's builder scopes are **provably disjoint**; fail the plan
    envelope when two `write_scope` globs overlap (they are currently compared as literal strings).
@@ -282,7 +289,7 @@ Ordered by payoff per unit of effort. Every step is shippable alone. No new infr
 5. Cheap wins available now: fan out the read-mostly stages (research, post-coding review,
    security, debug hypothesis search) where parallelism is unambiguously positive.
 
-### D28 — Close the learning loop *(days)*
+### D29 — Close the learning loop *(days)*
 1. Implement consolidation (nothing sets `consolidated = true` today) and cap what gets inlined —
    rank by recency + role + explicit tags, budget it in bytes.
 2. Raise the memory postcondition above `count(*) > 0`: reject entries that are pure retry

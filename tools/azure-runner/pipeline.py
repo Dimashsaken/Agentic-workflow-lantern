@@ -574,8 +574,13 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
                    "report is on disk and append_memory has been called.")
 
         async def run_turn(text: str):
-            return await Runner.run(agent, input=text, session=session,
-                                    max_turns=max_turns_for(role))
+            # D23: same retry policy as the container path — a throttled builder is a
+            # retriable transport failure, not a failed stage.
+            return await factory.with_retry(
+                lambda: Runner.run(agent, input=text, session=session,
+                                   max_turns=max_turns_for(role)),
+                on_retry=lambda n, of, e, d: print(
+                    f"[{run_id}] retry {n}/{of} after {type(e).__name__} — {d:.1f}s"))
 
         if role == "coding":
             # D17: quality gate as code + bounded fix loop — the same helper the

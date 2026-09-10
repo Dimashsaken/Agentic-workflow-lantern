@@ -389,6 +389,210 @@ class FixLoop(Base):
             self.assertEqual(f.fix_rounds(), f.FIX_ROUNDS_DEFAULT)
 
 
+class RateLimitError(Exception):
+    """Same class NAME openai raises; classification matches names, never imports."""
+
+
+class FakeAPIStatusError(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"status {status_code}")
+        self.status_code = status_code
+
+
+class MaxTurnsExceeded(Exception):
+    """Same name the Agents SDK uses; classification must keep it terminal."""
+
+
+class Retry(unittest.TestCase):
+    def test_transport_names_are_retryable(self):
+        for name in ("RateLimitError", "APIConnectionError", "APITimeoutError"):
+            exc = type(name, (Exception,), {})()
+            self.assertEqual(f.classify_error(exc), "retryable", name)
+
+    def test_unknown_errors_are_terminal(self):
+        self.assertEqual(f.classify_error(ValueError("bad json")), "terminal")
+
+    def test_status_code_outranks_the_name(self):
+        self.assertEqual(f.classify_error(FakeAPIStatusError(429)), "retryable")
+        self.assertEqual(f.classify_error(FakeAPIStatusError(400)), "terminal")
+        self.assertEqual(f.classify_error(FakeAPIStatusError(503)), "retryable")
+
+    def test_agent_budget_and_refusals_stay_terminal(self):
+        # A 429 is the deployment saying "later"; MaxTurnsExceeded is the agent saying
+        # "I could not finish". Retrying the second one just buys the same answer twice.
+        self.assertEqual(f.classify_error(MaxTurnsExceeded()), "terminal")
+
+    def test_retries_a_throttle_then_succeeds(self):
+        calls, slept = [], []
+
+        async def flaky():
+            calls.append(1)
+            if len(calls) < 3:
+                raise RateLimitError("429")
+            return "done"
+
+        async def fake_sleep(d):
+            slept.append(d)
+
+        out = asyncio.run(f.with_retry(flaky, attempts=3, base_delay=1.0,
+                                       sleep=fake_sleep, jitter=lambda: 1.0))
+        self.assertEqual(out, "done")
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(slept, [1.0, 2.0])          # exponential, jitter pinned to max
+
+    def test_gives_up_and_reraises_the_last_error(self):
+        async def always():
+            raise RateLimitError("429")
+
+        async def fake_sleep(d):
+            pass
+
+        with self.assertRaises(RateLimitError):
+            asyncio.run(f.with_retry(always, attempts=2, sleep=fake_sleep,
+                                     jitter=lambda: 0.0))
+
+    def test_terminal_errors_are_not_retried(self):
+        calls = []
+
+        async def bad():
+            calls.append(1)
+            raise ValueError("malformed envelope")
+
+        with self.assertRaises(ValueError):
+            asyncio.run(f.with_retry(bad, attempts=5, sleep=None, jitter=lambda: 0.0))
+        self.assertEqual(len(calls), 1)
+
+    def test_backoff_is_capped(self):
+        slept = []
+
+        async def always():
+            raise RateLimitError("429")
+
+        async def fake_sleep(d):
+            slept.append(d)
+
+        with self.assertRaises(RateLimitError):
+            asyncio.run(f.with_retry(always, attempts=8, base_delay=10.0,
+                                     sleep=fake_sleep, jitter=lambda: 1.0))
+        self.assertTrue(max(slept) <= f.MODEL_RETRY_CAP_S, slept)
+
+    def test_retries_env(self):
+        with unittest.mock.patch.dict(os.environ, {"LANTERN_MODEL_RETRIES": "7"}):
+            self.assertEqual(f.model_retries(), 7)
+        with unittest.mock.patch.dict(os.environ, {"LANTERN_MODEL_RETRIES": "nope"}):
+            self.assertEqual(f.model_retries(), f.MODEL_RETRIES_DEFAULT)
+
+
+class Checkpoints(Base):
+    def test_snapshot_includes_untracked_work_and_restores_it(self):
+        # The whole point: a builder's NEW file is untracked until it commits, and
+        # `git stash create` would have silently omitted it.
+        (self.product / "src" / "api" / "new_feature.py").write_text("x = 1\n", encoding="utf-8")
+        (self.product / "README.md").write_text("# product\nedited\n", encoding="utf-8")
+        sha = f.checkpoint_tree(self.product, "run:03-coding:1", 0)
+        self.assertTrue(sha)
+
+        (self.product / "src" / "api" / "new_feature.py").write_text("BROKEN\n", encoding="utf-8")
+        (self.product / "README.md").write_text("# product\n", encoding="utf-8")
+        self.assertTrue(f.restore_checkpoint(self.product, sha))
+
+        self.assertEqual((self.product / "src" / "api" / "new_feature.py").read_text(encoding="utf-8"), "x = 1\n")
+        self.assertEqual((self.product / "README.md").read_text(encoding="utf-8"), "# product\nedited\n")
+
+    def test_checkpoint_leaves_head_and_the_real_index_alone(self):
+        head_before = git("rev-parse", "HEAD", cwd=self.product)
+        status_before = git("status", "--porcelain", cwd=self.product)
+        (self.product / "untracked.txt").write_text("hi\n", encoding="utf-8")
+        f.checkpoint_tree(self.product, "k", 0)
+        self.assertEqual(git("rev-parse", "HEAD", cwd=self.product), head_before)
+        # still untracked — the snapshot did not stage anything on the agent's behalf
+        self.assertIn("?? untracked.txt", git("status", "--porcelain", cwd=self.product))
+        self.assertNotEqual(status_before, git("status", "--porcelain", cwd=self.product))
+
+    def test_checkpoint_is_reachable_by_ref(self):
+        sha = f.checkpoint_tree(self.product, "feat:03-coding:2", 1)
+        ref = f.checkpoint_ref("feat:03-coding:2", 1)
+        self.assertEqual(git("rev-parse", ref, cwd=self.product), sha)
+
+    def test_ignored_files_stay_out(self):
+        (self.product / ".gitignore").write_text("secrets.env\n", encoding="utf-8")
+        (self.product / "secrets.env").write_text("KEY=abc\n", encoding="utf-8")
+        sha = f.checkpoint_tree(self.product, "k", 0)
+        self.assertNotIn("secrets.env", git("ls-tree", "-r", "--name-only", sha, cwd=self.product))
+
+    def test_never_raises_outside_a_repo(self):
+        self.assertIsNone(f.checkpoint_tree(self.tmp / "not-a-repo", "k", 0))
+
+    def test_gate_score_orders_green_above_red_and_fewer_failures_above_more(self):
+        green = {"passed": True, "results": [{"passed": True}]}
+        one_red = {"passed": False, "results": [{"passed": True}, {"passed": False}]}
+        two_red = {"passed": False, "results": [{"passed": False}, {"passed": False}]}
+        self.assertGreater(f.gate_score(green), f.gate_score(one_red))
+        self.assertGreater(f.gate_score(one_red), f.gate_score(two_red))
+
+
+class CoherenceCollapse(Base):
+    """D24: a fix round that makes things worse must cost a round, not the work."""
+
+    def _two_check_product(self):
+        (self.product / "lantern.toml").write_text(
+            '[quality]\ntest = "test -f GOOD"\nlint = "test -f ALSO_GOOD"\n', encoding="utf-8")
+
+    def test_a_worse_fix_round_does_not_ship(self):
+        self._two_check_product()
+        turns = []
+
+        async def run_turn(text):
+            turns.append(text)
+            if len(turns) == 1:
+                (self.product / "GOOD").write_text("", encoding="utf-8")   # 1 of 2 green
+            else:
+                (self.product / "GOOD").unlink()                           # thrash it away
+            return {}
+
+        results, gate = asyncio.run(f.coding_turns(
+            run_turn, "Begin", run_id=RUN, stage="03-coding", root=self.product,
+            execution_key="k", max_rounds=1))
+
+        self.assertEqual(len(turns), 2)
+        self.assertFalse(gate["passed"])                 # honest: it never went green
+        self.assertEqual(gate.get("restored_from_round"), 0)
+        self.assertTrue((self.product / "GOOD").exists(), "round 0's better tree was not restored")
+        # gate.json on disk describes the tree that ships, not the one thrown away
+        on_disk = json.loads((self.rd / "03-coding" / "gate.json").read_text(encoding="utf-8"))
+        self.assertEqual(on_disk.get("restored_from_round"), 0)
+        self.assertIn("restored from round 0",
+                      (self.rd / "03-coding" / "gate.md").read_text(encoding="utf-8"))
+
+    def test_a_better_final_round_ships_unchanged(self):
+        self._two_check_product()
+        turns = []
+
+        async def run_turn(text):
+            turns.append(text)
+            (self.product / ("GOOD" if len(turns) == 1 else "ALSO_GOOD")).write_text("", encoding="utf-8")
+            return {}
+
+        results, gate = asyncio.run(f.coding_turns(
+            run_turn, "Begin", run_id=RUN, stage="03-coding", root=self.product,
+            execution_key="k", max_rounds=2))
+        self.assertTrue(gate["passed"])
+        self.assertIsNone(gate.get("restored_from_round"))
+
+    def test_checkpoints_can_be_switched_off(self):
+        self._two_check_product()
+
+        async def run_turn(text):
+            (self.product / "GOOD").write_text("", encoding="utf-8")
+            return {}
+
+        _, gate = asyncio.run(f.coding_turns(
+            run_turn, "Begin", run_id=RUN, stage="03-coding", root=self.product,
+            execution_key="k", max_rounds=0, checkpoints=False))
+        self.assertIsNone(gate.get("restored_from_round"))
+        self.assertEqual(git("for-each-ref", "--count=1", f.CHECKPOINT_NS, cwd=self.product), "")
+
+
 class Usage(unittest.TestCase):
     def test_merge_sums_the_ledgers(self):
         merged = f.merge_usage([{"requests": 1, "input_tokens": 10, "output_tokens": 2},

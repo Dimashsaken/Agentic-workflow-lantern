@@ -40,6 +40,9 @@ LANTERN_FIX_ROUNDS=3                # D17: quality-gate fix rounds before a red 
 LANTERN_BUILDER_PARALLELISM=2       # D18: scoped builders at once; capped by MAX_CONCURRENCY
                                     #   (and by 1 in-process, where executions share env)
 LANTERN_REVIEW_ROUNDS=2             # D19: review-bot rounds before a human sees code_complete (0 = off)
+LANTERN_MODEL_RETRIES=3             # D23: retries on a throttled/transport model failure (0 = off)
+LANTERN_MAX_TURNS=                  # D23: fleet-wide turn ceiling; per role LANTERN_MAX_TURNS_<ROLE>
+                                    #   (defaults: coding 400, every other role 120)
 LANTERN_BABYSIT_MINUTES=30          # D19: merge-babysitter cadence for approved, unmerged branches
 LANTERN_SMALL_FIX_MAX_LINES=60      # D20: a trivial/small bug fix above this many changed lines is re-classified large
 LANTERN_DEDUP_THRESHOLD=0.45        # D20: similarity at/above which a past run is a dedup candidate

@@ -1,14 +1,14 @@
 {
   "plan": {
-    "generated_at": "2026-09-09T05:16:49+00:00",
+    "generated_at": "2026-09-10T03:57:25+00:00",
     "mode": "frozen",
-    "n_inputs": 1,
+    "n_inputs": 2,
     "role": "pre-coding",
     "suite": "plan",
     "summary": {
-      "full_coverage": 1,
+      "full_coverage": 2,
       "mean_coverage": 1.0,
-      "n": 1,
+      "n": 2,
       "runs": [
         {
           "deferred": 0,
@@ -17,12 +17,20 @@
           "run_id": "feat-20260908-note-delete",
           "score": 1.0,
           "uncovered": []
+        },
+        {
+          "deferred": 0,
+          "n_criteria": 2,
+          "planned": 2,
+          "run_id": "feat-20260908-status-version",
+          "score": 1.0,
+          "uncovered": []
         }
       ]
     }
   },
   "repro": {
-    "generated_at": "2026-09-09T05:16:49+00:00",
+    "generated_at": "2026-09-10T03:57:25+00:00",
     "mode": "frozen",
     "n_inputs": 0,
     "role": null,
@@ -35,7 +43,7 @@
     }
   },
   "triage": {
-    "generated_at": "2026-09-09T05:16:49+00:00",
+    "generated_at": "2026-09-10T03:57:25+00:00",
     "mode": "frozen",
     "n_inputs": 1,
     "role": "debug",
@@ -50,7 +58,7 @@
     }
   },
   "validate": {
-    "generated_at": "2026-09-09T05:16:49+00:00",
+    "generated_at": "2026-09-10T03:57:25+00:00",
     "mode": "frozen",
     "n_inputs": 0,
     "role": "validator",

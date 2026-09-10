@@ -921,3 +921,62 @@ prompts, per-phase cost, restart from here — and HumanLayer's workspace — on
   configured secret, and the run opened a real `story_signoff` gate. Screenshots of
   every page at 1440 and 390 px, light and dark, in
   `tools/mission-control/screenshots/v3-*.png`.
+
+## D23 — 2026-09-10 — The stage loop survives its own bad rounds and the deployment's 429s
+
+**Context.** An architecture audit (`docs/research/agentic-architecture-assessment.md`)
+found the per-stage loop is the thinnest part of the system: one `Runner.run` per stage
+with no retry, a flat 120-turn ceiling for twelve roles, and a fix loop that hands off
+whatever the LAST round produced. Two of those are cheap to fix and one of them is the
+best-evidenced failure mode in the agentic-coding literature.
+
+**Decision.**
+
+- **A red fix round costs a round, not the work.** `coding_turns` snapshots the worktree
+  before each gate and, if the loop ends red on a tree that scores worse than one it
+  already had, restores the better tree and re-gates it. `gate.json` records
+  `restored_from_round` so the handoff, the execution drawer and a human all see which
+  round shipped. Motivation is measured, not theoretical: across SWE-agent and OpenHands,
+  60–69% of failures reach and edit the *correct* functions and then thrash them, in five
+  cases producing a bit-identical gold patch mid-trajectory and destroying it
+  (arXiv 2603.24631). Our fix loop has exactly that shape. aider buys the same protection
+  by auto-committing every model turn; here the harness takes the snapshot instead, so the
+  agent's branch, index and commit messages are untouched.
+- **A checkpoint is a temporary-index commit, not `git stash create`.** `stash create`
+  silently omits untracked files, which is most of what a builder produces between
+  commits. `read-tree HEAD` → `add -A` → `write-tree` → `commit-tree` under
+  `GIT_INDEX_FILE` captures the same state including new files, respects `.gitignore`,
+  and touches neither the real index nor the worktree nor HEAD. Checkpoints are kept
+  under `refs/lantern/<execution>/round-<n>` so a discarded round stays readable.
+- **A 429 is transport, not content.** `factory.with_retry` retries transport-shaped
+  failures with capped exponential backoff and jitter (`LANTERN_MODEL_RETRIES`, default
+  3), wired into both executors' `run_turn`. `classify_error` splits retryable from
+  terminal by exception class NAME — never by import, so factory.py keeps its no-SDK rule
+  — with a status code outranking the name when the exception carries one.
+  `MaxTurnsExceeded` and guardrail tripwires stay terminal: they are results about the
+  work, and retrying buys the same answer twice. This matters most under D18, where N
+  builders hit one Azure deployment on the same startup credits, so throttling is the
+  expected case; before this, one 429 failed the run and a human had to re-run the whole
+  stage and pay for every turn again.
+- **Turn ceilings are per role.** `LANTERN_MAX_TURNS_<ROLE>` then `LANTERN_MAX_TURNS`,
+  falling back to 400 for `coding` (the D14 `LANTERN_CODING_MAX_TURNS` name still works)
+  and 120 for everything else. 120 was one number for twelve roles with no relation to
+  observed behaviour — traces show a review-shaped stage finishing in ~9–11 model
+  requests while a browser-driving QA charter can legitimately need far more.
+
+**Not done here, deliberately.** Context compaction inside a stage, `output_type`
+structured outputs, guardrails, and `RunState` gate resumption are all real gaps the same
+audit found, but each changes what the model sees or how a stage resumes and none can be
+proven on frozen data alone — they need a live run against the Azure deployment. Writing
+`error_class` at the failure site is now a one-liner (`factory.classify_error`) and is
+still unwired. Delegating stage 3's inner loop to Codex CLI via the SDK's experimental
+`codex_tool` remains the strategically better answer than growing our own loop further;
+it needs live Azure plumbing to evaluate.
+
+**Proof.** `tools/azure-runner/test_factory.py` 29 → 47 tests: `Retry` (8, including
+status-code precedence, terminal classification of `MaxTurnsExceeded`, and the real
+backoff maths with injected sleep), `Checkpoints` (6, including "an untracked new file
+survives a restore" — the bug `stash create` would have shipped — and ".gitignore is
+respected"), `CoherenceCollapse` (3: a worse round is discarded, a better final round
+ships unchanged, checkpoints can be switched off). Whole-suite green, `check_pr.py` green
+with a regenerated `tools/evals/REPORT.md`.

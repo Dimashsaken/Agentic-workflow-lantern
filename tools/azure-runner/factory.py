@@ -28,11 +28,14 @@ Without builders in the plan every function here behaves exactly as before.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import random
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 from datetime import datetime, timezone
@@ -726,11 +729,15 @@ def changed_files_since(root: Path, since_sha: str | None) -> list[str]:
 
 
 def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, round_no: int,
-                     since_sha: str | None = None) -> dict:
+                     since_sha: str | None = None, restored_from: int | None = None) -> dict:
     """Run the product's quality commands + the write-scope check; write gate.json/gate.md.
 
     Always writes the files, even with nothing configured, so a host re-check can tell
     'no commands' (passed, configured=[]) from 'the gate never ran' (no file).
+
+    `restored_from` records that this gate ran against an EARLIER round's tree, put back
+    because the later rounds were worse (D23) — it goes in gate.json so the handoff, the
+    execution drawer and a human all see which round actually shipped.
     """
     cfg = quality_config(root)
     results = []
@@ -754,6 +761,8 @@ def run_quality_gate(run_id: str, stage: str, root: Path, execution_key: str, ro
         "results": results,
         "ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+    if restored_from is not None:
+        gate["restored_from_round"] = restored_from
     if cfg.get("error"):
         gate["passed"] = False
         gate["results"].append({"name": "config", "command": "lantern.toml", "exit": 1,
@@ -772,6 +781,9 @@ def render_gate_md(gate: dict) -> str:
              f"- **Source:** {gate.get('source') or 'no lantern.toml [quality] in the product — nothing ran'}",
              f"- **Execution:** `{gate['execution_key']}` at {gate['ran_at']}", "",
              "| check | exit | seconds |", "|-------|------|---------|"]
+    if gate.get("restored_from_round") is not None:
+        lines.insert(5, f"- **Tree:** restored from round {gate['restored_from_round']} — "
+                        "later fix rounds scored worse and were discarded (D23)")
     for r in gate["results"]:
         lines.append(f"| {r['name']} | {r['exit']} | {r['seconds']} |")
     for r in gate["results"]:
@@ -913,6 +925,189 @@ def coding_gate_note(run_id: str, root: Path | None) -> str:
     return builder_brief(run_id) + "\n".join(lines)
 
 
+# ── model-call retry (D23) ───────────────────────────────────────────────────
+# A stage used to die on the first 429. That is a TRANSPORT failure being recorded as a
+# CONTENT failure: the run goes to `failed`, a human types `pipeline.py retry`, and the
+# whole stage re-runs and pays for every turn again. With D18 fan-out every builder
+# hits the same Azure deployment on the same startup credits, so throttling is the
+# expected case, not the exceptional one.
+#
+# Classification is by exception CLASS NAME rather than by isinstance, because
+# factory.py keeps its no-SDK-import rule (the openai/agents exception classes live
+# behind the SDK, and importing them here would break the container/in-process/test
+# three-way share). A status code, when the exception carries one, outranks the name.
+
+MODEL_RETRIES_DEFAULT = 3
+MODEL_RETRY_BASE_S = 2.0
+MODEL_RETRY_CAP_S = 60.0
+RETRYABLE_STATUS = frozenset({408, 409, 429, 500, 502, 503, 504})
+RETRYABLE_NAMES = frozenset({
+    "RateLimitError", "APIConnectionError", "APITimeoutError", "InternalServerError",
+    "APIError", "ServiceUnavailableError", "ConnectionError", "TimeoutError",
+    "ReadTimeout", "ConnectTimeout", "RemoteProtocolError",
+})
+# MaxTurnsExceeded is the agent exhausting its budget and a guardrail tripwire is a
+# refusal — both are real results about the work, and retrying them just buys the same
+# answer twice. They stay terminal even though they surface as exceptions.
+TERMINAL_NAMES = frozenset({
+    "MaxTurnsExceeded", "ModelRefusalError", "UserError",
+    "InputGuardrailTripwireTriggered", "OutputGuardrailTripwireTriggered",
+})
+
+
+def model_retries() -> int:
+    try:
+        return max(0, int(os.environ.get("LANTERN_MODEL_RETRIES", MODEL_RETRIES_DEFAULT)))
+    except ValueError:
+        return MODEL_RETRIES_DEFAULT
+
+
+def classify_error(exc: BaseException) -> str:
+    """'retryable' (transport/throttle — the same call may work) or 'terminal' (stop).
+
+    This is what `stage_executions.error_class` was always for; schema.sql has had the
+    column since the first migration and nothing has ever written it.
+    """
+    names = {c.__name__ for c in type(exc).__mro__}
+    if names & TERMINAL_NAMES:
+        return "terminal"
+    status = getattr(exc, "status_code", None)
+    if not isinstance(status, int):
+        status = getattr(exc, "status", None)
+    if isinstance(status, int):
+        return "retryable" if status in RETRYABLE_STATUS else "terminal"
+    return "retryable" if names & RETRYABLE_NAMES else "terminal"
+
+
+async def with_retry(make_awaitable, *, attempts: int | None = None,
+                     base_delay: float = MODEL_RETRY_BASE_S, sleep=None, jitter=None,
+                     on_retry=None):
+    """Await `make_awaitable()`, retrying transport failures with exponential backoff.
+
+    `make_awaitable` is a zero-arg callable returning a FRESH awaitable each time — a
+    coroutine cannot be awaited twice, so a bare coroutine would fail on retry 1.
+    `sleep` and `jitter` are injectable so the tests can run the real backoff maths
+    without spending the real seconds.
+    """
+    tries = model_retries() if attempts is None else attempts
+    sleep = asyncio.sleep if sleep is None else sleep
+    jitter = random.random if jitter is None else jitter
+    for attempt in range(tries + 1):
+        try:
+            return await make_awaitable()
+        except Exception as e:
+            if attempt >= tries or classify_error(e) != "retryable":
+                raise
+            # Full jitter in the top half of the window: never a thundering herd of
+            # builders retrying in lockstep, never a delay so short it re-throttles.
+            delay = min(base_delay * (2 ** attempt), MODEL_RETRY_CAP_S) * (0.5 + jitter() / 2)
+            if on_retry:
+                on_retry(attempt + 1, tries, e, delay)
+            await sleep(delay)
+
+
+# ── working-tree checkpoints (D23) ───────────────────────────────────────────
+# Coherence collapse: measured across SWE-agent and OpenHands, 60-69% of failures reach
+# and edit the CORRECT functions and then thrash them — in five cases the agent produced
+# a bit-identical gold patch mid-trajectory and destroyed it later (arXiv 2603.24631).
+# The fix loop below has exactly that shape: fix round 2 can be strictly worse than
+# round 1, and round 2 is the tree we hand off. aider buys the fix by auto-committing
+# every model turn; here the HARNESS takes the snapshot instead, so the agent's own git
+# workflow (its branch, its commit messages, its index) is untouched.
+#
+# A checkpoint is built in a TEMPORARY index — read-tree HEAD, add -A, write-tree,
+# commit-tree — so it captures the agent's uncommitted work INCLUDING files it has
+# created but not yet added, while touching neither the real index nor the worktree nor
+# HEAD. (`git stash create`, the obvious one-liner, silently omits untracked files,
+# which is most of what a builder produces between commits.) .gitignore is respected, so
+# node_modules and .env stay out. The commit is kept alive under refs/lantern/ so gc
+# cannot drop it mid-stage and a human can still read a discarded round afterwards
+# (`git log <ref>`, `git diff <ref> HEAD`).
+
+CHECKPOINT_NS = "refs/lantern"
+_CHECKPOINT_IDENTITY = {
+    "GIT_AUTHOR_NAME": "lantern-harness", "GIT_AUTHOR_EMAIL": "lantern@localhost",
+    "GIT_COMMITTER_NAME": "lantern-harness", "GIT_COMMITTER_EMAIL": "lantern@localhost",
+}
+
+
+def _git(root: Path, *args: str, env: dict | None = None,
+         stdin: str | None = None) -> tuple[int, str]:
+    r = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
+                       errors="replace", input=stdin,
+                       env={**os.environ, **env} if env else None)
+    return r.returncode, (r.stdout or "").strip()
+
+
+def checkpoint_ref(execution_key: str, round_no: int) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", execution_key).strip("-.") or "exec"
+    return f"{CHECKPOINT_NS}/{slug}/round-{round_no}"
+
+
+def checkpoint_tree(root: Path, execution_key: str, round_no: int) -> str | None:
+    """Snapshot the worktree as a commit object; its sha, or None if git could not.
+
+    Never raises and never mutates the worktree, the index or HEAD: a checkpoint is
+    insurance, not a postcondition. A stage must not fail because its snapshot failed.
+    """
+    tmp_index = None
+    try:
+        fd, tmp_index = tempfile.mkstemp(prefix="lantern-index-")
+        os.close(fd)
+        os.unlink(tmp_index)                  # git wants to create it itself
+        env = {**_CHECKPOINT_IDENTITY, "GIT_INDEX_FILE": tmp_index}
+        if _git(root, "read-tree", "HEAD", env=env)[0] != 0:
+            return None                       # no HEAD yet — nothing to snapshot against
+        if _git(root, "add", "-A", ".", env=env)[0] != 0:
+            return None
+        code, tree = _git(root, "write-tree", env=env)
+        if code != 0 or not tree:
+            return None
+        code, head = _git(root, "rev-parse", "HEAD", env=env)
+        parent = ["-p", head] if code == 0 and head else []
+        code, sha = _git(root, "commit-tree", tree, *parent, env=env,
+                         stdin=f"lantern checkpoint: {execution_key} round {round_no}\n")
+        if code != 0 or not sha:
+            return None
+        _git(root, "update-ref", checkpoint_ref(execution_key, round_no), sha)
+        return sha
+    except OSError:
+        return None
+    finally:
+        if tmp_index and os.path.exists(tmp_index):
+            try:
+                os.unlink(tmp_index)
+            except OSError:
+                pass
+
+
+def restore_checkpoint(root: Path, sha: str) -> bool:
+    """Reset worktree AND index to a checkpoint's tree. HEAD and history are left alone.
+
+    History keeps the thrash; the tree that ships is the best one. The handoff commits
+    whatever is uncommitted (`_publish_branch` auto-commits at bundle time), so the
+    branch lands on the restored tree without this function rewriting anyone's commits.
+
+    One documented limit: `read-tree -u --reset` removes files the index knows about and
+    the tree lacks, but a file that was never added to the real index is invisible to it
+    and survives the restore. The gate is re-run afterwards, so a leftover that actually
+    breaks something fails honestly rather than shipping quietly.
+    """
+    return _git(root, "read-tree", "-u", "--reset", sha)[0] == 0
+
+
+def gate_score(gate: dict) -> tuple[int, int, int]:
+    """Order two gate results — bigger is better. (green, checks passed, -checks failed).
+
+    Deliberately crude. It exists to answer one question — 'was an earlier tree better
+    than this one?' — and a richer score (weighting tests above lint, say) would start
+    making product judgements the product's own lantern.toml should be making.
+    """
+    results = gate.get("results") or []
+    passed = sum(1 for r in results if r.get("passed"))
+    return (1 if gate.get("passed") else 0, passed, -(len(results) - passed))
+
+
 # ── the bounded fix loop ─────────────────────────────────────────────────────
 
 def fix_rounds() -> int:
@@ -924,15 +1119,34 @@ def fix_rounds() -> int:
 
 async def coding_turns(run_turn, kickoff: str, *, run_id: str, stage: str, root: Path,
                        execution_key: str, since_sha: str | None = None,
-                       max_rounds: int | None = None) -> tuple[list, dict]:
-    """Build turn → gate → (failures → fix turn)*, bounded. `run_turn(text)` is the agent
-    turn (Runner.run in production, a fake in tests); returns (results, final gate)."""
+                       max_rounds: int | None = None,
+                       checkpoints: bool = True) -> tuple[list, dict]:
+    """Build turn → checkpoint → gate → (failures → fix turn)*, bounded.
+
+    `run_turn(text)` is the agent turn (Runner.run in production, a fake in tests);
+    returns (results, final gate).
+
+    The last round is NOT automatically the one that ships (D23). Each round's worktree
+    is snapshotted before its gate runs, and if the loop ends red on a tree that scores
+    worse than one we already had, the better tree is restored and re-gated — so a fix
+    round that made things worse costs a round, not the work.
+    """
     rounds = fix_rounds() if max_rounds is None else max_rounds
     results = [await run_turn(kickoff)]
     round_no = 0
+    best: tuple[tuple[int, int, int], str, int] | None = None   # (score, sha, round)
     while True:
+        sha = checkpoint_tree(root, execution_key, round_no) if checkpoints else None
         gate = run_quality_gate(run_id, stage, root, execution_key, round_no, since_sha)
+        score = gate_score(gate)
+        if sha and (best is None or score > best[0]):
+            best = (score, sha, round_no)
         if gate["passed"] or round_no >= rounds:
+            if best is not None and best[0] > score and restore_checkpoint(root, best[1]):
+                # Re-gate so gate.json describes the tree that actually ships, not the
+                # one we threw away — the host re-check reads that file at handoff.
+                gate = run_quality_gate(run_id, stage, root, execution_key, round_no,
+                                        since_sha, restored_from=best[2])
             return results, gate
         round_no += 1
         results.append(await run_turn(fix_prompt(gate, round_no, rounds)))

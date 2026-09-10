@@ -1,8 +1,8 @@
 # Factory evals — REPORT
 
-Generated 2026-09-09 05:16 UTC at commit `19501909fb49` from frozen data: 9 briefs, 3 stories, 1 plans, 2 validations, 1 repros.
+Generated 2026-09-10 03:57 UTC at commit `39090c2172ae` from frozen data: 11 briefs, 5 stories, 2 plans, 2 validations, 1 repros.
 
-<!-- lantern-evals-fingerprint: bae6f53716d8a5682c7f2ee4274fee42b946d3386aed13e23e983fdbc3de67d0 -->
+<!-- lantern-evals-fingerprint: 7604c771133164dcebc42a9d3fcf732b78302c26dc9ad57e194355c5d85be207 -->
 
 **The rule (D20):** a diff that touches `agents/**`, `factory.py`, `intake.py`, the scorers, or the orchestrator's prompt builders / gate functions must regenerate this file (`pipeline.py evals build && pipeline.py evals report`) in the same change. `tools/evals/check_pr.py` enforces it from this repo's `lantern.toml` lint command. A number that moved is the review conversation; a number that did not move is the evidence the change was safe. `evals run --suite <name> --live` replays the role on the real model for a before/after — opt-in, costs cents per row.
 
@@ -10,7 +10,7 @@ Generated 2026-09-09 05:16 UTC at commit `19501909fb49` from frozen data: 9 brie
 
 | suite | mode | n | metric | value |
 |---|---|---|---|---|
-| plan | frozen | 1 | mean plan coverage | 1.00 |
+| plan | frozen | 2 | mean plan coverage | 1.00 |
 | validate | frozen | 0 | validator vs QA agreement | n/a |
 | triage | frozen | 1 | classification accuracy | n/a |
 | repro | frozen | 0 | repro rate | n/a |
@@ -20,6 +20,7 @@ Generated 2026-09-09 05:16 UTC at commit `19501909fb49` from frozen data: 9 brie
 | run | criteria | planned | deferred | uncovered | coverage |
 |---|---|---|---|---|---|
 | feat-20260908-note-delete | 3 | 3 | 0 | — | 1.00 |
+| feat-20260908-status-version | 2 | 2 | 0 | — | 1.00 |
 
 ## validate — the validator's verdict against what QA found (validator)
 

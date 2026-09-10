@@ -1444,11 +1444,30 @@ def stage_tools(role: str, run_id: str, stage: str, execution_key: str, paper=No
     return tools
 
 
+DEFAULT_MAX_TURNS = 120
+CODING_MAX_TURNS = 400
+
+
 def max_turns_for(role: str) -> int:
-    """Coding is a long loop of edit/test/commit; the other roles are review-shaped."""
-    if role == "coding":
-        return int(os.environ.get("LANTERN_CODING_MAX_TURNS", "400"))
-    return 120
+    """Coding is a long loop of edit/test/commit; the other roles are review-shaped.
+
+    Overridable per role (`LANTERN_MAX_TURNS_QA_DEV`) and fleet-wide
+    (`LANTERN_MAX_TURNS`), because 120 was one number for twelve roles with no relation
+    to observed behaviour — traces show a review-shaped stage finishing in ~9-11 model
+    requests, while a browser-driving QA charter can legitimately need many more. A role
+    that hits its ceiling fails as MaxTurnsExceeded, which classify_error keeps terminal.
+    """
+    default = CODING_MAX_TURNS if role == "coding" else DEFAULT_MAX_TURNS
+    if role == "coding" and os.environ.get("LANTERN_CODING_MAX_TURNS"):
+        default = os.environ["LANTERN_CODING_MAX_TURNS"]        # the D14 name, kept
+    for var in (f"LANTERN_MAX_TURNS_{role.upper().replace('-', '_')}", "LANTERN_MAX_TURNS"):
+        if os.environ.get(var):
+            default = os.environ[var]
+            break
+    try:
+        return max(1, int(default))
+    except (TypeError, ValueError):
+        return CODING_MAX_TURNS if role == "coding" else DEFAULT_MAX_TURNS
 
 
 def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
@@ -1751,9 +1770,17 @@ async def main() -> None:
                    "Do not reply with a plan — start calling tools now and keep working "
                    "until the report is on disk and append_memory has been called.")
 
+        def _retrying(attempt: int, of: int, exc: Exception, delay: float) -> None:
+            print(f"RETRY {attempt}/{of} after {type(exc).__name__}: {exc} "
+                  f"— sleeping {delay:.1f}s", file=sys.stderr)
+
         async def run_turn(text: str):
-            return await Runner.run(agent, input=text, session=session,
-                                    max_turns=max_turns_for(role))
+            # D23: a 429 from the shared Azure deployment is transport, not content.
+            # Retrying here costs seconds; failing the stage costs every turn again.
+            return await factory.with_retry(
+                lambda: Runner.run(agent, input=text, session=session,
+                                   max_turns=max_turns_for(role)),
+                on_retry=_retrying)
 
         if role == "coding" and product_writable():
             # D17: build turn → the product's quality commands as code → failures back
