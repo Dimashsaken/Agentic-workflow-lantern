@@ -111,8 +111,7 @@ def sidebar(sessions, directory, user: str, active_sid: str | None, now) -> str:
         if earlier:
             bits.append("<div class='sgrp'>Earlier</div>" + "".join(item(s) for s in earlier))
     else:
-        bits.append("<p class='sideempty'><b>Nothing yet.</b> Ask Lantern what's "
-                    "blocked, or pick a specialist and ask what you'd ask a colleague.</p>")
+        bits.append("<p class='sideempty'>Your conversations will appear here.</p>")
     if theirs:
         bits.append("<div class='sgrp'>The team's</div>" + "".join(item(s) for s in theirs))
     return f"<aside class='chatside'>{''.join(bits)}</aside>"
@@ -765,87 +764,59 @@ async def chat_hub(request: Request, agent: str = "", run: str = "", error: str 
     ok, why = cs.chat_configured()
     sel = agent if agent in directory else cs.LANTERN_AGENT
 
-    cards = []
-    info = directory[cs.LANTERN_AGENT]
-    cards.append(f"""<label class='acard hero{' sel' if sel == cs.LANTERN_AGENT else ''}'
-        data-agent='{cs.LANTERN_AGENT}'><span class='an'>Lantern</span>
-      <div class='ad'>{H(info["desc"])}</div>
-      <div class='am'><span>orchestrator</span><span>reads the pipeline database</span>
-        <span>hands questions to specialists</span><span>acts on your confirmation</span>
-        </div></label>""")
-    for slug, i in directory.items():
-        if i["kind"] == "orchestrator":
-            continue
-        kind = "fleet role" if i["kind"] == "fleet" else "custom"
-        browser = ("<span title='This role drives a browser on pipeline runs; web consults "
-                   "run without it for now — use pipeline.py ask -i when a live browser "
-                   "matters.'>browser: CLI only</span>" if i.get("browser_role") else "")
-        cards.append(f"""<label class='acard{' sel' if sel == slug else ''}' data-agent='{H(slug)}'>
-          <span class='an'>{H(i["name"])}</span><div class='ad'>{H(i["desc"])}</div>
-          <div class='am'><span>{kind}</span><span>{H(i["model_pref"])}</span>{browser}</div>
-        </label>""")
-
-    notice = "" if ok else (f"<div class='notice'><b>Chat can't reach a model.</b> "
-                            f"{H(why)} on the server, then reload. History below still works.</div>")
-    err = f"<div class='notice'><b>{H(error)}</b></div>" if error else ""
-    run_chip = (f"<p class='sub'>This conversation will be scoped to run "
-                f"<code>{H(run)}</code> — the agent reads its run folder first.</p>"
-                if run else "")
-
+    options = "".join(f"<option value='{H(slug)}'{' selected' if slug == sel else ''}>"
+                      f"{H(i['name'])}</option>" for slug, i in directory.items())
+    notice = "" if ok else (f"<div class='notice'><b>Chat is unavailable.</b> "
+                            f"{H(why)} on the server, then reload. You can still read past conversations.</div>")
+    err = f"<div class='notice' role='alert'><b>{H(error)}</b></div>" if error else ""
+    run_chip = (f"<p class='sub'>Working on <a class='lnk' href='/run/{H(run)}'>"
+                f"{H(run)}</a></p>" if run else "")
+    permission = 'Actions need your confirmation' if sel == cs.LANTERN_AGENT else 'Advice only · read-only'
     main = f"""<main class='chatmain'><div class='hub'><div class='inner'>
-      <h1>Talk to the fleet</h1>
-      <p class='lede'>One question, one agent. Lantern sees the whole pipeline, pulls
-        specialists in, and can operate the factory for you — start a run, point it at a
-        repo, decide a gate — but only after you type the confirmation it asks for, and
-        always in your name. Every specialist stays advisory and read-only.</p>
+      <span class='eyebrow'>Start with an idea</span>
+      <h1>What would you like to build?</h1>
+      <p class='lede'>Describe a feature, report a bug, or ask about your work.</p>
       {notice}{err}{run_chip}
       <form id='newform' method='post' action='/chat/new'>
-        <input type='hidden' name='agent' id='agentfield' value='{H(sel)}'>
         <input type='hidden' name='run_id' value='{H(run)}'>
-        <div class='agrid'>{''.join(cards)}</div>
-        <div class='composer' style='border-top:0;padding:16px 0 0'><div class='cbox'>
+        <div class='composer'><div class='cbox'>
           <div class='crow'>
-            <textarea name='text' id='cinput' rows='1' {'' if ok else 'disabled '}
-              placeholder='Ask — Enter to send, Shift+Enter for a new line'></textarea>
-            <button class='send' id='csend' {'' if ok else 'disabled '}title='Send (Enter)'>↑</button>
+            <textarea name='text' id='cinput' rows='3' {'' if ok else 'disabled '}required
+              aria-label='Message' placeholder='Describe what you have in mind…'></textarea>
+            <button class='send' id='csend' {'' if ok else 'disabled '}aria-label='Send message' title='Send (Enter)'>↑</button>
           </div>
-          <div class='cfoot'><b id='selname'>{H(agent_label(directory, sel))} consult</b>
-            <span>·</span><span id='selline'>{'acts only on your typed confirmation'
-              if sel == cs.LANTERN_AGENT else 'advisory, read-only'}</span>
-            <span>·</span><span>nothing billed yet</span></div>
+          <div class='cfoot'><b id='selname'>{H(agent_label(directory, sel))}</b>
+            <span>·</span><span id='selline'>{permission}</span></div>
         </div></div>
+        <details class='agent-picker'{' open' if sel != cs.LANTERN_AGENT else ''}>
+          <summary>Choose a specialist</summary>
+          <label for='agentfield'>Talk to</label>
+          <select name='agent' id='agentfield'>{options}</select>
+          <p>Specialists offer advice. Lantern coordinates the work.</p>
+        </details>
       </form>
-      <p class='sub' style='margin-top:18px'>Need a new kind of specialist?
-        <a href='/agents' style='color:var(--dawn-3)'>Create an agent →</a></p>
     </div></div></main>
     <script>
     (function(){{
-      var f = document.getElementById('agentfield'), nm = document.getElementById('selname');
-      var input = document.getElementById('cinput');
-      document.querySelectorAll('.acard').forEach(function(c){{
-        c.addEventListener('click', function(){{
-          document.querySelectorAll('.acard.sel').forEach(function(x){{x.classList.remove('sel')}});
-          c.classList.add('sel'); f.value = c.dataset.agent;
-          nm.textContent = (c.querySelector('.an').textContent) + ' consult';
-          var ln = document.getElementById('selline');
-          if(ln) ln.textContent = (c.dataset.agent === 'lantern')
-            ? 'acts only on your typed confirmation' : 'advisory, read-only';
-          if(input) input.focus();
-        }});
+      var form=document.getElementById('newform'), f=document.getElementById('agentfield');
+      var input=document.getElementById('cinput');
+      f.addEventListener('change',function(){{
+        document.getElementById('selname').textContent=f.options[f.selectedIndex].textContent;
+        document.getElementById('selline').textContent=f.value==='lantern'
+          ? 'Actions need your confirmation' : 'Advice only · read-only';
       }});
-      if(input){{
-        input.addEventListener('input', function(){{ input.style.height='auto';
-          input.style.height = Math.min(input.scrollHeight, 220) + 'px'; }});
-        input.addEventListener('keydown', function(e){{
-          if(e.key === 'Enter' && !e.shiftKey){{ e.preventDefault();
-            if(input.value.trim()) document.getElementById('newform').submit(); }}
-        }});
-        input.focus();
-      }}
+      input.addEventListener('input',function(){{ input.style.height='auto';
+        input.style.height=Math.min(input.scrollHeight,220)+'px'; }});
+      input.addEventListener('keydown',function(e){{
+        if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){{
+          e.preventDefault(); if(input.value.trim()&&!input.disabled) form.requestSubmit();
+        }}
+      }});
+      form.addEventListener('submit',function(e){{if(!input.value.trim()) e.preventDefault();}});
     }})();
     </script>"""
 
-    body = f"<div class='chatwrap'>{sidebar(sessions, directory, user, None, now)}{main}</div>"
+    body = f"<div class='chatwrap{" empty-chat" if not sessions else ""}'>{sidebar(sessions, directory, user, None, now)}<details class='chat-history'><summary>Conversations</summary>{sidebar(sessions, directory, user, None, now)}</details>{main}</div>"
     return HTMLResponse(deps["page"]("Chat — Lantern Mission Control", body, user,
                                      "/chat", f"{now:%H:%M}", auto_reload=False))
 
@@ -1058,8 +1029,7 @@ async def chat_session(sid: str, request: Request):
         <form class='rename' method='post' action='/chat/{H(sid)}/rename'>
           <input class='ttl' name='title' value='{H(s["title"] or "")}'
             placeholder='(untitled)' onchange='this.form.submit()'></form>
-        <div class='adesc'>{H(info["desc"])}</div>
-        <div class='chips'>{''.join(chips)}</div>
+        <details class='run-meta'><summary>Conversation details</summary><div class='adesc'>{H(info["desc"])}</div><div class='chips'>{''.join(chips)}</div></details>
       </div>
       <div class='totals'><span class='v' id='tot-cost'>{H(fmt_money(est)) if tot else '—'}</span>
         <span id='tot-line'>{fmt_int(tot)} tok · {len(turns)} turn{'s' if len(turns) != 1 else ''}{H(unm)}</span><br>
@@ -1076,7 +1046,7 @@ async def chat_session(sid: str, request: Request):
                        disabled=not ok)
             + chat_js(sid, label, running_id))
 
-    body = f"<div class='chatwrap'>{sidebar(sessions, directory, user, sid, now)}{main}</div>"
+    body = f"<div class='chatwrap'>{sidebar(sessions, directory, user, sid, now)}<details class='chat-history'><summary>Conversations</summary>{sidebar(sessions, directory, user, sid, now)}</details>{main}</div>"
     title = (s["title"] or label)[:60]
     return HTMLResponse(deps["page"](f"{title} — Lantern Chat", body, user, "/chat",
                                      f"{now:%H:%M}", auto_reload=False))

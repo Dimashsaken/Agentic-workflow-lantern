@@ -257,43 +257,39 @@ def snap_for(runs, pend, latency=(), **kw) -> dict:
     return asyncio.run(mc.snapshot(p)), p
 
 
-class TestReviewCards(unittest.TestCase):
-    def card(self, age_seconds):
+class TestReviewRows(unittest.TestCase):
+    def row(self, age_seconds):
         run = run_row()
         a = approval_row(age_seconds=age_seconds)
         snap, _ = snap_for([run], [a])
-        col, html = mc.build_card(run, snap, NOW)
-        self.assertEqual(col, "review")
-        return html
+        rows = mc.work_rows(snap, NOW)
+        self.assertEqual(rows[0]["state"], "review")
+        return rows[0], mc.worklist.render(rows, NOW)
 
-    def test_fresh_card_has_age_and_controls_but_no_stale(self):
-        html = self.card(20 * 3600)
+    def test_fresh_row_links_to_evidence_without_decision_controls(self):
+        row, html = self.row(20 * 3600)
+        self.assertFalse(row["stale"])
         self.assertIn("20h", html)
-        self.assertNotIn("STALE", html)
-        self.assertNotIn("stale", html)
-        self.assertIn("/gate/7/approve", html)
-        self.assertIn("/gate/7/reject", html)
-        self.assertIn("href='/gates#gate-7'", html)   # evidence deep-links to the card           # evidence link
+        self.assertIn("href='/run/feat-20260901-fake#gate-7'", html)
+        self.assertNotIn("/gate/7/approve", html)
+        self.assertNotIn("/gate/7/reject", html)
 
-    def test_exact_24h_card_is_not_stale(self):
-        self.assertNotIn("STALE", self.card(DAY))
+    def test_exact_24h_row_is_not_stale(self):
+        self.assertFalse(self.row(DAY)[0]["stale"])
 
-    def test_over_24h_card_shows_stale_treatment_and_keeps_controls(self):
-        html = self.card(4 * DAY)
-        self.assertIn("STALE", html)
-        self.assertIn("kcard hot stale", html)
-        self.assertIn("4d", html)
-        self.assertIn("/gate/7/approve", html)
-        self.assertIn("/gate/7/reject", html)
-        self.assertIn("href='/gates#gate-7'", html)   # evidence deep-links to the card
+    def test_over_24h_row_keeps_waiting_age_visible(self):
+        row, html = self.row(4 * DAY)
+        self.assertTrue(row["stale"])
+        self.assertIn("work-age overdue", html)
+        self.assertIn("Waiting 4d", html)
 
     def test_just_over_24h_is_stale(self):
-        self.assertIn("STALE", self.card(DAY + 60))
+        self.assertTrue(self.row(DAY + 60)[0]["stale"])
 
     def test_future_requested_at_renders_0s_not_stale(self):
-        html = self.card(-600)
+        row, html = self.row(-600)
+        self.assertFalse(row["stale"])
         self.assertIn("0s", html)
-        self.assertNotIn("STALE", html)
 
 
 class TestGateCardPreserved(unittest.TestCase):
@@ -324,7 +320,7 @@ class TestLedgerRender(unittest.TestCase):
         html = ui.gate_ledger(mc.gate_latency_metrics(mc.gate_latency_rows([])))
         self.assertIn("—", html)
         self.assertIn("no decisions · n=0", html)
-        self.assertNotIn("0h", html)
+        self.assertNotIn(">0h<", html)
 
     def test_error_state_copy(self):
         html = ui.gate_ledger(None)
@@ -334,36 +330,31 @@ class TestLedgerRender(unittest.TestCase):
 # ── routes ───────────────────────────────────────────────────────────────────
 
 class TestRoutes(unittest.TestCase):
-    def test_board_renders_ledger_between_statusline_and_columns(self):
-        pool = FakePool(
-            runs=[run_row()], pend=[live_approval(4 * DAY)],
-            latency=[latency_row("ux_signoff", 72000.0, 2),
-                     latency_row("plan_signoff", 4 * DAY + 0.0, 2)])
-        html = body_of(get(mc.board, signed(), pool=pool))
+    def test_review_timing_is_disclosed_on_the_reviews_page(self):
+        pool = FakePool(runs=[run_row()], pend=[live_approval(4 * DAY)],
+                        latency=[latency_row("ux_signoff", 20 * 3600.0, 2),
+                                 latency_row("plan_signoff", 4 * DAY + 0.0, 2)])
+        html = body_of(get(mc.gates, signed(), pool=pool))
+        self.assertIn("<details class='disclosure'><summary>Review timing</summary>", html)
         self.assertIn("GATE LATENCY · LAST 30 DAYS", html)
         self.assertIn("STALE", html)
-        for col in ("Queued", "Running", "Blocked", "Review", "Done"):
-            self.assertIn(col, html)
         self.assertIn("/gate/7/approve", html)
-        i_status = html.index("statusline")
-        i_ledger = html.index("GATE LATENCY")
-        i_board = html.index("class='kb'")
-        self.assertLess(i_status, i_ledger)
-        self.assertLess(i_ledger, i_board)
+        home = body_of(get(mc.board, signed(), pool=pool))
+        self.assertNotIn("GATE LATENCY", home)
+        self.assertIn("Needs review", home)
 
-    def test_board_survives_latency_query_failure(self):
-        pool = FakePool(runs=[run_row()], pend=[live_approval(4 * DAY)],
-                        fail_latency=True)
-        html = body_of(get(mc.board, signed(), pool=pool))
+    def test_reviews_survive_latency_query_failure(self):
+        pool = FakePool(runs=[run_row()], pend=[live_approval(4 * DAY)], fail_latency=True)
+        html = body_of(get(mc.gates, signed(), pool=pool))
         self.assertIn("Gate latency unavailable — refresh.", html)
-        self.assertIn("/gate/7/approve", html)          # cards still decidable
-        self.assertIn("Review", html)
+        self.assertIn("/gate/7/approve", html)
+        self.assertEqual(get(mc.board, signed(), pool=pool).status_code, 200)
 
-    def test_board_with_zero_decided_and_zero_pending(self):
-        html = body_of(get(mc.board, signed(), pool=FakePool()))
+    def test_reviews_with_zero_decided_and_zero_pending(self):
+        html = body_of(get(mc.gates, signed(), pool=FakePool()))
         self.assertIn("no decisions · n=0", html)
-        self.assertNotIn("0h", html)
-        self.assertIn("Nothing needs you", html)
+        self.assertNotIn(">0h<", html)
+        self.assertIn("Nothing is waiting", html)
 
     def test_board_query_count_is_constant(self):
         small = FakePool(runs=[run_row()], pend=[])

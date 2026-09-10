@@ -2,19 +2,10 @@
 
     uvicorn app:app --host 0.0.0.0 --port 8080     (or: python app.py)
 
-One glance = what runs, what needs me, what it cost; one click = act:
-  /                 Home: the Inbox (every pending gate, leading with the artifact being
-                    decided) above the Board (runs as tickets in five workflow columns).
-  /run/<id>         Swim lanes: one lane per stage execution key in time order, attempts
-                    as bars, gate diamonds between lanes; a bar opens the execution drawer.
-  /run/<id>/exec/<n>  The drawer: compiled prompt, tool calls, report, envelope + its
-                    validation, gate.md, memory appended, cost, retry / rework-to.
-  /run/<id>/trace   Traceability: story criteria × plan tasks × commits × QA charter ×
-                    validation verdicts, as a matrix of status chips.
-  /factory          The catalog: roles, stages and gates, the model stack, each product's
-                    quality gate, evals, builders — read-only, from files and env.
-  /cost             Per run, per day, per model, and the two spend tripwires.
-  /gates /runs /chat /agents  as before.
+Work, reviews, and chat are the primary navigation. Home is a compact searchable
+queue; review evidence opens on demand. Run pages show recent actual activity,
+with the full execution lanes and technical artifacts in disclosure sections.
+See docs/MISSION-CONTROL.md for routes and interaction details.
 
 Two hard rules carried over unchanged from v1:
   * Gate integrity: approvals are written server-side via
@@ -68,7 +59,8 @@ import lanes  # noqa: E402
 import traceability  # noqa: E402
 import ui  # noqa: E402
 import workspace  # noqa: E402
-from ui import H, ago, chip, fmt_int, fmt_k, fmt_money, group_head, srail, strip, strip_header  # noqa: E402
+import worklist  # noqa: E402
+from ui import H, ago, chip, fmt_int, fmt_k, fmt_money  # noqa: E402
 
 # Board columns = run-folder dirs; split stage-1 executions share one column.
 BOARD_DIRS = list(dict.fromkeys(d for _, d, *_ in FEATURE_STAGES))
@@ -386,24 +378,6 @@ async def snapshot(p) -> dict:
             "online": online, "today": today, "feed": feed}
 
 
-def rail_segs(run, latest_by_dir) -> tuple[list[str], str, int]:
-    curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
-    curidx = BOARD_DIRS.index(curdir) if curdir in BOARD_DIRS else 0
-    segs = []
-    for i, d in enumerate(BOARD_DIRS):
-        e = latest_by_dir.get((run["id"], d))
-        if d == curdir:
-            segs.append("done" if run["status"] == "done" else
-                        "fail" if run["status"] in ("failed", "cancelled") else "now")
-        elif i < curidx or (e and e["status"] == "succeeded"):
-            segs.append("done")
-        elif e and e["status"] == "failed":
-            segs.append("fail")
-        else:
-            segs.append("")
-    return segs, curdir, curidx
-
-
 def run_short(run_id: str) -> str:
     return re.sub(r"^(feat|bug)-\d{8}-", "", run_id)
 
@@ -414,123 +388,9 @@ def workstation_blocked(run, online: dict) -> bool:
             and not online.get("workstation"))
 
 
-def build_strip(run, snap: dict, now: datetime) -> tuple[str, dict]:
-    """Classify one run into its board group and render its strip dict."""
-    lat = snap["latest_by_dir"]
-    led = snap["ledger"].get(run["id"], {})
-    pend_by_run = {a["run_id"]: a for a in snap["pend"]}
-    segs, curdir, curidx = rail_segs(run, lat)
-    meta = STAGE_META.get(curdir, (curdir, "agent", ""))
-    e = lat.get((run["id"], curdir))
-    phase = run["current_stage"].split(".", 1)[1] if "." in run["current_stage"] else ""
-    stage_label = f"{curidx + 1} of {len(BOARD_DIRS)} · {curdir.split('-', 1)[1]}" + \
-                  (f" {phase}" if phase else "")
-    a = pend_by_run.get(run["id"])
-    verdict = None
-    if run["status"] not in ("done", "cancelled"):
-        verdict = report_verdict(report_text(run["id"], curdir))
-
-    if a is not None:
-        group = "needs_you"
-        gate = GATE_SHORT.get(a["gate"], a["gate"])
-        d_chip = ("Blocked", "blocked") if verdict == "BLOCKED" else ("Waiting", "gate")
-        wait_main, why = ("You", f" — {gate}"), (
-            "report status: BLOCKED — read it before approving"
-            if verdict == "BLOCKED" else GATE_META.get(a["gate"], ("", ""))[1][:70])
-        elapsed, cold = ago((now - a["requested_at"]).total_seconds()), False
-        dot_kind = "gate"
-    elif run["status"] == "failed":
-        group, d_chip, dot_kind = "stuck", ("Failed", "blocked"), "fail"
-        err = (e["error"] or "").splitlines()[0][:70] if e and e["error"] else "see run page"
-        wait_main, why = ("Nobody", " — failed, needs rework"), err
-        elapsed, cold = ago((now - run["updated_at"]).total_seconds()), False
-    elif workstation_blocked(run, snap["online"]):
-        group, d_chip, dot_kind = "stuck", ("No runner", "warn"), "fail"
-        wait_main = ("Design workstation", " — offline")
-        why = "start pipeline.py daemon --runner workstation"
-        elapsed, cold = ago((now - run["updated_at"]).total_seconds()), False
-    elif run["status"] in ("running", "executing"):
-        group, dot_kind = "working", "live"
-        runner = STAGE_RUNNER.get(run["current_stage"], "ec2")
-        if run["status"] == "executing":
-            d_chip = ("Running", "ok")
-            hb = e["heartbeat_at"] if e and e["heartbeat_at"] else None
-            why = f"runner {runner}" + (f" · heartbeat {ago((now - hb).total_seconds())} ago" if hb else "")
-        else:
-            d_chip = ("Queued", "")
-            why = f"waiting for a {runner} daemon slot"
-        # "0 · Research & story" → "Research & story"; a stage dir with no STAGE_META
-        # entry (a bug run's 02-repro) keeps its own key. Taking [1] crashed the whole
-        # page the first time a debug-lifecycle run appeared on it.
-        wait_main = ("Agent", f" — {meta[0].split('·', 1)[-1].strip()}")
-        started = e["started_at"] if e and e["status"] in ("running",) else run["updated_at"]
-        elapsed, cold = ago((now - started).total_seconds()), False
-    elif run["status"] in ("done", "cancelled"):
-        group, dot_kind = "closed", "idle"
-        d_chip = ("Shipped", "ok") if run["status"] == "done" else \
-                 (f"{led.get('max_att', 1)} attempts", "warn") if led.get("max_att", 1) > 1 \
-                 else ("Cancelled", "")
-        when = (run["completed_at"] or run["updated_at"])
-        wait_main = ("Nobody", f" — closed {when:%b %d}")
-        why = f"{run['status']} at stage {curidx + 1} · {curdir}"
-        elapsed, cold = f"{when:%b %d}", True
-    else:                                    # waiting_gate but no approval row
-        group, d_chip, dot_kind = "stuck", ("No gate", "warn"), "fail"
-        wait_main = ("Nobody", " — gate open but no approval row")
-        why = "inconsistent state — check pipeline.py"
-        elapsed, cold = ago((now - run["updated_at"]).total_seconds()), False
-
-    models = led.get("models", set())
-    tot, inp, cached = led.get("tot", 0), led.get("inp", 0), led.get("cached", 0)
-    if tot:
-        tok_l1 = fmt_int(tot)
-        tok_l2 = f"{round(cached / inp * 100)}% cached" if inp else ""
-        model_l1 = next(iter(models)) if len(models) == 1 else ("mixed" if models else "—")
-        model_l2 = f"{fmt_int(led.get('reqs'))} requests" if led.get("reqs") else ""
-        money = fmt_money(led.get("cost"))
-    else:
-        tok_l1, tok_l2 = "—", "no ledger"
-        model_l1, model_l2 = "—", "unmetered"
-        money = "—"
-    return group, {
-        "href": f"/run/{run['id']}", "dot": dot_kind, "id": run["id"],
-        "sub": f"{run['created_by']} · opened {run['created_at']:%b %d}",
-        "stage_label": stage_label, "segs": segs, "chip": d_chip,
-        "wait_main": wait_main, "wait_why": why, "elapsed": elapsed,
-        "elapsed_cold": cold, "model_l1": model_l1, "model_l2": model_l2,
-        "tok_l1": tok_l1, "tok_l2": tok_l2, "money": money,
-    }
-
-
-# ── shared page fragments ────────────────────────────────────────────────────
-
 def page(title, body, user, active, now, kind: str = "", auto_reload: bool = True) -> HTMLResponse:
     return HTMLResponse(ui.page(title, body, user, active, f"{now:%H:%M}",
                                 auto_reload=auto_reload, kind=kind))
-
-
-def runner_sentence(snap) -> tuple[str, str]:
-    """(count 'n / m', description) for the runners readout cell."""
-    expected = sorted(set(STAGE_RUNNER.values()))
-    on = sum(1 for n in expected if snap["online"].get(n))
-    bits = []
-    for n in expected:
-        r = snap["runners"].get(n)
-        if r is None:
-            bits.append(f"{n} never seen")
-        elif snap["online"].get(n):
-            bits.append(f"{n} live {ago(r['age'])} ago")
-        else:
-            bits.append(f"{n} last seen {ago(r['age'])} ago")
-    return f"{on}<small> / {len(expected)}</small>", " · ".join(bits)
-
-
-def today_spend(snap) -> tuple[float, int, str]:
-    cost = sum(est_cost_usd(r["inp"], r["cached"], r["outp"], r["model"])
-               for r in snap["today"])
-    n = sum(r["n"] for r in snap["today"])
-    models = sorted({r["model"] for r in snap["today"] if r["model"]})
-    return cost, n, ", ".join(models) if models else "—"
 
 
 # ── gate cards: the artifact being decided comes first ───────────────────────
@@ -934,195 +794,22 @@ async def logout():
     return resp
 
 
-def led_model(led: dict) -> str:
-    models = led.get("models") or set()
-    return next(iter(models)) if len(models) == 1 else ("mixed" if models else "—")
-
-
-def build_card(run, snap: dict, now: datetime) -> tuple[str, str]:
-    """One run, one ticket. Returns (column, card html).
-
-    The board is Fredrin's concept, not a pipeline diagram: five workflow
-    columns — Queued · Running · Blocked · Review · Done — and the ticket
-    moves through them. Where the run is inside the 8-stage pipeline is the
-    rail ON the card, not the geometry of the board. Review cards carry the
-    actual controls; the decision is still the same server-side POST.
-    """
-    lat = snap["latest_by_dir"]
-    led = snap["ledger"].get(run["id"], {})
-    pend_by_run = {x["run_id"]: x for x in snap["pend"]}
-    a = pend_by_run.get(run["id"])
-    segs, curdir, curidx = rail_segs(run, lat)
-    e = lat.get((run["id"], curdir))
-    verdict = None
-    if run["status"] not in ("done", "cancelled"):
-        verdict = report_verdict(report_text(run["id"], curdir))
-
-    title = run_short(run["id"])
-    prefix = run["id"][: len(run["id"]) - len(title)].rstrip("-") \
-        if run["id"].endswith(title) and title != run["id"] else ""
-    stage_name = curdir.split("-", 1)[1]
-    stage_lab = f"stage {curidx + 1}/{len(BOARD_DIRS)} · {stage_name}"
-    chips: list[tuple[str, str]] = []
-    wl = err = acts = ""
-    age, cold, hot, dim, stale = "", False, False, False, False
-
-    if a is not None:
-        col, hot = "review", True
-        waited = (now - a["requested_at"]).total_seconds()
-        age, stale = ago(waited), is_stale(waited)
-        if verdict == "BLOCKED":
-            chips.append(("report: blocked", "blocked"))
-        if stale:
-            chips.append(("STALE", "warn"))
-        chips.append((GATE_SHORT.get(a["gate"], a["gate"]), "gate"))
-        wl = ("Waiting on <b>you</b> — the report says BLOCKED, read it first."
-              if verdict == "BLOCKED" else
-              "Waiting on <b>you</b> — review the evidence, then decide.")
-        confirm = (" onsubmit=\"return confirm('The report says BLOCKED — approve anyway?')\""
-                   if verdict == "BLOCKED" else "")
-        acts = (f"<div class='acts'>"
-                f"<form method='post' action='/gate/{a['id']}/approve'{confirm}>"
-                f"<button class='btn primary sm'>Approve</button></form>"
-                f"<form method='post' action='/gate/{a['id']}/reject' "
-                f"onsubmit=\"return confirm('Reject and stop this run for rework?')\">"
-                f"<button class='btn danger sm'>Reject</button></form>"
-                f"<a class='ev' href='/gates#gate-{a['id']}'>evidence →</a></div>")
-    elif run["status"] == "executing":
-        col = "running"
-        age = ago((now - (e["started_at"] if e else run["updated_at"])).total_seconds())
-        hb = e["heartbeat_at"] if e and e["heartbeat_at"] else None
-        runner = STAGE_RUNNER.get(run["current_stage"], "ec2")
-        wl = (f"<b>{H(led_model(led))}</b> working on {H(runner)}"
-              + (f" · heartbeat {ago((now - hb).total_seconds())} ago" if hb else ""))
-    elif workstation_blocked(run, snap["online"]):
-        col = "blocked"
-        chips.append(("no runner", "warn"))
-        age = ago((now - run["updated_at"]).total_seconds())
-        wl = "Needs the <b>design workstation</b>, which is offline."
-    elif run["status"] == "running":
-        col = "queued"
-        runner = STAGE_RUNNER.get(run["current_stage"], "ec2")
-        age = ago((now - run["updated_at"]).total_seconds())
-        wl = f"Waiting for a free <b>{H(runner)}</b> slot."
-    elif run["status"] == "failed":
-        col = "blocked"
-        chips.append(("failed", "blocked"))
-        age = ago((now - run["updated_at"]).total_seconds())
-        if e and e["error"]:
-            err = e["error"].splitlines()[0][:160]
-        wl = "Needs rework — fix, then retry from the run page."
-    elif run["status"] in ("done", "cancelled"):
-        col, dim, cold = "done", True, True
-        when = run["completed_at"] or run["updated_at"]
-        age = f"{when:%b %d}"
-        if run["status"] == "done":
-            chips.append(("shipped", "ok"))
-        elif led.get("max_att", 1) > 1:
-            chips.append((f"{led['max_att']} attempts", "warn"))
-        else:
-            chips.append(("cancelled", ""))
-        wl = f"{run['status'].capitalize()} at stage {curidx + 1} · {H(stage_name)}"
-    else:                                    # waiting_gate but no approval row
-        col = "blocked"
-        chips.append(("no gate", "warn"))
-        age = ago((now - run["updated_at"]).total_seconds())
-        wl = "Gate open but no approval row — check pipeline.py."
-
-    chips_html = "".join(chip(t, k) for t, k in chips)
-    foot = ""
-    if led.get("tot"):
-        cpct = f" · {round(led['cached'] / led['inp'] * 100)}% cached" if led.get("inp") else ""
-        foot = (f"<div class='foot'><span class='m'>{H(fmt_money(led['cost']))}</span>"
-                f"<span>{H(led_model(led))} · {fmt_k(led['tot'])} tok{cpct}</span></div>")
-    card = (f"<div class='kcard{' hot' if hot else ''}{' stale' if stale else ''}"
-            f"{' dim' if dim else ''}'>"
-            f"<a class='title' href='/run/{H(run['id'])}'>{H(title)}</a>"
-            f"<div class='meta'>{H(prefix)}{' · ' if prefix else ''}{H(run['created_by'])}</div>"
-            + (f"<div class='chips'>{chips_html}</div>" if chips_html else "")
-            + f"<div class='stg'><span class='lab'>{H(stage_lab)}</span>"
-              f"<span class='age{' cold' if cold else ''}'>{H(age)}</span></div>"
-            + srail(segs)
-            + (f"<div class='wl'>{wl}</div>" if wl else "")
-            + (f"<div class='kerr'>{H(err)}</div>" if err else "")
-            + foot + acts + "</div>")
-    return col, card
-
-
-def inbox_section(snap: dict, now: datetime) -> str:
-    """The Inbox: every pending gate, oldest first, artifact first."""
-    runs_by_id = {r["id"]: r for r in snap["runs"]}
-    pend = snap["pend"]
-    n = len(pend)
-    stale_n = sum(1 for a in pend if is_stale((now - a["requested_at"]).total_seconds()))
-    head = (f"<div class='ihead'><h2>{n} gate{'s' if n != 1 else ''} waiting on you</h2>"
-            + (f"<span>{chip(f'{stale_n} stale', 'warn')}</span>" if stale_n else "")
-            + f"<span class='keys'>{ui.keys_hint(('j/k', 'move'), ('a', 'approve'), ('r', 'reject'), ('?', 'all keys'))}</span></div>")
-    if not pend:
-        body = ("<p class='iempty'><b>Nothing needs you.</b> When a stage finishes behind a "
-                "gate, its card appears here with the artifact being decided.</p>")
-    else:
-        body = "".join(gate_card(a, runs_by_id.get(a["run_id"]), now) for a in pend)
-    return f"<section class='inbox' id='inbox'>{head}{body}</section>"
+def work_rows(snap, now):
+    return worklist.items(snap, now, stage_dir=STAGE_DIR, stage_meta=STAGE_META,
+                          gate_meta=GATE_META, short_name=run_short,
+                          blocked=workstation_blocked,
+                          report_verdict=lambda rid, stage: report_verdict(report_text(rid, stage)))
 
 
 @app.get("/", response_class=HTMLResponse)
-async def board(request: Request):
+async def board(request: Request, filter: str = "active", q: str = ""):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
-    p = await get_pool()
-    snap = await snapshot(p)
+    snap = await snapshot(await get_pool())
     now = datetime.now(timezone.utc)
-
-    cols: dict[str, list[str]] = {k: [] for k in
-                                  ("queued", "running", "blocked", "review", "done")}
-    for run in snap["runs"]:
-        col, card = build_card(run, snap, now)
-        if col == "done" and (now - run["updated_at"]).total_seconds() > 48 * 3600:
-            continue
-        cols[col].append(card)
-
-    cost_today, _n_today, _models = today_spend(snap)
-    tripwire = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "50"))
-    sep = "<span class='sep'>·</span>"
-    ec2 = snap["runners"].get("ec2")
-    ec2_bit = (f"ec2 <b>live</b>" if ec2 and snap["online"].get("ec2")
-               else f"ec2 last seen {ago(ec2['age'])} ago" if ec2
-               else "<span class='bad'>ec2 never seen</span>")
-    ws_bit = ("workstation <b>live</b>" if snap["online"].get("workstation")
-              else "<span class='warn'>workstation offline — stage 1 can't start</span>")
-    n_rev, n_run = len(cols["review"]), len(cols["running"])
-    statusline = (
-        f"<div class='statusline'>"
-        f"<span><span class='num'>{n_rev}</span> waiting on you</span>{sep}"
-        f"<span><span class='num'>{n_run}</span> running</span>{sep}"
-        f"<span>spent today <span class='num'>{H(fmt_money(cost_today))}</span>"
-        f" of ${tripwire:.0f} <a href='/cost' style='text-decoration:underline'>cost</a></span>{sep}"
-        f"<span>{ec2_bit}</span>{sep}<span>{ws_bit}</span></div>")
-
-    lat = snap["gate_latency"]
-    lat_html = ui.gate_ledger(gate_latency_metrics(lat) if lat is not None else None)
-
-    COLS = [
-        ("queued",  "Queued",  "Empty. Runs wait here for a runner slot before an agent picks them up."),
-        ("running", "Running", "No agent is working right now. A ticket moves here when a daemon claims it."),
-        ("blocked", "Blocked", "Nothing has failed."),
-        ("review",  "Review",  "Nothing needs you. When a stage finishes behind a gate, its ticket lands here."),
-        ("done",    "Done",    "Nothing closed in the last 48 hours."),
-    ]
-    kb = []
-    for key, name, empty in COLS:
-        hot = key == "review" and bool(cols[key])
-        head = (f"<div class='kbhead{' hot' if hot else ''}'>"
-                f"<span class='n'>{H(name)}</span><span class='c'>{len(cols[key])}</span></div>")
-        content = "".join(cols[key]) if cols[key] else f"<p class='kbempty'>{H(empty)}</p>"
-        kb.append(f"<div class='kbcol'>{head}{content}</div>")
-
-    return page("Home — Lantern Mission Control",
-                statusline + inbox_section(snap, now) + lat_html
-                + f"<section class='kb'>{''.join(kb)}</section>",
-                user, "/", now, kind="home")
+    return page("Work — Lantern", worklist.render(work_rows(snap, now), now,
+                selected=filter, query=q), user, "/", now, kind="home")
 
 
 @app.get("/gates", response_class=HTMLResponse)
@@ -1141,17 +828,20 @@ async def gates(request: Request):
         """SELECT * FROM approvals WHERE status != 'pending'
            ORDER BY decided_at DESC NULLS LAST LIMIT 12""")
 
-    body = [f"<h2 class='sect'>{len(pend)} gate{'s' if len(pend) != 1 else ''} waiting, oldest first</h2>",
-            "<p class='sub'>Approving advances the run; rejecting stops it for rework. "
-            "Every decision lands in the audit log with your name on it. "
-            f"{ui.keys_hint(('j/k', 'move'), ('a', 'approve'), ('r', 'reject'))}</p>"]
+    body = ["<header class='work-heading'><div><span class='eyebrow'>Your decisions</span>"
+            "<h1>Reviews</h1><p>Open a review to see the evidence and decide.</p></div></header>"]
     if pend:
         for a in pend:
-            body.append(gate_card(a, runs.get(a["run_id"]), now))
+            run = runs.get(a["run_id"])
+            label = GATE_META.get(a["gate"], (a["gate"],))[0]
+            age = ago((now - a["requested_at"]).total_seconds())
+            body.append(f"<details class='review-item'><summary data-k>"
+                        f"<span><strong>{H(run_short(a['run_id']).replace('-', ' ').capitalize())}</strong>"
+                        f"<span>{H(label)}</span></span><span class='review-age'>waiting {H(age)}</span>"
+                        f"</summary>{gate_card(a, run, now)}</details>")
     else:
-        body.append("<p class='empty' style='margin-top:16px'><b>Nothing is waiting "
-                    "on a human.</b> When a stage finishes behind a gate, it appears "
-                    "here with its evidence.</p>")
+        body.append("<div class='work-empty'><h2>You're all caught up</h2>"
+                    "<p>Nothing is waiting on your review.</p><a class='btn' href='/'>Back to work</a></div>")
 
     if history:
         rows = []
@@ -1166,36 +856,30 @@ async def gates(request: Request):
                 f"<span class='er ok' style='color:var(--text-muted)'>{H(note) or '—'}</span>"
                 f"<span class='at'>{chip(a['status'], k)}<br>"
                 f"<span style='letter-spacing:.04em'>{H(a['decided_by'] or '')}</span></span></div>")
-        body.append(f"<section class='feed decided'><div class='th'>"
+        body.append(f"<details class='disclosure'><summary>Recent decisions</summary><section class='feed decided'><div class='th'>"
                     f"<span class='caps'>Decided · most recent</span>"
-                    f"<span class='caps'>{len(history)} shown</span></div>{''.join(rows)}</section>")
+                    f"<span class='caps'>{len(history)} shown</span></div>{''.join(rows)}</section></details>")
+
+    try:
+        latency = gate_latency_metrics(gate_latency_rows(await p.fetch(LATENCY_SQL)))
+    except asyncpg.PostgresError:
+        latency = None
+    body.append("<details class='disclosure'><summary>Review timing</summary>"
+                + ui.gate_ledger(latency) + "</details>")
 
     return page("Gates — Lantern Mission Control",
                 f"<main class='page'>{''.join(body)}</main>", user, "/gates", now, kind="gates")
 
 
 @app.get("/runs", response_class=HTMLResponse)
-async def runs_index(request: Request):
+async def runs_index(request: Request, filter: str = "all", q: str = ""):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
-    p = await get_pool()
-    snap = await snapshot(p)
+    snap = await snapshot(await get_pool())
     now = datetime.now(timezone.utc)
-    open_s, closed_s = [], []
-    for run in snap["runs"]:
-        group, d = build_strip(run, snap, now)
-        (closed_s if group == "closed" else open_s).append(
-            strip(d, hot=(group == "needs_you"), dim=(group == "closed")))
-    body = [group_head("Open", len(open_s)),
-            f"<div class='stripwrap'>{strip_header()}{''.join(open_s)}</div>" if open_s
-            else "<p class='empty'><b>No open runs.</b> Start one with "
-                 "<code>pipeline.py run</code>.</p>",
-            group_head("Closed", len(closed_s), "full history"),
-            f"<div class='stripwrap'>{''.join(closed_s)}</div>" if closed_s
-            else "<p class='empty'><b>Nothing has closed yet.</b></p>"]
-    return page("Runs — Lantern Mission Control",
-                f"<main class='page'>{''.join(body)}</main>", user, "/runs", now, kind="runs")
+    return page("All work — Lantern", worklist.render(work_rows(snap, now), now,
+                selected=filter, query=q, path="/runs"), user, "/", now, kind="runs")
 
 
 # ── cost ─────────────────────────────────────────────────────────────────────
@@ -1350,24 +1034,25 @@ def run_header(run, run_id: str, now: datetime, totals: dict, active: str) -> st
     unm_line = f"<br>{unm} unmetered execution{'s' if unm != 1 else ''}" if unm else ""
     secs = totals.get("seconds")
     sec_line = f"<br>{ui.dur(secs)} of agent time" if secs else ""
-    tabs = [("Lanes", f"/run/{run_id}", ""), ("Traceability", f"/run/{run_id}/trace", " data-key-t"),
+    tabs = [("Overview", f"/run/{run_id}", ""), ("Traceability", f"/run/{run_id}/trace", " data-key-t"),
             ("Codebase", f"/run/{run_id}/repo", ""),
             ("Ask Lantern", f"/chat?agent=lantern&run={run_id}", "")]
     nav = "".join(f"<a href='{H(href)}'{extra}{' class=on' if href == active else ''}>{H(n)}</a>"
                   for n, href, extra in tabs)
     return f"""<div class='runhead'><div>
-        <div class='caps'>Run · pipeline v{H(str(run['pipeline_version']))}</div>
-        <h1>{H(run_id)}</h1>
-        <div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>
-          {chip(*status_chip)}{v_chip}{mode}</div>
-        <div class='meta'>brief <code>{H(run['brief'])}</code><br>
-          started by <b>{H(run['created_by'])}</b> · {run['created_at']:%b %d %H:%M} UTC
-          · last activity {ago((now - run['updated_at']).total_seconds())} ago<br>
-          product repo: {repo_bit}</div>
-        <nav class='runnav'>{nav}</nav></div>
-      <div class='totals'><div class='caps'>Est. spend</div>
-        <div class='v'>{H(fmt_money(totals.get('cost', 0.0)) if tot else '—')}</div>
-        <div class='d'>{H(tok_line)}{unm_line}{sec_line}</div></div></div>"""
+        <a class='back-link' href='/'>← All work</a>
+        <h1>{H(run_short(run_id).replace('-', ' ').capitalize())}</h1>
+        <div class='run-status'>{chip(*status_chip)}{v_chip}<span>{H(STAGE_META.get(curdir, (curdir,))[0])}</span></div>
+        <details class='run-meta'><summary>Run details</summary><div class='meta'>
+          <code>{H(run_id)}</code> · pipeline v{H(str(run['pipeline_version']))} {mode}<br>
+          brief <code>{H(run['brief'])}</code><br>
+          Started by <b>{H(run['created_by'])}</b> · {run['created_at']:%b %d %H:%M} UTC<br>
+          product repo: {repo_bit}<br>
+          Est. spend {H(fmt_money(totals.get('cost', 0.0)) if tot else '—')} · {H(tok_line)}{unm_line}{sec_line}
+        </div></details>
+        {repo_bit if not dict(run).get('product_repo') else ''}
+        <nav class='runnav' aria-label='Run views'>{nav}</nav></div></div>"""
+
 
 
 def _trace_keys(run_id: str, execs) -> set[str]:
@@ -1418,12 +1103,21 @@ async def run_page(run_id: str, request: Request):
     for a in pend:
         body.append(gate_card(a, run, now))
 
-    body.append(f"<h2 class='sect'>Swim lanes</h2><p class='sub'>One lane per stage execution, "
-                f"in the order they started; {model['executions']} execution"
-                f"{'s' if model['executions'] != 1 else ''}, {model['retries']} retr"
-                f"{'y' if model['retries'] == 1 else 'ies'}. Click a bar for what that execution "
-                f"did. {ui.keys_hint(('j/k', 'move'), ('Enter', 'open'), ('t', 'traceability'))}</p>")
-    body.append(lanes.render_lanes(model, run_id, GATE_SHORT, GATE_META, STAGE_META))
+    if not pend:
+        status = run["status"]
+        latest = execs[-1] if execs else None
+        if status == "failed":
+            message = H((latest["error"] if latest else None) or "This run stopped. Open its latest execution to investigate.")
+            body.append(f"<div class='notice'><b>This run needs attention.</b> {message}</div>")
+        elif status == "waiting_gate":
+            body.append("<div class='notice'><b>Review unavailable.</b> This run is waiting for a decision, but its approval record is missing.</div>")
+        elif status in ("done", "cancelled"):
+            body.append(f"<p class='sub'>This run is {H(status)}. Its evidence and history are below.</p>")
+        else:
+            body.append("<p class='sub'>Work is in progress. The next review will appear here when it's ready.</p>")
+    body.append(lanes.render_activity(model, run_id, STAGE_META))
+    body.append(f"<details class='disclosure'><summary>Execution details <span>{model['executions']} executions</span></summary>"
+                + lanes.render_lanes(model, run_id, GATE_SHORT, GATE_META, STAGE_META) + "</details>")
 
     # Traceability, one line: the counts and a link to the matrix.
     m = traceability.build_matrix(run_id, run_root(run_id))
@@ -1440,10 +1134,10 @@ async def run_page(run_id: str, request: Request):
     for e in execs:
         by_dir.setdefault(STAGE_DIR.get(e["stage"], e["stage"]), []).append(e)
     curdir = STAGE_DIR.get(run["current_stage"], run["current_stage"])
-    body.append("<h2 class='sect'>Stage folders</h2><p class='sub'>What each stage left in "
-                "<code>workflow/runs/</code>: the report (its last Status line counts), "
-                "registered artifacts, and a consult with the role that owns the stage.</p>")
-    for i, d in enumerate(BOARD_DIRS):
+    body.append("<details class='disclosure'><summary>Reports &amp; files</summary>")
+    for d in dict.fromkeys([*BOARD_DIRS, *by_dir, curdir]):
+        if d not in by_dir and d != curdir:
+            continue
         name, actor, desc = STAGE_META.get(d, (d, "agent", ""))
         tries = sorted(by_dir.get(d, []), key=lambda e: e["started_at"], reverse=True)
         latest = tries[0] if tries else None
@@ -1490,6 +1184,8 @@ async def run_page(run_id: str, request: Request):
                         f"💬 consult {H(role)} about this run</a></div>")
         body.append(f"<div class='{cls}'>{''.join(bits)}</div>")
 
+    body.append("</details>")
+
     if events:
         rows = []
         for e in events:
@@ -1502,9 +1198,8 @@ async def run_page(run_id: str, request: Request):
                         f"<span class='ac'>{H(e['actor'])}</span>"
                         f"<span class='ty'><b>{H(e['type'].replace('_', ' '))}</b>"
                         f"<span>{H(snippet)}</span></span></div>")
-        body.append(f"<h2 class='sect'>Audit log</h2><p class='sub'>Every action on "
-                    f"this run, newest first — {len(events)} shown.</p>"
-                    f"<div>{''.join(rows)}</div>")
+        body.append(f"<details class='disclosure'><summary>Audit log <span>{len(events)} events</span></summary>"
+                    f"<div>{''.join(rows)}</div></details>")
 
     return page(f"{run_id} — Lantern Mission Control",
                 f"<main class='page'>{''.join(body)}</main>", user, "/runs", now, kind="run")

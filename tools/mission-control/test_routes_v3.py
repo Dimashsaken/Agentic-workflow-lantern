@@ -8,8 +8,8 @@ from fakes.py. Contract under test:
   * / /gates /runs /cost /factory render on an empty database; /spend redirects to /cost;
     run-scoped pages 404 for an unknown run and render for a bare run row;
   * every GET redirects anonymous callers to /login; the drawer fragment 401s instead;
-  * the home page is Inbox + Board: gate cards lead with the artifact, carry the
-    keyboard hooks, STALE badges, and one decision form with both actions;
+  * the work queue links to reviews without duplicate decision controls;
+    review cards retain evidence, keyboard hooks, stale warnings, and both actions;
   * retry / rework are server-side POSTs: 401 anonymous, 409/400 when the pipeline's
     rules refuse, otherwise the pipeline primitives are called with the web identity;
   * the shell carries the theme boot, the toggle and the keyboard map on every page.
@@ -43,8 +43,8 @@ def status_of(exc: HTTPException) -> int:
 
 class EmptyDatabase(unittest.TestCase):
     def test_every_list_page_renders_empty(self):
-        for route, needle in ((mc.board, "Nothing needs you"), (mc.gates, "Nothing is waiting"),
-                              (mc.runs_index, "No open runs"), (mc.cost_page, "No executions in the ledger yet"),
+        for route, needle in ((mc.board, "A clear start"), (mc.gates, "Nothing is waiting"),
+                              (mc.runs_index, "A clear start"), (mc.cost_page, "No executions in the ledger yet"),
                               (mc.factory_page, "Roles")):
             resp = get(route, signed(), pool=FakePool())
             self.assertEqual(resp.status_code, 200, route.__name__)
@@ -65,11 +65,11 @@ class EmptyDatabase(unittest.TestCase):
     def test_bare_run_renders_lanes_matrix_and_404_drawer(self):
         pool = FakePool(runs=[run_row(id=RUN, status="running", current_stage="00-story.scout")])
         html = body_of(get(mc.run_page, RUN, signed(), pool=pool))
-        self.assertIn("Swim lanes", html)
+        self.assertIn("Activity", html)
         self.assertIn("class='lane cur'", html)            # queued stage 0 is the current lane
         self.assertIn("class='lane future'", html)
         self.assertIn("queued — waiting for a runner slot", html)
-        self.assertIn("Stage folders", html)
+        self.assertIn("Reports &amp; files", html)
         self.assertNotIn("Traceability</h2>", html)         # no story → no summary line
         html = body_of(get(mc.trace_matrix, RUN, signed(), pool=pool))
         self.assertIn("No story yet", html)
@@ -104,7 +104,7 @@ class BugRunOnEveryPage(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         html = body_of(resp)
         self.assertIn(self.BUG, html)
-        self.assertIn("02-repro", html)
+        self.assertIn("02 repro", html)
 
     def test_board_and_run_page_too(self):
         pool = FakePool(runs=[self.bug_run()],
@@ -130,7 +130,7 @@ class Shell(unittest.TestCase):
         self.assertIn("id='drawer'", html)
         self.assertIn("data-page='home'", html)
         self.assertIn("@media (max-width:820px)", html)
-        for name, href in mc.ui.NAV:
+        for name, href, icon in mc.ui.NAV:
             self.assertIn(f"href='{href}'", html)
         self.assertIn("href='/factory'", html)
         self.assertIn("href='/cost'", html)
@@ -176,7 +176,7 @@ class Shell(unittest.TestCase):
             self.assertNotIn("border:", body, block)
 
 
-class HomeInboxAndBoard(unittest.TestCase):
+class WorkAndReviewEvidence(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="mc-home-"))
         self._repo, self._frepo = mc.REPO, factory.REPO
@@ -193,17 +193,17 @@ class HomeInboxAndBoard(unittest.TestCase):
         mc.REPO, factory.REPO = self._repo, self._frepo
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_inbox_leads_with_the_artifact_and_carries_the_keyboard_hooks(self):
+    def test_work_links_to_artifact_first_review_without_duplicate_controls(self):
         run = run_row(id=RUN, status="waiting_gate", current_stage="00-story.write")
         a = live_approval(30 * 3600, id=7, run_id=RUN, gate="story_signoff",
                           payload=json.dumps({"stage": "00-story.write"}))
         html = body_of(get(mc.board, signed(), pool=FakePool(runs=[run], approvals=[a])))
-        i_status, i_inbox = html.index("statusline"), html.index("id='inbox'")
-        i_ledger, i_board = html.index("GATE LATENCY"), html.index("class='kb'")
-        self.assertLess(i_status, i_inbox)
-        self.assertLess(i_inbox, i_ledger)
-        self.assertLess(i_ledger, i_board)
-        self.assertIn("1 gate waiting on you", html)
+        self.assertEqual(html.count("class='work-row'"), 1)
+        self.assertIn(f"href='/run/{RUN}#gate-7'", html)
+        self.assertNotIn("data-decide data-gate=", html)
+        self.assertNotIn("GATE LATENCY", html)
+        html = body_of(get(mc.gates, signed(), pool=FakePool(runs=[run], approvals=[a])))
+        self.assertIn("<details class='review-item'>", html)
         self.assertIn("The story being approved — 00-story/story.md", html)
         self.assertIn("The JSON carries branch facts.", html)
         self.assertIn("<b>1</b> acceptance criteria", html)
@@ -215,9 +215,6 @@ class HomeInboxAndBoard(unittest.TestCase):
         self.assertIn("class='gcard stale' data-k tabindex='0' id='gate-7'", html)
         self.assertIn("chip warn'>STALE", html)
         self.assertIn("starts 1 · UI/UX design", html)
-        # the board column still shows the ticket with its controls
-        self.assertIn("kcard hot stale", html)
-        self.assertIn("href='/gates#gate-7'", html)
 
     def test_a_named_png_that_is_gone_is_said_not_shown_broken(self):
         """Presence AND validity for the artifact under decision: a handoff naming a
@@ -340,7 +337,7 @@ class RunPageWithData(unittest.TestCase):
 
     def test_run_page_lanes_and_pending_gate(self):
         html = body_of(get(mc.run_page, RUN, signed(), pool=self.pool()))
-        self.assertIn("3 executions, 1 retry", html)
+        self.assertIn("3 executions", html)
         self.assertIn(f"href='/run/{RUN}/exec/9' data-drawer", html)
         self.assertIn("class='gaterow wait'", html)
         self.assertIn("/gate/4/approve", html)
@@ -357,7 +354,7 @@ class RunPageWithData(unittest.TestCase):
         self.assertIn("learned x", text)
         self.assertIn("close ✕", text)
         full = body_of(get(mc.exec_drawer, RUN, 10, signed(), pool=self.pool()))
-        self.assertIn("<header class='topbar'>", full)
+        self.assertIn("<aside class='app-sidebar'", full)
         self.assertIn("← run", full)
         self.assertNotIn("close ✕", full)
 

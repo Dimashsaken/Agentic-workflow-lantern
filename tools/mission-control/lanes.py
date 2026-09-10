@@ -232,6 +232,25 @@ def gate_row(lane: dict, gate_short: dict, gate_meta: dict) -> str:
             f"<span class='who'>{who}</span>{link}</div>")
 
 
+def render_activity(model: dict, run_id: str, stage_meta: dict) -> str:
+    """Recent actual work, with the full execution model available in the disclosure."""
+    attempts = [(a, lane) for lane in model["lanes"] for a in lane["attempts"]]
+    attempts.sort(key=lambda item: item[0]["started_at"], reverse=True)
+    rows = []
+    for attempt, lane in attempts[:8]:
+        name = stage_meta.get(lane["dir"], (lane["stage"],))[0].split(" · ", 1)[-1]
+        label, tone = STATUS_LABEL.get(attempt["status"], (attempt["status"], ""))
+        rows.append(f"<a class='activity-row' href='/run/{H(run_id)}/exec/{attempt['exec_id']}' data-drawer data-k>"
+                    f"<span><strong>{H(name)}</strong><small>{H(lane['role'])} · Attempt {attempt['attempt']}</small></span>"
+                    f"{chip(label, tone)}<time>{H(dur(attempt['seconds']))}</time>"
+                    f"<span aria-hidden='true'>↗</span></a>")
+    if len(attempts) > 8:
+        rows.append(f"<p class='sub'>Latest 8 of {len(attempts)} executions. Full history is below.</p>")
+    if not rows:
+        rows.append("<p class='sub'>No activity yet. Executions will appear here as work begins.</p>")
+    return "<section class='activity'><h2>Activity</h2>" + "".join(rows) + "</section>"
+
+
 def render_lanes(model: dict, run_id: str, gate_short: dict, gate_meta: dict,
                  stage_meta: dict) -> str:
     n = model["columns"]

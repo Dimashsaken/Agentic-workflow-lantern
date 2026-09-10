@@ -5,13 +5,13 @@ The web UI for the software factory — design and rationale in
 
 | Page | Module | What it answers |
 |------|--------|-----------------|
-| **Home** `/` | `app.py` | The **Inbox** (every pending gate, each card opening with the artifact being decided, Approve/Reject on the card) above the gate-latency ledger and the **Board** (runs as tickets in five workflow columns). |
-| **Run** `/run/<id>` | `lanes.py` | **Swim lanes**: one lane per stage execution key in start order, attempts as bars, gate diamonds between lanes, per-lane tier / tokens / est. cost. |
-| **Drawer** `/run/<id>/exec/<n>` | `drawer.py` | One execution end to end: compiled prompt, kickoff, tool-call timeline, report, envelope + validation, quality gate, memory rows, ledger, and the retry / rework-to actions. |
-| **Traceability** `/run/<id>/trace` | `traceability.py` | Story criteria × plan tasks × commits × QA charter × validation verdicts. |
-| **Factory** `/factory` | `catalog.py` | Roles, stages and gates, the model stack, each product's quality commands, evals, builders. |
-| **Cost** `/cost` | `cost.py` | Per run, per day, per model, and both spend tripwires. (`/spend` redirects here.) |
-| **Gates** · **Runs** · **Chat** · **Agents** | `app.py`, `chat.py` | Gate history, the flight-strip run list, and consult mode (`docs/CHAT.md`). |
+| **Work** `/`, `/runs` | `worklist.py`, `app.py` | One searchable queue. Reviews and blocked runs first; filters for active work, reviews, completed work, and history. |
+| **Reviews** `/gates` | `app.py` | Open one review to see its artifact and decide. Timing and decision history are optional disclosures. |
+| **Run** `/run/<id>` | `app.py`, `lanes.py` | Current decision and recent activity. Full execution lanes, reports, and audit history are available on demand. |
+| **Drawer** `/run/<id>/exec/<n>` | `drawer.py` | Prompt, tool calls, report, validation, quality gate, memory, ledger, retry and rework. |
+| **Traceability** `/run/<id>/trace` | `traceability.py` | Story criteria mapped to plan tasks, commits, QA, and validation. |
+| **Chat** `/chat` | `chat.py` | Start with Lantern; choose a specialist only when needed. |
+| **Workspace** | `catalog.py`, `cost.py`, `chat.py` | Secondary navigation for Agents, Factory and Cost. |
 
 `ui.py` holds the tokens, CSS, page shell and the small vanilla-JS layer (theme,
 keyboard map, the drawer over fetch). No build step. **One style: white**, on every
@@ -31,16 +31,16 @@ box; without them every page still works and the composer explains what is
 missing. The SSE bus is in-process — run ONE uvicorn worker (the systemd unit
 and the commands below already do).
 
-**Gate latency (feat-20260831-gate-latency):** the Board carries a full-width
-ledger between the statusline and the columns — per gate type, the median
+**Gate latency (feat-20260831-gate-latency):** Reviews includes a folded Review timing
+ledger below the queue — per gate type, the median
 `decided_at - requested_at` over the last 30 days of decided (approved or
 rejected) approvals, with its sample count. Zero-decision gates show
 `— · no decisions · n=0`; a median over 24h renders in the warning color. Every
-pending Review card shows its age from `approvals.requested_at`; strictly over
+pending review shows its age from `approvals.requested_at`; strictly over
 24h it gains a `STALE` chip and warning border (the plan's staffing threshold —
 hardcoded, changing it is a code edit in `app.py:STALE_SECONDS`). All of it is
 read-only from the `approvals` table in one grouped query; if that query fails
-the ledger degrades to a sentence and the board still renders. Behavior tests:
+the ledger degrades to a sentence and the reviews still render. Behavior tests:
 `python -m unittest test_gate_latency` (stdlib only, no DB).
 
 Runs from the azure-runner venv (shared deps, imports `pipeline.py` directly):

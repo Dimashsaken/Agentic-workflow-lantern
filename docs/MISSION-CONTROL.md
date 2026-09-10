@@ -1,4 +1,45 @@
-# Mission Control — the software factory's face
+# Mission Control
+
+Mission Control opens on the work that needs attention. The primary navigation is
+**Work**, **Reviews**, and **Chat**. Agents, factory configuration, and costs are in
+**Workspace**; theme, keyboard help, and sign-out are under the user's name.
+
+- **Work** `/`: a single searchable list, with reviews and blocked work first.
+  Active, Needs review, Completed, and All work filters retain the search query.
+  Search matches the run name, repository, owner, and current activity. `/runs`
+  opens the same view with all history selected.
+- **Reviews** `/gates`: compact summaries, oldest first. Open a review to see the
+  full artifact and decision form. Recent decisions and review timing are folded
+  below the queue. Existing `#gate-<id>` links reveal the matching evidence.
+- **Run** `/run/<id>`: the current decision and recent actual activity. An activity
+  row opens the execution drawer. Full execution lanes, reports, files, and audit
+  history are available in disclosures; metadata lives under Run details.
+- **Chat** `/chat`: describe the work to Lantern. Specialist selection is optional,
+  and links from a run preserve the chosen role and run context. On phones,
+  conversation history is available from the Conversations disclosure.
+
+The full execution trace, acceptance-criterion matrix, catalog, and cost views remain
+available. Decisions still use the authenticated server routes and the existing human
+confirmation rules. The work list itself has no approval shortcuts: it takes the
+reviewer to the evidence.
+
+The interface is server-rendered Python with native HTML forms and disclosures,
+shared CSS, and small JavaScript enhancements. No frontend build step or dependency
+was added. Light is the default; dark is a per-browser preference. `j`/`k` move through
+visible work or executions, Enter opens, `a`/`r` act on a focused review, `t` opens the
+criterion matrix, `d` changes theme, and `?` opens keyboard help. Typing or opening a
+disclosure pauses automatic refresh so it cannot discard the reader's context.
+
+Implementation: `tools/mission-control/worklist.py`, `app.py`, `ui.py`, `chat.py`,
+`lanes.py`. Tests: `python -m unittest discover -s tools/mission-control -p 'test_*.py'`.
+
+## Earlier design and evidence
+
+The following describes the v3 implementation before the September 11 simplification.
+Its evidence, accounting, and gate-integrity rules remain applicable; the screen
+arrangement above supersedes the older Inbox + Board presentation.
+
+## Mission Control v3 — the software factory's face
 
 Where developers *see* the factory. Design principle (from
 `docs/research/karpathy-agentic-loops.md`): the human's job in an agentic loop is
