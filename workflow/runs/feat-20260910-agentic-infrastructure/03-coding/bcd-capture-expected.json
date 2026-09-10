@@ -1,0 +1,15 @@
+{
+  "identity": {
+    "run_id": "test-capture-d13a2182c62d440394ce9f6ac302cfeb",
+    "execution_key": "test-capture-d13a2182c62d440394ce9f6ac302cfeb:04-qa-dev:1",
+    "execution_id": 1,
+    "attempt": 1,
+    "fence": 1
+  },
+  "deployment": {
+    "deployment_id": "lantern-capture-fixture-d13a2182c62d",
+    "revision": "ad73d7746315103f978846ec9fa87eb1e7bff86bbe52d41b11a498eb9a37a1fe",
+    "origin": "https://qa-fixture.test:8443",
+    "descriptor_id": "controller:d13a2182c62d440394ce9f6ac302cfeb"
+  }
+}

@@ -1,0 +1,12 @@
+test_capture_persistence_binds_mode_and_durable_attempt (__main__.Boundaries.test_capture_persistence_binds_mode_and_durable_attempt) ... ok
+test_descendant_cannot_use_wrong_execution_lock (__main__.Boundaries.test_descendant_cannot_use_wrong_execution_lock) ... ok
+test_external_policy_rejects_site_local_ipv6 (__main__.Boundaries.test_external_policy_rejects_site_local_ipv6) ... ok
+test_quarantine_is_not_a_snapshot_exception (__main__.Boundaries.test_quarantine_is_not_a_snapshot_exception) ... ok
+test_repeated_cancellation_still_joins_thread (__main__.Boundaries.test_repeated_cancellation_still_joins_thread) ... ok
+test_trial_base_and_parent_movement_are_held (__main__.Boundaries.test_trial_base_and_parent_movement_are_held) ... ok
+test_up_to_date_requires_final_provider_observation (__main__.Boundaries.test_up_to_date_requires_final_provider_observation) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.258s
+
+OK

@@ -552,7 +552,7 @@ def trial_merge(mirror: Path, base: str, branch: str, run_id: str,
     """Clone the mirror to a temp dir, merge origin/<base> into <branch> with the bot
     identity. Returns {clean, clone, merge_sha | files}. The caller removes `clone`."""
     clone = Path(tempfile.mkdtemp(prefix=f"lantern-babysit-{run_id[:24]}-"))
-    r = _git("clone", "--quiet", "--no-hardlinks", "--branch", branch, str(mirror), str(clone))
+    r = _git("clone", "--quiet", "--no-hardlinks", "--config", "core.autocrlf=false", "--branch", branch, str(mirror), str(clone))
     if r.returncode != 0:
         force_rmtree(clone)
         raise RuntimeError(f"could not clone the mirror on {branch}: {r.stderr.strip()[-300:]}")
@@ -725,8 +725,9 @@ async def babysit_run(conn, run_id: str, runner: str = "ec2", deps: Deps | None 
     no_product | no_branch | merged | pr_closed | up_to_date | waiting_for_base | conflict |
     push_refused | updated | fixed | failed."""
     import execution_runtime
-    if execution_runtime.enabled():
-        raise RuntimeError("babysitting is held in lease mode until it has a fenced operation and effect reconciliation")
+    if execution_runtime.enabled() or os.environ.get('LANTERN_FENCED_BABYSIT') == '1':
+        import maintenance_runtime
+        return await maintenance_runtime.babysit(conn, run_id, runner, force=force)
     deps = deps or default_deps()
     repo, base, branch = await deps.product(conn, run_id)
     if not repo or not branch:

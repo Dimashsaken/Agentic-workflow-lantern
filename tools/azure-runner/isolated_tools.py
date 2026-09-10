@@ -9,6 +9,7 @@ Docker and the administrator-supplied image remain trusted infrastructure.
 from __future__ import annotations
 
 from collections import deque
+from contextvars import ContextVar
 import hashlib
 import json
 from pathlib import Path
@@ -16,6 +17,38 @@ import re
 import subprocess
 import threading
 import uuid
+
+from execution_retention import worker_mount
+
+
+CURRENT_CANCELLATION = ContextVar('lantern_worker_cancellation', default=None)
+
+
+class WorkerCancellation:
+    """Controller lifecycle registry shared with copied to_thread contexts."""
+    def __init__(self):
+        self.cancelled = threading.Event()
+        self.workers = []
+        self.lock = threading.RLock()
+
+    def register(self, worker):
+        with self.lock:
+            if self.cancelled.is_set():
+                raise IsolationError('execution was cancelled before worker allocation')
+            self.workers.append(worker)
+
+    def stop(self):
+        with self.lock:
+            self.cancelled.set()
+            workers = tuple(self.workers)
+        errors = []
+        for worker in workers:
+            try:
+                worker.stop()
+            except Exception as exc:
+                errors.append(exc)
+        if errors:
+            raise IsolationError('cancelled execution has unreaped workers') from errors[0]
 
 
 class IsolationError(RuntimeError):
@@ -153,6 +186,9 @@ class IsolatedToolWorker:
         self._names = set()
         self._lock = threading.RLock()
         self._stopped = False
+        self.cancellation = CURRENT_CANCELLATION.get()
+        if self.cancellation:
+            self.cancellation.register(self)
 
     @staticmethod
     def _root(value):
@@ -184,7 +220,7 @@ class IsolatedToolWorker:
 
     def _new_name(self):
         with self._lock:
-            if self._stopped:
+            if self._stopped or (self.cancellation and self.cancellation.cancelled.is_set()):
                 raise IsolationError("Worker has already stopped")
             name = "lantern-tool-" + uuid.uuid4().hex
             self._names.add(name)
@@ -219,7 +255,7 @@ class IsolatedToolWorker:
 
     def start(self):
         """Start the MCP lifetime container, pinning the image before execution."""
-        with self._lock:
+        with self._lock, worker_mount(self.product_root, self.execution_key):
             if self.container_id:
                 return self
             self._pin_image()
@@ -245,7 +281,7 @@ class IsolatedToolWorker:
             raise ValueError("Tool timeout must be between 0 and 3600 seconds")
         # Create under the lifecycle lock. stop() must not remove a still-absent
         # name just before Docker creates it and leave a late-starting orphan.
-        with self._lock:
+        with self._lock, worker_mount(self.product_root, self.execution_key):
             self._pin_image()
             name = self._new_name()
             args = self._args(name)

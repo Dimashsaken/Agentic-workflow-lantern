@@ -141,3 +141,56 @@ remains unverified. The process-kill publication proof uses real disposable
 Postgres with simulated GitHub observations, separately from that live read-only
 check. Azure stays the sole model provider and the fixed pipeline and human gate
 decisions remain unchanged.
+
+## Continuation 3 local implementation — 2026-09-11
+
+`LANTERN_FENCED_BABYSIT=1` selects dedicated maintenance ownership for both manual
+and scheduled babysitting. It requires isolated tools and is default off. A
+maintenance execution binds the actual human code-complete decision, exact PR,
+repository/refs and run position; it never changes run status or approvals to
+obtain a dispatcher lease. Dispatcher claim, retry/rework and decision writes
+serialize on the run row. Conflict checks use a fresh statement after obtaining
+that lock, avoiding PostgreSQL's pre-wait statement snapshot race.
+
+The maintenance path uses a private trial merge, an immutable quality snapshot,
+conditional working-branch push and final provider observation. Lease loss stops
+known workers and joins outstanding worker threads before returning. A red regate
+holds: inherited maintenance fix execution is not implemented. Unknown or legacy
+publication approvals also hold. No code merges a PR or changes a human gate.
+The legacy runtime remains available with the experimental protections disabled.
+
+Fresh isolated product checkouts receive controller-owned allocation descriptors
+under `LANTERN_RETENTION_AUTHORITY` (default `~/.lantern/retention`). Allocation,
+worker mounts and retirement share an OS lock. Retirement permanently tombstones
+the identity, atomically quarantines the exact checked directory, then deletes
+only it. Database terminal state, seven-day age and absence of unresolved effects
+and all Docker bind mounts are rechecked. Nonempty output/error pins evidence
+indefinitely. Symlinks, reparse points, hardlinks, unknown allocations, failed
+inspection and unverified Docker Desktop path translations hold.
+
+`execution_retention.inventory` reports known bytes, server-clock ages and held
+reasons. It cannot authorize deletion; `retire` rechecks under the lifecycle lock
+and defaults to `apply=False`. No automatic cleanup schedule is wired. Legacy
+paths and temporary maintenance clones remain retained. Maintenance allocation
+coverage and lookup cost as permanent descriptors accumulate remain tracked debt.
+
+`qa_transport.launch_external` unconditionally holds. The gateway sources and
+43-package hash lock are unaccepted candidates: the dependency audit found
+published advisories, and no accepted host firewall adapter or actual gateway
+denial proof exists. They must not be enabled through a proxy variable or flag.
+
+The dedicated recorder image passed a local direct HTTPS fixture using an
+ephemeral per-container NSS trust store with certificate validation enabled.
+Its output is video plus a redacted command-outcome JSON trace, not a replayable
+Playwright trace. Controller-only capture receipts bind execution/attempt/fence,
+immutable image, deployment descriptor, requirements and actual media hashes and
+decoding. Persistence checks the durable attempt/key under its lease. Fixture
+receipts explicitly say `transport_mode=direct_fixture`, `test_only=true` and
+have no gateway image; contradictory or missing transport contracts are refused.
+This fixture does not establish external egress enforcement or fleet-stage
+integration, and generic QA stage media remains separate.
+
+Independent reviews permit only a bounded local B/D pilot. Staging remains
+NO-GO. No flags, live gates, configured schema, external publications or
+deployments were changed by this local implementation. Full evidence and known
+limits are recorded in the run's coding, QA, post-coding and security reports.

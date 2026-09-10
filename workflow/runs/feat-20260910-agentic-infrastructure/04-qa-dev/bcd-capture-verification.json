@@ -1,0 +1,99 @@
+{
+  "kind": "independent_local_capture_receipt_verification",
+  "fleet_execution": false,
+  "external_transport_verified": false,
+  "gateway_accepted": false,
+  "transport_mode": "direct_fixture",
+  "test_only": true,
+  "images": {
+    "gateway": null,
+    "recorder": "sha256:a743cef23a8d1049392135d806aeab9be3ffb3e65559616ae5a66dea5c52172f"
+  },
+  "source_sha256": "251b6585978ea307c0c5c57b7585d20a8f0419113584c3ea1ef2ccd46b905cc1",
+  "recording_id": "d13a2182c62d440394ce9f6ac302cfeb",
+  "identity": {
+    "run_id": "test-capture-d13a2182c62d440394ce9f6ac302cfeb",
+    "execution_key": "test-capture-d13a2182c62d440394ce9f6ac302cfeb:04-qa-dev:1",
+    "execution_id": 1,
+    "attempt": 1,
+    "fence": 1
+  },
+  "deployment_sha256": "5473c9c5244709b042ffd70a8de3ed69c7af5b613896a33eab3356e10bafba90",
+  "receipt_sha256": "59ef25d03f673431299fc9d7d46bb1c51f6b84a8510864eaac3aeb819baf826b",
+  "media": {
+    "trace": {
+      "bytes": 305,
+      "name": "d13a2182c62d440394ce9f6ac302cfeb.trace.json",
+      "sha256": "d8787911ef9d88e162f8c9bc06febd9c322e30fde13ddfe246cec406b69305ba"
+    },
+    "video": {
+      "bytes": 41853,
+      "decoded": true,
+      "duration_seconds": 1.0,
+      "name": "d13a2182c62d440394ce9f6ac302cfeb.webm",
+      "sha256": "cf2b326a9ee0c5f86f477a5aae460a379258da21c2fefec3beb133b7f78d8e60",
+      "streams": [
+        {
+          "codec_name": "vp8",
+          "codec_type": "video",
+          "height": 720,
+          "width": 1280
+        }
+      ]
+    }
+  },
+  "results": [
+    {
+      "scenario": "positive_actual_media_full_decode",
+      "passed": true
+    },
+    {
+      "scenario": "wrong_run_id",
+      "passed": true
+    },
+    {
+      "scenario": "wrong_execution_key",
+      "passed": true
+    },
+    {
+      "scenario": "wrong_execution_id",
+      "passed": true
+    },
+    {
+      "scenario": "wrong_attempt",
+      "passed": true
+    },
+    {
+      "scenario": "wrong_fence",
+      "passed": true
+    },
+    {
+      "scenario": "wrong_revision",
+      "passed": true
+    },
+    {
+      "scenario": "wrong_recording",
+      "passed": true
+    },
+    {
+      "scenario": "same_size_video_tamper",
+      "passed": true
+    },
+    {
+      "scenario": "same_size_trace_tamper",
+      "passed": true
+    },
+    {
+      "scenario": "failed_requirement",
+      "passed": true
+    },
+    {
+      "scenario": "missing_requirements",
+      "passed": true
+    },
+    {
+      "scenario": "forged_writable_mirror",
+      "passed": true
+    }
+  ]
+}

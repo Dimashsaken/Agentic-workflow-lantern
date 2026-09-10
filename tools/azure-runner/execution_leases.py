@@ -31,6 +31,7 @@ class Lease:
     fence: int
     execution_id: int | None = None
     parent_fence: int | None = None
+    maintenance: bool = False
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,12 @@ async def acquire_run(conn, run_id, owner, ttl=120):
     """Claim only queued work. Expired/legacy executing rows require recovery first."""
     if not owner:
         raise ValueError("lease owner must be nonempty")
-    fence = await conn.fetchval("""
+    async with conn.transaction():
+        # Serialize the conflict check with maintenance acquisition on this row.
+        await conn.fetchrow("SELECT id FROM runs WHERE id=$1 FOR UPDATE", run_id)
+        if await conn.fetchval("SELECT EXISTS(SELECT 1 FROM stage_executions WHERE run_id=$1 AND stage='03-coding.babysit' AND status='running')", run_id):
+            return None
+        fence = await conn.fetchval("""
         UPDATE runs SET status='executing', lease_owner=$2,
           lease_fence=lease_fence+1,
           lease_expires_at=clock_timestamp()+$3 * interval '1 second',
@@ -74,6 +80,10 @@ async def assert_current(conn, lease):
     """Check AND lock ownership inside an existing transaction (not an autocommit check)."""
     if not conn.is_in_transaction():
         raise RuntimeError("lease assertion requires a transaction")
+    if lease.maintenance:
+        from maintenance_runtime import assert_current as assert_maintenance
+        await assert_maintenance(conn, lease)
+        return
     row = await conn.fetchrow("SELECT * FROM runs WHERE id=$1 FOR UPDATE", lease.run_id)
     expected = lease.parent_fence if lease.execution_id is not None else lease.fence
     now = await conn.fetchval("SELECT clock_timestamp()")

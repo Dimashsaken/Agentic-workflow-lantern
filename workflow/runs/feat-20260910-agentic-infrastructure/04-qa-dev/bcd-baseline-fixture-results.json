@@ -1,0 +1,64 @@
+{
+  "kind": "local_fixture_provenance_renderer",
+  "fleet_execution": false,
+  "live_dev": false,
+  "recorded_at": "2026-09-10T18:02:53.856Z",
+  "source_sha256": {
+    "tools/mission-control/drawer.py": "4d0ff75298075824fc3ee134d0bec779504295f3bd1ce9ba30b02d7bdb4d616c",
+    "tools/mission-control/ui.py": "0abc73df7ee04ad8c9e96d2f209494286d790946e097ba16fa723ef63d3de513",
+    "tools/mission-control/app.py": "335695ad448151f833133dee6d04a1c98a7f77a00461af55254294325460357c",
+    "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/local-browser-fixtures.py": "3a59d5349cdfa32622e65d717e74997b8c6865b95fba4e2e0e3a6c7e86ed282c"
+  },
+  "results": [
+    {
+      "name": "provenance-fixture-desktop-bcd-baseline",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.11,
+          "title": "verified: evidence section visible"
+        },
+        {
+          "seconds": 1.19,
+          "title": "forged-mirror: evidence section visible"
+        },
+        {
+          "seconds": 2.27,
+          "title": "stale: evidence section visible"
+        },
+        {
+          "seconds": 3.34,
+          "title": "cross-run: evidence section visible"
+        },
+        {
+          "seconds": 4.45,
+          "title": "Back and refresh retain stale receipt refusal"
+        }
+      ],
+      "errors": [],
+      "video": "media/provenance-fixture-desktop-bcd-baseline.webm",
+      "trace": "media/provenance-fixture-desktop-bcd-baseline.zip",
+      "video_sha256": "6c83e575f46f26bd3c3687a1b4da12f01ee7a6f5cd3cfb70eb1695527f414adb"
+    },
+    {
+      "name": "provenance-fixture-mobile-bcd-baseline",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.12,
+          "title": "Verified hashes and test links fit mobile viewport"
+        },
+        {
+          "seconds": 1.2,
+          "title": "Theme change preserves provenance readability"
+        }
+      ],
+      "errors": [],
+      "video": "media/provenance-fixture-mobile-bcd-baseline.webm",
+      "trace": "media/provenance-fixture-mobile-bcd-baseline.zip",
+      "video_sha256": "26d279ee0e4c2eaa97d993a47c365411168a473484f41fc248d8040ae55b05b9"
+    }
+  ],
+  "ui_revision": "80babd0",
+  "source_hash_note": "Baseline renderer files exported with git show before serving; corrected original recorder current-checkout hash collection"
+}

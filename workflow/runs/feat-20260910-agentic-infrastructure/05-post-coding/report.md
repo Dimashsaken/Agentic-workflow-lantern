@@ -408,3 +408,28 @@ Open question: Do you approve the schema-free local contracts B–D in
 and evidence-deletion gates?
 
 Status: BLOCKED (complete foundation/formal stage); scoped v3 publication review PASS-WITH-NOTES
+
+
+## Continuation-3 B/C/D independent post-coding review - 2026-09-11
+
+Reviewed the full local diff versus main 80babd0 and the untracked maintenance, retention, QA capture and image candidate files in the isolated continuation-3 worktree. Detailed findings, source hashes and evidence limits: [bcd-review.md](bcd-review.md).
+
+| ID | Area | Severity | Tag | Evidence/disposition |
+|---|---|---|---|---|
+| BCD-PC-1 | Pilot flag routing | major | fix-now - resolved | Integrator changed review.babysit_run to select maintenance when the fenced pilot is enabled independently of dispatcher leasing. Independent injected call verified one fenced call and zero legacy calls. |
+| BCD-PC-2 | Temporary maintenance retention | medium | debt-ticket - open | LANTERN-DEBT-EXECUTION-GC amended in bcd-review.md: retained trial clones lack allocation descriptors and are not eligible for automatic retirement. |
+| BCD-PC-3 | Descriptor history overhead | medium | debt-ticket - open | Same local ticket now requires bounded mount-lookup cost without weakening ancestor checks or tombstones. Every current launch scans all historical path mappings. |
+| BCD-PC-4 | External candidate acceptance | acceptance limit | waived - scope only | Keeping held candidate files is acceptable for local review. Actual external HTTPS transport/capture, version-2 receipt display, image and dependency acceptance remain unaccepted, not waived. |
+
+Independent checks: 35 focused tests passed, seven PostgreSQL tests skipped; pilot routing probe and diff whitespace check passed. Inspected supplied 14-test real PostgreSQL/Git/Docker green-path log with simulated GitHub; no independent live service proof claimed. Final configured quality run and independent security retest remain integrator-owned. No new schema, database modification, gate movement, deployment, external publication or runtime edit was performed by this reviewer.
+
+Memory candidate and local execution-GC ticket amendment are in bcd-review.md; integrator owns actual append_memory insertion. No rendered memory edit claimed.
+
+Status: PASS-WITH-NOTES (scoped local B/C/D review); complete foundation/formal stage and external activation remain unaccepted.
+
+
+### B/C/D narrow supplement - 2026-09-11
+
+Reviewed the explicit direct_fixture transport contract, shared validation at capture construction/seal/verify/persist, durable attempt/key checks and read-only retirement inventory. No new fix-now finding. Independent reruns: 16 retention and 9 provenance tests passed; diff whitespace check passed. Supplied actual local TLS recorder/PostgreSQL proof was inspected, not independently rerun; it remains explicitly test-only with no gateway/external transport acceptance. BCD-PC-2/3 retention debts remain open. Updated source hashes and evidence distinctions are appended in [bcd-review.md](bcd-review.md).
+
+Status: PASS-WITH-NOTES (narrow local supplement); full foundation and external activation remain unaccepted.

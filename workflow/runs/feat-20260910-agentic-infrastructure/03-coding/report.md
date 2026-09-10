@@ -511,3 +511,91 @@ Status: BLOCKED (remaining dependent architecture work; v3 increment complete)
 Do you approve local implementation of architecture contracts B–D in
 `../02-pre-coding/continuation-3-task-plan.md`, preserving every existing human
 gate and excluding configured-database migration and deployment?
+
+### Continuation 3 B–D local increment — 2026-09-11
+
+The user requested "do the continuation-3 of the work we are doing with agent
+infrastructure thing". This continues the concrete local work order above;
+architecture implementation is no longer waiting on the previous question.
+It does not authorize a registered gate decision, configured schema migration,
+external publication, deployment or evidence deletion. No such action occurred.
+
+The increment is isolated at `C:/Users/dimas/.lantern/worktrees/continuation-3`,
+branch `codex/agentic-infrastructure-continuation-3`, based on `80babd0`.
+A concurrent task changed the original checkout's Mission Control UI and branch;
+its work was preserved. This worktree contains the infrastructure changes and
+reviews. It changes neither Azure provider/SDK routing nor the fixed pipeline.
+
+**Implemented behavior.** Dedicated default-off maintenance leases bind the
+latest human code-complete decision, exact PR, repository/base/working refs and
+run position. Maintenance never rewrites a run to executing or changes a human
+approval. Claim/retry/rework/decision paths share the run lock; child conflict
+checks use a fresh statement after that lock. Real concurrency testing found
+and fixed the pre-wait PostgreSQL statement-snapshot race. Manual and scheduled
+entry points use the same pilot, including when legacy dispatcher leasing is off.
+
+Trial merges verify exact parent revisions and regate immutable committed source
+in an image pinned by digest. Working-branch publication uses expected-old-head
+conditional push, current provider observations and fenced effect receipts.
+Repeated cancellation stops known workers and joins helper threads. Conflicts
+and red regates hold; inherited maintenance fix authority is still absent.
+
+Fresh isolated checkouts have controller descriptors and shared allocation,
+worker-mount and retirement locks. Cleanup defaults to dry-run, verifies terminal
+database state/server age/all container mounts and refuses unknown ownership,
+links, path substitution and unverified Desktop mount translation. It tombstones,
+quarantines and deletes only owned temporary roots in tests, with crash/audit
+recovery. Evidence/output/error remains pinned indefinitely. Diagnostic inventory
+reports bytes, server ages and held reasons; no cleanup scheduler is connected.
+
+The external QA gateway is an unaccepted source/image candidate and its launcher
+unconditionally refuses activation. Its 43 exact wheel hashes match the reviewed
+PyPI metadata, but four selected packages have reported advisories. The build
+retry was stopped; there is no accepted gateway image or host firewall adapter.
+The narrow recorder image built successfully and passed a direct local HTTPS
+fixture with ephemeral NSS CA trust and certificate checks enabled. Its trace is
+redacted command-outcome JSON, not a Playwright replay ZIP. Controller receipts
+bind the fixture deployment, image, requirements, execution/attempt/fence and
+actual decoded media, and validate explicit transport mode at every boundary.
+Fenced database persistence also checks the durable attempt/key. This is a local
+fixture, not an external deployment or packet-denial acceptance claim.
+
+| Evidence | Final result and scope |
+|---|---|
+| `bcd-final-quality.json`, `bcd-final-test.log`, `bcd-final-lint.log` | Complete configured commands passed: **616 unittest cases, 607 passed and 9 explicit skips**, plus standalone checks; test 113.422s, lint 0.359s. Runtime source unchanged during checks; full per-file hashes in JSON. Skips are seven opt-in PostgreSQL cases, one opt-in Docker evidence case and Windows symlink privilege. The opted-in suites ran separately below. |
+| `bcd-final-maintenance.log` | **14/14 passed**, 26.364s, with real disposable PostgreSQL, a real temporary Git merge, immutable Docker regate and conditional local push. GitHub observations were simulated. Includes parent-lock race, competing ownership, expiration, renewal, stale effect, changed approval and unchanged run/approval checks. |
+| `bcd-final-frozen-source.log` | Actual Docker test **1/1 passed**, 79.006s, image `sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756`; positive quality command, source/manifest negatives, ignored dependency exclusion and mutable modify/test/restore versus read-only refusal. No Azure or database. |
+| `bcd-capture-proof.py/json`, `bcd-capture-expected.json` | Actual recorder image `sha256:a743cef23a8d1049392135d806aeab9be3ffb3e65559616ae5a66dea5c52172f`; four browser commands passed; actual 1.0s VP8 video fully decoded. Disposable SQL persisted the matching receipt and rejected wrong attempt/key/stale owner. Test-only direct TLS, no gateway; fixture database/containers/network removed. Public CA only reached recorder; temporary private key removed with fixture files. |
+| `../04-qa-dev/bcd-capture-verification.json`, `bcd-capture-supplement.md` | Independent **13/13** actual-media controls: positive full decode and 12 identity/tamper/outcome/mirror negatives. Actual frame at 0:00.5 inspected. Redacted trace and one-second fixture video do not replace full workflow diagnostics. |
+| `../04-qa-dev/bcd-report.md` and baseline result/decoder JSON | Four recorded desktop/mobile real-app and fixture contexts passed on baseline UI `80babd0`; actual videos 57.16s/42.28s decoded and inspected. Existing app database approval snapshot unchanged. These browser tests remain separate from the new recorder proof; unrelated UI edits were excluded through a frozen temporary runtime. |
+| `../05-post-coding/bcd-review.md` | Independent PASS-WITH-NOTES; explicit pilot routing defect fixed. Final supplement: 16 retention + 9 provenance tests pass. Temporary maintenance clone allocation and all-history descriptor scan cost remain local debt. |
+| `../06-security/continuation3-bcd-prereview.md`, final snapshot and media review JSON | No remaining confirmed high B/D issue; independent final 16 retention, 9 receipt and 7 adversarial probes pass. Actual media independently rehashed and decoded. Scope permits local B/D and test-only fixture; external C and staging NO-GO. |
+| `bcd-retention-inventory.json` | Existing configured root: **8 legacy checkouts, 149,093,385 bytes, zero eligible, zero deleted**. Unknown server age is null; no filesystem timestamp authorizes cleanup. Maintenance temp clones are outside this inventory and stay retained. |
+| `bcd-memory.json` | Actual bound `append_memory` calls wrote coding/security/post-coding/QA rows **60–63** to existing localhost:5432 `lantern`. Runs/executions/approvals stayed **12/23/8**, complete approval snapshot unchanged; memory 37→41. No migration or fabricated stage execution. Rendered memory includes an existing concurrent task's row and was not hand-edited. |
+
+The earlier `bcd-increment-*` failed check is retained as iteration evidence,
+not final validation. Final checks above supersede it. `bcd-isolated-*` was an
+intermediate passing checkpoint. D20 build/report regenerated: fingerprint
+`5a980d1ebb9f8215d788435a756161286e1ec8f15d16a85ed18f6d9e64798e3e`, frozen
+plan coverage 1.00 (n=2), invalid acceptance 0/14 and valid rejection 0/1.
+These frozen verifier scores do not establish live Azure quality.
+
+| Work-order item | Verdict |
+|---|---|
+| C3-1–3 | Existing configured database recovery and publication v3 increment preserved; positive live GitHub proof remains limited by the previously observed bot PR-read 403. No permission changes or provider mutations were made. |
+| C3-4–5 | Local B–D continuation authorized; independent reviews completed. Dedicated maintenance acquisition, eligibility, fencing and recovery implemented and locally tested. |
+| C3-6 | Green immutable-regate/conditional-push path implemented; red-regate inherited fix is explicitly held and incomplete. |
+| C3-7 | **Incomplete / activation blocked:** gateway dependency advisory disposition, successful accepted image, effective-hook tests and host egress-denial adapter/acceptance remain. |
+| C3-8 | Local direct-TLS sealed capture mechanics pass; external deployment and fleet-stage integration remain incomplete. |
+| C3-9 | Conservative retirement/inventory API and temporary-root race/crash tests implemented. Legacy/real evidence deletion not performed; maintenance temp allocation and lookup scalability remain debt. |
+| C3-10 | Local configured checks and independent QA/post/security reviews pass within stated scope. Full foundation acceptance is incomplete. |
+| C3-11 | Deferred until foundation acceptance; no context-budget or structured-output Azure experiment run or promoted. |
+
+Videos and binary screenshots remain local artifacts rather than git
+payloads; reports retain their exact names/hashes. No artifact upload was
+performed by this manual engineering session. Deployment and all human gates
+remain unchanged. Follow-on work is the bounded red-regate authority path,
+gateway dependency/network acceptance and complete external capture integration.
+
+Status: PARTIAL — B/D local increment and test-only recorder proof complete;
+external QA/foundation acceptance incomplete; staging NO-GO.

@@ -1450,15 +1450,16 @@ async def claim_run(conn, runner: str) -> str | None:
     stages = [s for s, r in STAGE_RUNNER.items() if r == runner]
     async with conn.transaction():
         row = await conn.fetchrow(
-            """SELECT id FROM runs WHERE status = 'running' AND current_stage = ANY($1::text[])
+            """SELECT id FROM runs r WHERE status = 'running' AND current_stage = ANY($1::text[])
+               AND NOT EXISTS (SELECT 1 FROM stage_executions e WHERE e.run_id=r.id AND e.stage='03-coding.babysit' AND e.status='running')
                ORDER BY updated_at FOR UPDATE SKIP LOCKED LIMIT 1""", stages)
         if not row:
             return None
         if ownership.enabled():
             return await ownership.claim(conn, row["id"])
-        await conn.execute(
-            "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1", row["id"])
-        return row["id"]
+        import maintenance_runtime
+        claimed = await maintenance_runtime.legacy_claim(conn, row["id"])
+        return row["id"] if claimed != 'UPDATE 0' else None
 
 
 # ── commands ─────────────────────────────────────────────────────────────────
@@ -1548,9 +1549,8 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
             if ownership.enabled():
                 claimed = await ownership.claim(conn, run_id)
             else:
-                claimed = await conn.execute(
-                    "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1 AND status = 'running'",
-                    run_id)
+                import maintenance_runtime
+                claimed = await maintenance_runtime.legacy_claim(conn, run_id)
             if not claimed or claimed.endswith(" 0"):  # another daemon won
                 continue
             await step_run(conn, run_id, local)
@@ -1558,6 +1558,8 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
 
 
 async def recover_expired_runs(conn):
+    import maintenance_runtime
+    await maintenance_runtime.recover(conn)
     recovered = await ownership.leases.recover_expired(conn)
     if tool_execution.enabled():
         from isolated_tools import cleanup_execution
@@ -1618,7 +1620,7 @@ async def cmd_daemon(runner: str) -> None:
             slots = {t for t in slots if not t.done()}
             if ownership.enabled():
                 await recover_expired_runs(conn)
-            if runner == "ec2" and review.babysit_due() and not ownership.enabled():
+            if runner == "ec2" and review.babysit_due() and (not ownership.enabled() or os.environ.get("LANTERN_FENCED_BABYSIT") == "1"):
                 # Existing babysitting starts from waiting_gate. Until it owns a
                 # distinct fenced operation it must not mutate an approved branch.
                 slots.add(asyncio.create_task(review.babysit_slot(connect, runner)))
@@ -1673,21 +1675,23 @@ async def cmd_decide(run_id: str, gate: str, by: str, note: str, approved: bool)
     # The Slack/GitHub front-ends MUST verify actor allowlists + webhook signatures.
     conn = await connect()
     status = "approved" if approved else "rejected"
-    updated = await conn.fetchval(
-        """UPDATE approvals SET status = $1, decided_at = now(), decided_by = $2, decision_note = $3
-           WHERE run_id = $4 AND gate = $5 AND status = 'pending' RETURNING id""",
-        status, by, note, run_id, gate)
-    if not updated:
-        sys.exit(f"no pending approval for run {run_id} gate {gate}")
-    await log_event(conn, run_id, f"human:{by}", f"gate_{status}", {"gate": gate, "note": note})
-    record_gate_decision(run_id, gate, status, by, note)
-    if approved:
-        stage = await conn.fetchval("SELECT current_stage FROM runs WHERE id = $1", run_id)
-        await advance(conn, run_id, stage)
-        print(f"[{run_id}] {gate} approved by {by} — advancing.")
-    else:
-        await conn.execute("UPDATE runs SET status = 'failed', updated_at = now() WHERE id = $1", run_id)
-        print(f"[{run_id}] {gate} rejected by {by} — run marked failed; rework then `retry`.")
+    async with conn.transaction():
+        await conn.fetchrow('SELECT id FROM runs WHERE id=$1 FOR UPDATE', run_id)
+        updated = await conn.fetchval(
+            """UPDATE approvals SET status = $1, decided_at = now(), decided_by = $2, decision_note = $3
+               WHERE run_id = $4 AND gate = $5 AND status = 'pending' RETURNING id""",
+            status, by, note, run_id, gate)
+        if not updated:
+            sys.exit(f"no pending approval for run {run_id} gate {gate}")
+        await log_event(conn, run_id, f"human:{by}", f"gate_{status}", {"gate": gate, "note": note})
+        record_gate_decision(run_id, gate, status, by, note)
+        if approved:
+            stage = await conn.fetchval("SELECT current_stage FROM runs WHERE id = $1", run_id)
+            await advance(conn, run_id, stage)
+            print(f"[{run_id}] {gate} approved by {by} — advancing.")
+        else:
+            await conn.execute("UPDATE runs SET status = 'failed', updated_at = now() WHERE id = $1", run_id)
+            print(f"[{run_id}] {gate} rejected by {by} — run marked failed; rework then `retry`.")
     await render_runboard(conn)
     await conn.close()
 
@@ -1716,6 +1720,16 @@ def force_rmtree(path: Path) -> None:
 
 
 def product_checkout(repo: str, branch: str, run_id: str, work: str = "", execution_key: str = "") -> Path:
+    if execution_key and tool_execution.enabled():
+        from execution_retention import allocation
+        root = PRODUCT_MIRROR_DIR / "checkouts"
+        dest = root / hashlib.sha256(execution_key.encode()).hexdigest()
+        with allocation(dest, root, execution_key, run_id):
+            return _product_checkout(repo, branch, run_id, work, execution_key)
+    return _product_checkout(repo, branch, run_id, work, execution_key)
+
+
+def _product_checkout(repo: str, branch: str, run_id: str, work: str = "", execution_key: str = "") -> Path:
     """Host-side working checkout of the product for the in-process executor.
 
     Cloned fresh from the mirror every stage, so a stage can never read a tree some
@@ -2080,23 +2094,24 @@ async def cmd_rework(run_id: str, to_stage: str, by: str, note: str) -> None:
     if to_stage not in REWORK_TARGETS:
         sys.exit(f"rework target must be one of {', '.join(REWORK_TARGETS)}")
     conn = await connect()
-    row = await conn.fetchrow("SELECT status, current_stage FROM runs WHERE id = $1", run_id)
-    if not row:
-        sys.exit(f"unknown run {run_id}")
-    if row["status"] not in ("failed", "waiting_gate"):
-        sys.exit(f"{run_id} is {row['status']} — rework applies to failed or waiting_gate runs")
-    index = intake.stage_index(run_id, STAGE_INDEX)   # D20: bug runs order by the debug lifecycle table
-    if index.get(to_stage, 99) >= index.get(row["current_stage"], -1):
-        sys.exit(f"{to_stage} is not earlier than the run's current stage {row['current_stage']}")
-    await conn.execute(
-        """UPDATE approvals SET status = 'expired', decided_at = now(), decided_by = $2,
-           decision_note = $3 WHERE run_id = $1 AND status = 'pending'""",
-        run_id, by, f"expired by rework to {to_stage}")
-    await conn.execute(
-        "UPDATE runs SET current_stage = $1, status = 'running', updated_at = now() WHERE id = $2",
-        to_stage, run_id)
-    await log_event(conn, run_id, f"human:{by}", "run_reworked",
-                    {"from": row["current_stage"], "to": to_stage, "note": note})
+    async with conn.transaction():
+        row = await conn.fetchrow("SELECT status, current_stage FROM runs WHERE id = $1 FOR UPDATE", run_id)
+        if not row:
+            sys.exit(f"unknown run {run_id}")
+        if row["status"] not in ("failed", "waiting_gate"):
+            sys.exit(f"{run_id} is {row['status']} — rework applies to failed or waiting_gate runs")
+        index = intake.stage_index(run_id, STAGE_INDEX)   # D20: bug runs order by the debug lifecycle table
+        if index.get(to_stage, 99) >= index.get(row["current_stage"], -1):
+            sys.exit(f"{to_stage} is not earlier than the run's current stage {row['current_stage']}")
+        await conn.execute(
+            """UPDATE approvals SET status = 'expired', decided_at = now(), decided_by = $2,
+               decision_note = $3 WHERE run_id = $1 AND status = 'pending'""",
+            run_id, by, f"expired by rework to {to_stage}")
+        await conn.execute(
+            "UPDATE runs SET current_stage = $1, status = 'running', updated_at = now() WHERE id = $2",
+            to_stage, run_id)
+        await log_event(conn, run_id, f"human:{by}", "run_reworked",
+                        {"from": row["current_stage"], "to": to_stage, "note": note})
     record_gate_decision(run_id, f"rework -> {to_stage}", "reworked", by,
                          note or f"sent back from {row['current_stage']}")
     await render_runboard(conn)
@@ -2107,8 +2122,10 @@ async def cmd_rework(run_id: str, to_stage: str, by: str, note: str) -> None:
 
 async def cmd_retry(run_id: str) -> None:
     conn = await connect()
-    await conn.execute("UPDATE runs SET status = 'running', updated_at = now() WHERE id = $1", run_id)
-    await log_event(conn, run_id, "human:cli", "run_retried", {})
+    async with conn.transaction():
+        await conn.fetchrow('SELECT id FROM runs WHERE id=$1 FOR UPDATE', run_id)
+        await conn.execute("UPDATE runs SET status = 'running', updated_at = now() WHERE id = $1", run_id)
+        await log_event(conn, run_id, "human:cli", "run_retried", {})
     await render_runboard(conn)
     print(f"[{run_id}] re-queued at its current stage (fresh attempt, same session memory).")
     await conn.close()

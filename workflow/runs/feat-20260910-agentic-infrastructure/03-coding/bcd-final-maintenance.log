@@ -1,0 +1,6 @@
+.......Executing <Task pending name='Task-43' coro=<Postgres.test_actual_trial_immutable_regate_and_conditional_local_push() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:208> wait_for=<Future pending cb=[BaseProtocol._on_waiter_completed(), Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.594 seconds
+.......
+----------------------------------------------------------------------
+Ran 14 tests in 26.364s
+
+OK
