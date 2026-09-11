@@ -1694,6 +1694,13 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
         if not (REPO / vid).is_file():
             problems.append(f"handoff.json claims video '{vid}' but no such file exists")
     names = [o.get("name", "?") for o in data.get("options", [])]
+    if sdir != "01-ui-ux":
+        # Everything below judges a DESIGN handoff (options → prototypes or jsx). Any
+        # other stage's handoff.json — the coding stage's `coding_branch` (D14) — stops
+        # at the generic claims above. Found 2026-09-11 on the first html-mode run: the
+        # D25 block ran against 03-coding/handoff.json and failed a green coding stage
+        # for not declaring "design_mode": "html" (test_design_mode.py).
+        return problems
     if design_mode() == "html":
         # D25: without Paper the structural handoff is the prototype HTML itself — one
         # self-contained file per presented option, on disk, not described.

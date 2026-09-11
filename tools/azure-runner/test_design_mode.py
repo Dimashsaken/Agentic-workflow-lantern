@@ -80,6 +80,29 @@ class HtmlHandoffChecks(unittest.TestCase):
             problems = o.check_claimed_artifacts(RUN, "01-ui-ux")
         self.assertTrue(any('"design_mode": "html"' in p for p in problems), problems)
 
+    def test_other_stages_handoffs_are_not_judged_as_design_handoffs(self):
+        # Found 2026-09-11 on the first html-mode run (feat-20260911-tender-onboarding):
+        # 03-coding's `coding_branch` handoff has no options or prototypes by design, and
+        # the D25 block failed a green coding stage for not declaring design_mode html.
+        cdir = self.tmp / "workflow/runs" / RUN / "03-coding"
+        cdir.mkdir(parents=True)
+        (cdir / "handoff.json").write_text(json.dumps({
+            "kind": "coding_branch", "run_id": RUN, "branch": "feat/x", "base": "main",
+            "base_sha": "a" * 40, "head_sha": "b" * 40, "commits": [],
+            "bundle": f"workflow/runs/{RUN}/03-coding/branch.bundle"}), encoding="utf-8")
+        for mode in ("html", "paper"):
+            with mock.patch.dict(os.environ, {"LANTERN_DESIGN_MODE": mode}):
+                self.assertEqual(o.check_claimed_artifacts(RUN, "03-coding"), [], mode)
+        # The generic claim checks still apply to every stage: a QA handoff that names a
+        # video which is not on disk is still a problem in html mode.
+        qdir = self.tmp / "workflow/runs" / RUN / "04-qa-dev"
+        qdir.mkdir(parents=True)
+        (qdir / "handoff.json").write_text(json.dumps(
+            {"video": f"workflow/runs/{RUN}/04-qa-dev/media/missing.webm"}), encoding="utf-8")
+        with mock.patch.dict(os.environ, {"LANTERN_DESIGN_MODE": "html"}):
+            problems = o.check_claimed_artifacts(RUN, "04-qa-dev")
+        self.assertTrue(any("no such file" in p for p in problems), problems)
+
     def test_paper_mode_still_demands_jsx(self):
         self.handoff(design_mode="paper")
         with mock.patch.dict(os.environ, {"LANTERN_DESIGN_MODE": "paper"}):
