@@ -371,8 +371,11 @@ class Loop(Base):
         self.assertEqual(posted[0][1], "/repos/o/n/pulls/7/reviews")
         self.assertTrue(out["review"]["rounds"][0]["pr_review"]["posted"])
         self.assertIn("https://mc/run/" + RUN, posted[0][2]["body"])
-        # and without a PR (local-path repo) nothing is attempted, nothing fails
+        # and without a PR (local-path repo) nothing is attempted, nothing fails — a fresh
+        # first cycle: the previous loop's round-1.md would otherwise (correctly) make this
+        # cycle start at round 2.
         posted.clear()
+        rmtree(r.review_dir(RUN))
         execute, _ = self.scripted(["approve"])
         conn, out = self.run_loop(self.deps(execute=execute, gh_api=gh_api))
         self.assertEqual(posted, [])
