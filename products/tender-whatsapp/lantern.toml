@@ -1,0 +1,19 @@
+# lantern.toml — what the software factory runs AS CODE against a product repo.
+# Copy to the product repository's root. Every command runs from that root, through
+# bash, after the coding agent's turn (tools/azure-runner/factory.py); red output goes
+# back to the agent (failures only) for a bounded number of fix rounds, then the stage
+# fails honestly. $LANTERN_PYTHON is the harness interpreter (use it when the product is
+# Lantern itself; other stacks ignore it).
+
+# Every bug run lands its regression test under lantern/regressions/ (D20). The test
+# command MUST discover that directory so every past repro re-runs on every future run:
+# pytest and jest do by default; unittest needs
+#   && python -m unittest discover -s lantern/regressions -p 'test_*.py'
+# Playwright needs the directory in its testDir / spec pattern.
+
+[quality]
+test = "pytest -q"
+lint = "ruff check ."
+# typecheck = "..."                     # optional
+# build = "..."                     # optional
+timeout_s = 900                            # per command
