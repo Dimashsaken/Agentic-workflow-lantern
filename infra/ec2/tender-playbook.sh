@@ -78,6 +78,9 @@ serve() {
   git fetch -q origin "$branch"
   git checkout -q -B serve "origin/$branch"
   python3 -m venv .venv >/dev/null && .venv/bin/pip install -q -e '.[dev]'
+  # SEC-04 (security stage, 2026-09-11): the served build's exact resolved dependency set
+  # is retained next to its env file, so the audit can name versions instead of ranges.
+  .venv/bin/pip freeze --exclude-editable > "/home/ubuntu/$unit.lock" && echo "   dependency manifest: /home/ubuntu/$unit.lock ($(wc -l < /home/ubuntu/$unit.lock) pins)"
   # The product's secrets live in ONE env file outside the checkout, generated once and
   # kept across re-serves: a new TENDER_SECRET_KEY would sign every QA session out, and a
   # new TENDER_CREDENTIAL_KEY would make every saved Cloud credential unreadable. Stage 4
