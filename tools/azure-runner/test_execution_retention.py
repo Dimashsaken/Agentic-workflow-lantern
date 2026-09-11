@@ -1,6 +1,7 @@
 """Destructive controls are confined to owned TemporaryDirectory roots."""
 from contextlib import asynccontextmanager
 import json
+import asyncio
 import os
 from pathlib import Path
 import subprocess
@@ -43,7 +44,7 @@ class Retirement(unittest.IsolatedAsyncioTestCase):
                                       inspect_mounts=lambda: [], **kwargs)
 
     def descriptor(self):
-        return self.authority / (retention.key(self.execution) + '.json')
+        return self.authority / 'records-v2' / (retention.key(self.execution) + '.json')
 
     async def test_dry_run_preserves_bytes_then_deletes_only_checkout(self):
         evidence = self.base / 'evidence.json'
@@ -58,6 +59,97 @@ class Retirement(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(retention.RetentionHeld):
             with retention.worker_mount(self.path, self.execution, self.authority):
                 self.fail('retired checkout started')
+
+    async def test_mount_lookup_does_not_enumerate_retained_history(self):
+        # Build 10,000 durable tombstone mappings; only the one-time legacy index
+        # rebuild may enumerate them. Steady launch checks are independent of n.
+        for i in range(10000):
+            path = self.root / ('old-' + str(i))
+            location = self.authority / ('path-' + retention.path_key(path) + '.json')
+            location.write_text(json.dumps({'path': str(path), 'execution_key': 'old:' + str(i)}))
+        (self.authority / 'paths-v2' / 'complete.json').unlink()
+        with retention.path_index(self.authority):
+            pass
+        with patch.object(Path, 'glob', side_effect=AssertionError('unbounded history scan')):
+            with retention.worker_mount(self.path, self.execution, self.authority):
+                pass
+            with self.assertRaisesRegex(retention.RetentionHeld, 'ancestor'):
+                with retention.worker_mount(self.root, self.execution, self.authority):
+                    pass
+            with self.assertRaisesRegex(retention.RetentionHeld, 'different execution'):
+                with retention.worker_mount(self.root/'old-9999', self.execution, self.authority):
+                    pass
+
+    async def test_legacy_lock_creation_cannot_split_current_lock_identity(self):
+        execution='new-lock-identity'
+        legacy=self.authority/(retention.key(execution)+'.lock')
+        with retention.locked(execution,self.authority):
+            # Simulate an old reader opening its permanent top-level pathname.
+            # The former existence-based selection switched newer readers to it.
+            with legacy.open('a+b'):
+                pass
+            with self.assertRaisesRegex(retention.RetentionHeld,'lock is busy'):
+                with retention.locked(execution,self.authority,timeout=.05):
+                    self.fail('two holders for one execution')
+        with retention.locked(execution,self.authority,timeout=.05):
+            pass
+
+    async def test_crashed_legacy_index_rebuild_is_retried(self):
+        marker = self.authority/'paths-v2'/'complete.json'
+        marker.unlink()
+        legacy = self.root/'legacy-crash'
+        (self.authority/('path-'+retention.path_key(legacy)+'.json')).write_text(json.dumps({'path':str(legacy),'execution_key':'legacy'}))
+        with patch.object(retention, '_index_ancestors', side_effect=OSError('interrupted')):
+            with self.assertRaises(OSError):
+                with retention.worker_mount(self.path, self.execution, self.authority):
+                    pass
+        self.assertFalse(marker.exists())
+        with retention.worker_mount(self.path, self.execution, self.authority):
+            pass
+        self.assertTrue(marker.exists())
+
+    async def test_legacy_addition_during_registration_is_indexed(self):
+        original = retention.atomic_json
+        legacy = self.root/'late-parent'/'legacy'
+        injected = False
+        def interleave(path,value):
+            nonlocal injected
+            original(path,value)
+            if value.get('protocol')=='retention-v2-sentinel' and not injected:
+                injected=True
+                original(self.authority/('path-'+retention.path_key(legacy)+'.json'),{'execution_key':'legacy','path':str(legacy)})
+        with patch.object(retention,'atomic_json',side_effect=interleave):
+            with retention.allocation(self.root/'current',self.root,'current','run',authority=self.authority):
+                (self.root/'current').mkdir()
+        self.assertTrue(injected)
+        with self.assertRaisesRegex(retention.RetentionHeld,'ancestor'):
+            with retention.worker_mount(legacy.parent,'other',self.authority):
+                pass
+
+    async def test_legacy_addition_invalidates_index(self):
+        legacy = self.root/'legacy-parent'/'old-checkout'
+        (self.authority/('path-'+retention.path_key(legacy)+'.json')).write_text(json.dumps({'path':str(legacy),'execution_key':'legacy'}))
+        with self.assertRaisesRegex(retention.RetentionHeld,'ancestor'):
+            with retention.worker_mount(legacy.parent,'other',self.authority):
+                pass
+
+    async def test_slow_allocation_does_not_block_unrelated_mount(self):
+        import threading
+        started, release = threading.Event(), threading.Event()
+        def allocate():
+            with retention.allocation(self.root/'slow',self.root,'slow','run',authority=self.authority):
+                started.set()
+                if not release.wait(5):
+                    raise RuntimeError('allocation wait timed out')
+                (self.root/'slow').mkdir()
+        task = asyncio.create_task(asyncio.to_thread(allocate))
+        await asyncio.to_thread(started.wait,3)
+        try:
+            with retention.worker_mount(self.path,self.execution,self.authority):
+                pass
+        finally:
+            release.set()
+            await task
 
     async def test_inventory_reports_legacy_and_database_failure_without_delete(self):
         legacy = self.root/'legacy'

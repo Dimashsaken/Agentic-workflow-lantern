@@ -33,6 +33,7 @@ import hashlib
 import json
 import os
 import random
+from contextvars import ContextVar
 import re
 import subprocess
 import tool_execution
@@ -48,6 +49,7 @@ import evidence
 import trusted_evidence
 
 REPO = Path(__file__).resolve().parents[2]
+MAINTENANCE_OUTPUT = ContextVar("maintenance_output", default=None)
 
 AC_ID = re.compile(r"^AC-\d+$")
 VALIDATION_STATUSES = ("covered", "missing", "skipped", "off-spec", "insecure")
@@ -610,6 +612,9 @@ def exec_dir(sdir: str, builder: str | None = None) -> str:
     loser would fail on the winner's evidence. The integrator writes the stage dir
     itself, so `03-coding/` still carries exactly one handoff for the run branch.
     """
+    maintenance_output = MAINTENANCE_OUTPUT.get()
+    if sdir == "03-coding" and maintenance_output is not None:
+        return f"{sdir}/babysit/fixes/{maintenance_output}"
     name = current_builder() if builder is None else builder
     return sdir if not name or name == INTEGRATOR else f"{sdir}/{BUILDERS_DIR}/{name}"
 
@@ -1289,7 +1294,7 @@ def fix_rounds() -> int:
 async def coding_turns(run_turn, kickoff: str, *, run_id: str, stage: str, root: Path,
                        execution_key: str, since_sha: str | None = None,
                        max_rounds: int | None = None,
-                       checkpoints: bool = True) -> tuple[list, dict]:
+                       checkpoints: bool = True, gate_in_thread: bool = False) -> tuple[list, dict]:
     """Build turn → checkpoint → gate → (failures → fix turn)*, bounded.
 
     `run_turn(text)` is the agent turn (Runner.run in production, a fake in tests);
@@ -1300,25 +1305,32 @@ async def coding_turns(run_turn, kickoff: str, *, run_id: str, stage: str, root:
     worse than one we already had, the better tree is restored and re-gated — so a fix
     round that made things worse costs a round, not the work.
     """
+    async def check(function, *args, **kwargs):
+        if gate_in_thread:
+            from functools import partial
+            from maintenance_runtime import joined_thread
+            return await joined_thread(partial(function, *args, **kwargs))
+        return function(*args, **kwargs)
+
     rounds = fix_rounds() if max_rounds is None else max_rounds
     contract = quality_config(root)
     if contract.get("error"):
-        gate = run_quality_gate(run_id, stage, root, execution_key, 0, since_sha, contract=contract)
+        gate = await check(run_quality_gate, run_id, stage, root, execution_key, 0, since_sha, contract=contract)
         raise ValueError("automatic coding held: " + contract["error"])
     results = [await run_turn(kickoff)]
     round_no = 0
     best: tuple[tuple[int, int, int], str, int] | None = None   # (score, sha, round)
     while True:
-        sha = checkpoint_tree(root, execution_key, round_no) if checkpoints else None
-        gate = run_quality_gate(run_id, stage, root, execution_key, round_no, since_sha, contract=contract)
+        sha = await check(checkpoint_tree, root, execution_key, round_no) if checkpoints else None
+        gate = await check(run_quality_gate, run_id, stage, root, execution_key, round_no, since_sha, contract=contract)
         score = gate_score(gate)
         if sha and (best is None or score > best[0]):
             best = (score, sha, round_no)
         if gate["passed"] or round_no >= rounds:
-            if best is not None and best[0] > score and restore_checkpoint(root, best[1]):
+            if best is not None and best[0] > score and await check(restore_checkpoint, root, best[1]):
                 # Re-gate so gate.json describes the tree that actually ships, not the
                 # one we threw away — the host re-check reads that file at handoff.
-                gate = run_quality_gate(run_id, stage, root, execution_key, round_no,
+                gate = await check(run_quality_gate, run_id, stage, root, execution_key, round_no,
                                         since_sha, restored_from=best[2], contract=contract)
             return results, gate
         round_no += 1

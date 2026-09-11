@@ -73,7 +73,13 @@ def locked(execution_key, authority=None, timeout=10):
     root = Path(authority or authority_root()).absolute()
     root.mkdir(parents=True, exist_ok=True)
     name = key(execution_key)
-    lockpath = safe_path(root / (name + '.lock'), root, existing=(root / (name + '.lock')).exists())
+    for folder in ('locks-v2', 'records-v2', 'paths-v2'):
+        (root/folder).mkdir(exist_ok=True)
+        safe_path(root/folder, root)
+    # One permanent pathname shared with legacy readers, even when they refuse
+    # the v2 sentinel. Selecting a path by existence can split a live OS lock.
+    lockpath = root / (name + '.lock')
+    lockpath = safe_path(lockpath, root, existing=lockpath.exists())
     with lockpath.open('a+b') as lock:
         if os.fstat(lock.fileno()).st_size == 0:
             lock.write(b'0')
@@ -94,7 +100,10 @@ def locked(execution_key, authority=None, timeout=10):
                     raise RetentionHeld('checkout lifecycle lock is busy') from None
                 time.sleep(.02)
         try:
-            descriptor = safe_path(root / (name + '.json'), root, existing=(root / (name + '.json')).exists())
+            descriptor = root/'records-v2'/(name+'.json')
+            if not descriptor.exists() and (root/(name+'.json')).exists():
+                descriptor = root/(name+'.json')
+            descriptor = safe_path(descriptor, root, existing=descriptor.exists())
             yield descriptor
         finally:
             if os.name == 'nt':
@@ -102,6 +111,51 @@ def locked(execution_key, authority=None, timeout=10):
                 msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def _index_ancestors(auth, path):
+    # Monotone markers: tombstones and legacy holds are never pruned. A marker
+    # means at least one registered descendant, regardless of its current state.
+    for ancestor in Path(path).absolute().parents:
+        marker = auth / ('ancestor-' + path_key(ancestor) + '.json')
+        if not marker.exists():
+            atomic_json(marker, {'version': 1, 'path': str(ancestor)})
+
+
+def reconcile_legacy_index(auth, index):
+    stamp = auth.stat().st_mtime_ns
+    for mapping in auth.glob('path-*.json'):
+        if not re.fullmatch(r'path-[a-f0-9]{64}\.json', mapping.name):
+            continue
+        owned = json.loads(mapping.read_text())
+        if mapping.name != 'path-' + path_key(owned['path']) + '.json':
+            raise RetentionHeld('ownership mapping is inconsistent')
+        _index_ancestors(index, owned['path'])
+    if auth.stat().st_mtime_ns != stamp:
+        raise RetentionHeld('legacy registry changed while rebuilding index')
+    atomic_json(index/'complete.json', {'version': 2, 'legacy_mtime_ns': stamp})
+
+
+@contextmanager
+def path_index(authority):
+    """One locked legacy rebuild; subsequent lookups scale with path depth only.
+
+    Publish completeness last. A crash leaves conservative markers and forces a
+    rebuild; allocation and mount checks share this lock so neither misses a path.
+    """
+    auth = Path(authority).absolute()
+    with locked('retention:path-index:v1', auth):
+        index = auth/'paths-v2'
+        complete = index/'complete.json'
+        stamp = json.loads(complete.read_text()) if complete.exists() else None
+        # Legacy writers and permanent compatibility locks allocate in auth.
+        # Registration reconciles that growth; steady mounts reuse existing locks.
+        legacy_stamp = auth.stat().st_mtime_ns
+        if stamp is None or stamp.get('legacy_mtime_ns') != legacy_stamp:
+            reconcile_legacy_index(auth, index)
+        elif stamp.get('version') != 2:
+            raise RetentionHeld('unknown ownership index')
+        yield index
 
 
 @contextmanager
@@ -113,18 +167,31 @@ def allocation(path, root, execution_key, run_id, *, authority=None):
     if auth.is_relative_to(root) or root.is_relative_to(auth):
         raise RetentionHeld('retirement authority overlaps checkout root')
     with locked(execution_key, auth) as location:
-        if location.exists() or path.exists():
-            raise RetentionHeld('checkout identity cannot be reused')
-        record = {'version': 1, 'execution_key': execution_key, 'run_id': run_id,
-                  'root': str(root), 'path': str(path), 'state': 'allocating',
-                  'created_at': time.time(), 'docker_only': True}
-        atomic_json(location, record)
-        mapping = auth / ('path-' + path_key(path) + '.json')
-        if mapping.exists():
-            raise RetentionHeld('checkout path already has an ownership record')
-        atomic_json(mapping, {'execution_key': execution_key, 'path': str(path)})
-        quarantine = root / ('.retired-' + key(execution_key))
-        atomic_json(auth / ('path-' + path_key(quarantine) + '.json'), {'execution_key': execution_key, 'path': str(quarantine)})
+        with path_index(auth) as index:
+            if location.exists() or path.exists():
+                raise RetentionHeld('checkout identity cannot be reused')
+            record = {'version': 1, 'execution_key': execution_key, 'run_id': run_id,
+                      'root': str(root), 'path': str(path), 'state': 'allocating',
+                      'created_at': time.time(), 'docker_only': True}
+            atomic_json(location, record)
+            mapping = index / ('path-' + path_key(path) + '.json')
+            if mapping.exists() or (auth/mapping.name).exists():
+                raise RetentionHeld('checkout path already has an ownership record')
+            _index_ancestors(index, path)
+            atomic_json(mapping, {'execution_key': execution_key, 'path': str(path)})
+            quarantine = root / ('.retired-' + key(execution_key))
+            _index_ancestors(index, quarantine)
+            atomic_json(index / ('path-' + path_key(quarantine) + '.json'), {'execution_key': execution_key, 'path': str(quarantine)})
+            # Old readers still see immutable ownership. A v2 sentinel makes an
+            # old same-key launch/retirement refuse, rather than assume legacy.
+            for owned in (path, quarantine):
+                atomic_json(auth/('path-'+path_key(owned)+'.json'), {'execution_key':execution_key,'path':str(owned)})
+            atomic_json(auth/(key(execution_key)+'.json'), {'version':2,'protocol':'retention-v2-sentinel'})
+            # Compatibility writes share the legacy directory with older
+            # allocators. Reconcile it before accepting the new stamp; taking
+            # just a timestamp here could absorb a concurrent legacy addition.
+            reconcile_legacy_index(auth, index)
+        # A slow clone holds only its own execution lock, never the path index.
         yield
         safe_path(path, root)
         record.update(state='ready', identity=identity(path))
@@ -145,27 +212,24 @@ def worker_mount(path, execution_key, authority=None):
     """Unknown legacy roots cannot be retired; registered roots honor tombstones."""
     auth = Path(authority or authority_root()).absolute()
     mount_path = Path(path).absolute()
-    for mapping in auth.glob('path-*.json'):
-        owned = Path(json.loads(mapping.read_text())['path']).absolute()
-        if owned != mount_path and owned.is_relative_to(mount_path):
+    with locked(execution_key, authority) as location, path_index(auth) as index:
+        if (index / ('ancestor-' + path_key(mount_path) + '.json')).exists():
             raise RetentionHeld('ancestor mount would expose a registered checkout')
-    for candidate in (mount_path, *mount_path.parents):
-        mapping = auth / ('path-' + path_key(candidate) + '.json')
-        if mapping.exists():
-            ownership = json.loads(mapping.read_text())
-            if ownership.get('execution_key') != execution_key:
-                raise RetentionHeld('checkout path belongs to a different execution')
-    with locked(execution_key, authority) as location:
+        for candidate in (mount_path, *mount_path.parents):
+            for directory in (index, auth):
+                mapping = directory / ('path-' + path_key(candidate) + '.json')
+                if mapping.exists():
+                    ownership = json.loads(mapping.read_text())
+                    if ownership.get('execution_key') != execution_key:
+                        raise RetentionHeld('checkout path belongs to a different execution')
         if location.exists():
             record = read(location)
-            # Independent immutable test snapshots use the same execution key,
-            # but are not this retained checkout and are never cleanup candidates.
             original = Path(record['path']).absolute()
             quarantine = Path(record['root']) / ('.retired-' + key(execution_key))
             if mount_path.is_relative_to(original) or mount_path.is_relative_to(quarantine):
                 if record.get('state') != 'ready':
                     raise RetentionHeld('checkout is allocating or irreversibly retired')
-                target = safe_path(path, record['root'])
+                safe_path(path, record['root'])
                 if record['execution_key'] != execution_key or identity(original) != record['identity']:
                     raise RetentionHeld('checkout identity changed')
         yield
@@ -305,8 +369,10 @@ async def inventory(conn, root, *, authority=None, inspect_mounts=docker_mounts)
     """
     root, auth = Path(root).absolute(), Path(authority or authority_root()).absolute()
     records, seen = [], set()
-    for location in sorted(auth.glob('*.json')):
+    for location in sorted([*auth.glob('*.json'), *(auth/'records-v2').glob('*.json')]):
         if not re.fullmatch('[a-f0-9]{64}\\.json', location.name):
+            continue
+        if location.parent == auth and (auth/'records-v2'/location.name).exists():
             continue
         row = {'descriptor': location.name, 'bytes': None, 'age_seconds': None, 'eligible': False}
         try:

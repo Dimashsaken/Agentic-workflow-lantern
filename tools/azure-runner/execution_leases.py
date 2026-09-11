@@ -32,6 +32,8 @@ class Lease:
     execution_id: int | None = None
     parent_fence: int | None = None
     maintenance: bool = False
+    maintenance_parent: int | None = None
+    authority_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -224,6 +226,8 @@ async def read_effect(conn, lease, operation_key):
 
 
 async def begin_effect(conn, lease, operation_key, kind, request, initial_result=None):
+    if lease.maintenance_parent is not None:
+        raise EffectConflict("maintenance fix children cannot publish effects")
     if lease.execution_id is None:
         raise ValueError("effects require an execution lease")
     if not operation_key or not kind:

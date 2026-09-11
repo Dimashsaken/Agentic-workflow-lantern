@@ -14,6 +14,7 @@ import execution_leases as leases
 import github_publication as publication
 
 STAGE = '03-coding.babysit'
+FIX_STAGE = '03-coding.fix'
 
 
 async def joined_thread(function, *args):
@@ -41,6 +42,34 @@ async def joined_thread(function, *args):
             try:
                 await drain(task)
             except Exception:
+                pass
+        raise
+    finally:
+        CURRENT_CANCELLATION.reset(token)
+
+
+async def joined_task(coroutine):
+    """Quiesce model/tool work even when cancellation arrives repeatedly."""
+    from isolated_tools import WorkerCancellation, CURRENT_CANCELLATION
+    cancellation = WorkerCancellation()
+    token = CURRENT_CANCELLATION.set(cancellation)
+    task = asyncio.create_task(coroutine)
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        task.cancel()
+        stopped = asyncio.create_task(asyncio.to_thread(cancellation.stop))
+        for pending in (stopped, task):
+            while not pending.done():
+                try:
+                    await asyncio.shield(pending)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            try:
+                pending.result()
+            except BaseException:
                 pass
         raise
     finally:
@@ -130,6 +159,22 @@ async def acquire(conn, run_id, owner, runner='ec2', ttl=120):
 
 
 async def assert_current(conn, lease):
+    if lease.maintenance_parent is not None:
+        parent = leases.Lease(lease.run_id, lease.owner, lease.parent_fence,
+                              lease.maintenance_parent, maintenance=True)
+        await assert_current(conn, parent)
+        row = await conn.fetchrow('SELECT * FROM stage_executions WHERE id=$1 FOR UPDATE', lease.execution_id)
+        now = await conn.fetchval('SELECT clock_timestamp()')
+        authority = decoded(row['input']) if row else {}
+        if (not row or row['run_id'] != lease.run_id or row['stage'] != FIX_STAGE
+                or row['status'] != 'running' or row['lease_owner'] != lease.owner
+                or row['lease_fence'] != lease.fence or row['lease_expires_at'] is None
+                or row['lease_expires_at'] <= now or not isinstance(authority, dict)
+                or authority.get('maintenance_parent') != parent.execution_id
+                or authority.get('maintenance_fence') != parent.fence
+                or not lease.authority_sha256 or leases.request_hash(authority) != lease.authority_sha256):
+            raise leases.LeaseLost('inherited maintenance fix authority changed')
+        return
     run = await conn.fetchrow('SELECT * FROM runs WHERE id=$1 FOR UPDATE', lease.run_id)
     current = await binding(conn, run)
     child = await conn.fetchrow('SELECT * FROM stage_executions WHERE id=$1 FOR UPDATE', lease.execution_id)
@@ -155,11 +200,91 @@ async def recover(conn):
                     continue
                 except (leases.LeaseLost, publication.PublicationHeld, ValueError, TypeError):
                     pass
+                await conn.execute("UPDATE stage_executions SET status='failed',error='Parent maintenance authority lost',error_class='terminal',lease_owner=NULL,lease_expires_at=NULL,lease_fence=lease_fence+1,finished_at=clock_timestamp() WHERE run_id=$1 AND stage=$2 AND status='running' AND input->>'maintenance_parent'=$3", run['id'], FIX_STAGE, str(row['id']))
                 await conn.execute("UPDATE execution_effects SET status='uncertain',updated_at=clock_timestamp() WHERE stage_execution_id=$1 AND status='intended'", row['id'])
                 await conn.execute("UPDATE stage_executions SET status='failed',error='Maintenance interrupted; reconcile effects before retry',error_class='terminal',lease_owner=NULL,lease_expires_at=NULL,lease_fence=lease_fence+1,finished_at=clock_timestamp() WHERE id=$1", row['id'])
                 await conn.execute("INSERT INTO events(run_id,actor,type,data) VALUES($1,'orchestrator','maintenance_recovered',$2::jsonb)", run['id'], json.dumps({'execution_id': row['id']}))
                 recovered.append(row['id'])
     return recovered
+
+
+async def run_fix(conn, parent, controller, clone, gate, contract, image_id, merge_sha, base_sha):
+    """One child, at most the existing fix budget; no dispatcher lease or push."""
+    import factory
+    import execution_runtime as ownership
+    from pathlib import Path
+    rounds = min(factory.fix_rounds(), 10)
+    if not rounds:
+        raise publication.PublicationHeld('maintenance automatic fix budget is zero')
+    scope = factory.write_scope(parent.run_id)
+    if not scope or contract.get('error'):
+        raise publication.PublicationHeld('maintenance fix needs approved scope and immutable quality policy')
+    async with leases.fenced_transaction(conn, parent):
+        source = decoded(await conn.fetchval('SELECT input FROM stage_executions WHERE id=$1', parent.execution_id))
+        attempt = await conn.fetchval('SELECT coalesce(max(attempt),0)+1 FROM stage_executions WHERE run_id=$1 AND stage=$2', parent.run_id, FIX_STAGE)
+        execution_key = f'{parent.run_id}:{FIX_STAGE}:{attempt}'
+        authority = {'version': 1, 'maintenance_parent': parent.execution_id,
+                     'maintenance_fence': parent.fence, 'binding': source,
+                     'merge_sha': merge_sha, 'base_sha': base_sha, 'quality_sha256': contract['sha256'],
+                     'write_scope': scope, 'max_turns': rounds, 'image_id': image_id}
+        child_id = await conn.fetchval("""INSERT INTO stage_executions
+          (run_id,stage,runner,attempt,idempotency_key,input,lease_owner,lease_fence,lease_expires_at,heartbeat_at)
+          VALUES($1,$2,'host',$3,$4,$5::jsonb,$6,1,clock_timestamp()+interval '120 seconds',clock_timestamp()) RETURNING id""",
+          parent.run_id, FIX_STAGE, attempt, execution_key, json.dumps(authority), parent.owner)
+    child = leases.Lease(parent.run_id, parent.owner, 1, child_id, parent.fence, True, parent.execution_id, leases.request_hash(authority))
+    fix_root = Path(os.environ.get('LANTERN_MAINTENANCE_CHECKOUTS', str(Path.home()/'.lantern/maintenance-checkouts')))
+    fix_clone = fix_root / uuid4().hex
+    def prepare():
+        import review
+        from execution_retention import allocation
+        with allocation(fix_clone, fix_root, execution_key, parent.run_id):
+            result = review._git('clone', '--quiet', '--no-hardlinks', '--config', 'core.autocrlf=false',
+                                 str(clone), str(fix_clone))
+            if result.returncode:
+                raise publication.PublicationHeld('maintenance fix clone failed')
+            # Clone transfers local refs, not the trial's remote tracking refs.
+            # Preserve the already observed merge parent for normal handoff checks.
+            base_ref = 'refs/remotes/origin/' + source['publication_request']['base']
+            result = review._git('update-ref', base_ref, base_sha, cwd=fix_clone)
+            if result.returncode:
+                raise publication.PublicationHeld('maintenance base ref could not be pinned')
+    try:
+        async with leases.lease_guard(controller.connect, child) as guard:
+            token = ownership.STAGE.set(ownership.Ownership(child, guard))
+            output_token = factory.MAINTENANCE_OUTPUT.set(leases.request_hash(execution_key)[:24])
+            try:
+                await joined_thread(prepare)
+                async with leases.fenced_transaction(conn, child):
+                    pass
+                task = ('\n\n## Inherited maintenance regate fix\n'
+                        'Fix only the red regate after the approved base merge. Do not add features, '
+                        'change the quality policy, publish, or change gates. Commit fixes and append '
+                        'a Regate fix report; use append_memory. The host independently revalidates '
+                        'committed source before any publication.\n'
+                        f'Write this execution report under workflow/runs/{parent.run_id}/{factory.exec_dir("03-coding")}/report.md.\n'
+                        + factory.gate_failure_brief(gate))
+                options = {'checkout': fix_clone, 'start_sha': merge_sha, 'image_id': image_id,
+                           'task': task, 'max_rounds': rounds-1, 'authority': authority}
+                async with controller.INPROCESS_STAGE_LOCK:
+                    await joined_task(controller._run_agent_stage(conn, parent.run_id, FIX_STAGE, 'host',
+                                                      (attempt, execution_key, child_id), maintenance_fix=options))
+            finally:
+                factory.MAINTENANCE_OUTPUT.reset(output_token)
+                ownership.STAGE.reset(token)
+    except BaseException as error:
+        # Parent may already be fenced; in that case recovery owns the terminal row.
+        try:
+            async with leases.fenced_transaction(conn, child):
+                await conn.execute("UPDATE stage_executions SET status='failed',error=$2,error_class='terminal',lease_owner=NULL,lease_expires_at=NULL,finished_at=clock_timestamp() WHERE id=$1", child_id, factory.redact(str(error) or type(error).__name__)[:4000])
+        except leases.LeaseLost:
+            pass
+        raise
+    async with leases.fenced_transaction(conn, parent):
+        finished = await conn.fetchrow('SELECT status,input FROM stage_executions WHERE id=$1', child_id)
+        if (not finished or finished['status'] != 'succeeded'
+                or decoded(finished['input']) != authority or factory.write_scope(parent.run_id) != scope):
+            raise publication.PublicationHeld('maintenance child did not complete its bound contract')
+    return fix_clone, execution_key, child_id, scope
 
 
 async def finish(conn, lease, result):
@@ -169,7 +294,7 @@ async def finish(conn, lease, result):
 
 
 async def babysit(conn, run_id, runner, force=False):
-    """Both entry points use this gate. Red regates hold before publication."""
+    """Both entry points share maintenance authority and its bounded fix path."""
     if not enabled():
         raise RuntimeError('babysitting is held: fenced mode is disabled; set LANTERN_FENCED_BABYSIT only for reviewed pilots')
     import pipeline
@@ -187,8 +312,8 @@ async def babysit(conn, run_id, runner, force=False):
 async def run_pass(conn, lease, controller, force=False):
     """Observe an existing PR, trial merge, immutable regate, then conditional push.
 
-    Force affects backoff only. No review, PR creation, notification or agent fix
-    executes here. Red needs a human until inherited fix authority is implemented.
+    Force affects backoff only. Fix children inherit maintenance authority, never
+    dispatcher ownership. Conflicts, exhausted fixes and stale observations hold.
     """
     import review
     import tempfile
@@ -197,10 +322,12 @@ async def run_pass(conn, lease, controller, force=False):
     import tool_execution
     import trusted_evidence
     import factory
+    from execution_retention import allocation
 
     async with leases.fenced_transaction(conn, lease):
         row = await conn.fetchrow('SELECT input FROM stage_executions WHERE id=$1', lease.execution_id)
         snapshot = decoded(row['input'])
+        execution_key = await conn.fetchval('SELECT idempotency_key FROM stage_executions WHERE id=$1', lease.execution_id)
         approved = snapshot['publication_request']
     # Freeze fresh base but require the approved head (or a previously accepted
     # maintenance receipt) so a third-party branch edit cannot inherit approval.
@@ -228,7 +355,13 @@ async def run_pass(conn, lease, controller, force=False):
             raise publication.PublicationHeld('provider moved before up-to-date acceptance')
         return {'outcome': 'up_to_date', 'head_sha': expected, 'base_sha': base_sha,
                 'approval_request_sha256': leases.request_hash(approved)}
-    trial = await asyncio.to_thread(review.trial_merge, mirror, approved['base'], approved['branch'], lease.run_id, (controller.GIT_AUTHOR_NAME, controller.GIT_AUTHOR_EMAIL))
+    checkout_root = Path(os.environ.get('LANTERN_MAINTENANCE_CHECKOUTS', str(Path.home()/'.lantern/maintenance-checkouts')))
+    trial_path = checkout_root / uuid4().hex
+    def prepare_trial():
+        with allocation(trial_path, checkout_root, execution_key, lease.run_id):
+            return review.trial_merge(mirror, approved['base'], approved['branch'], lease.run_id,
+                                      (controller.GIT_AUTHOR_NAME, controller.GIT_AUTHOR_EMAIL), clone=trial_path)
+    trial = await joined_thread(prepare_trial)
     clone = Path(trial['clone'])
     if trial.get('base_sha') != base_sha:
         raise publication.PublicationHeld('trial base moved during mirror clone')
@@ -240,21 +373,49 @@ async def run_pass(conn, lease, controller, force=False):
     # only the retention protocol may retire it after worker quiescence.
     if not trial['clean']:
         return {'outcome': 'conflict', 'files': trial['files']}
+    image_id = None
+    contract = factory.quality_config(clone)
+    final_sha = trial['merge_sha']
+    fixed_scope = None
     def regate():
+        nonlocal image_id
         with tempfile.TemporaryDirectory(prefix='lantern-maintenance-output-') as media:
-            worker = IsolatedToolWorker(clone, Path(media), f'{lease.run_id}:{STAGE}:{lease.execution_id}', controller.SANDBOX_IMAGE)
+            worker = IsolatedToolWorker(clone, Path(media), execution_key, image_id or controller.SANDBOX_IMAGE)
             token = tool_execution.CURRENT.set(worker)
             try:
                 worker._pin_image()
-                with trusted_evidence.quality_snapshot(clone) as snapshot, snapshot.bind():
-                    return review.regate_local(snapshot.root, lease.run_id, f'{lease.run_id}:{STAGE}:{lease.execution_id}')
+                image_id = worker.image_id
+                if fixed_scope is not None:
+                    changes = factory.changed_files_since(clone, trial['merge_sha'])
+                    if factory.check_write_scope(lease.run_id, changes, scope=fixed_scope):
+                        raise publication.PublicationHeld('maintenance fix changed scope or quality policy')
+                with trusted_evidence.quality_snapshot(clone) as frozen, frozen.bind():
+                    if frozen.before['head_sha'] != final_sha or factory.quality_config(frozen.root) != contract:
+                        raise publication.PublicationHeld('maintenance source or quality policy changed')
+                    result = review.regate_local(frozen.root, lease.run_id, execution_key)
+                if trusted_evidence.capture_before(clone) != frozen.before:
+                    raise publication.PublicationHeld('maintenance source changed while regating')
+                return {**result, 'source': frozen.before, 'image_id': image_id}
             finally:
                 worker.stop()
                 tool_execution.CURRENT.reset(token)
     gate = await joined_thread(regate)
+    fix_id = None
     if gate.get('passed') is not True:
-        return {'outcome': 'regate_red', 'fix': 'held: inherited maintenance fix authority is not enabled'}
-    request = {**approved, 'base_sha': base_sha, 'head_sha': trial['merge_sha'], 'expected_remote_sha': expected}
+        clone, execution_key, fix_id, fixed_scope = await run_fix(conn, lease, controller, clone, gate, contract, image_id, final_sha, base_sha)
+        # Never trust the child's green result for publication; recheck commits,
+        # the original policy/scope and a fresh immutable snapshot after quiescence.
+        async with leases.fenced_transaction(conn, lease):
+            pass
+        final_sha = review._sha('HEAD', clone)
+        if not review._is_ancestor(trial['merge_sha'], final_sha, clone) or final_sha == trial['merge_sha']:
+            raise publication.PublicationHeld('maintenance fix must add commits to the trial merge')
+        if factory.quality_config(clone) != contract:
+            raise publication.PublicationHeld('maintenance fix changed scope or quality policy')
+        gate = await joined_thread(regate)
+        if gate.get('passed') is not True:
+            return {'outcome': 'regate_red', 'fix_execution_id': fix_id, 'gate': gate}
+    request = {**approved, 'base_sha': base_sha, 'head_sha': final_sha, 'expected_remote_sha': expected}
     key = 'maintenance:' + leases.request_hash(request)
     effect = await leases.begin_effect(conn, lease, key, 'maintenance_branch', request, {'publication_request': request})
     observed = await asyncio.to_thread(publication.observe, controller._gh_api, request)
@@ -271,4 +432,5 @@ async def run_pass(conn, lease, controller, force=False):
     if result['pr_number'] != snapshot['pr_number']:
         raise publication.PublicationHeld('PR identity changed after maintenance publication')
     await leases.confirm_effect(conn, lease, key, result['pr_url'], result)
-    return {**result, 'outcome': 'updated', 'approval_request_sha256': leases.request_hash(approved)}
+    return {**result, 'outcome': 'updated', 'approval_request_sha256': leases.request_hash(approved),
+            'fix_execution_id': fix_id, 'gate': gate}

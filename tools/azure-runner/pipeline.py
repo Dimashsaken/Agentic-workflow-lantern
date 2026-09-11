@@ -337,7 +337,7 @@ async def record_usage(conn, exec_id: int, usage: dict, model: str | None = None
     """Write one execution's token counts onto its stage_executions row (host-side)."""
     if not usage:
         return
-    if ownership.enabled():
+    if ownership.enabled() or ownership.STAGE.get() is not None:
         current = ownership.STAGE.get()
         if current is None or current.lease.execution_id != exec_id:
             raise ownership.leases.LeaseLost("usage does not belong to the bound execution")
@@ -426,18 +426,20 @@ def est_cost_rows(rows) -> float:
 async def insert_artifact(conn, run_id: str, stage: str, kind: str, uri: str,
                           metadata: dict | None = None) -> None:
     metadata = dict(metadata or {})
-    if ownership.enabled():
-        parent, child = ownership.RUN.get(), ownership.STAGE.get()
-        if parent is None or parent.lease.run_id != run_id:
+    child = ownership.STAGE.get()
+    inherited = bool(child and child.lease.maintenance_parent)
+    fenced = ownership.enabled() or inherited
+    if fenced:
+        parent = ownership.RUN.get()
+        if not inherited and (parent is None or parent.lease.run_id != run_id):
             raise ownership.leases.LeaseLost("artifact has no matching run ownership")
         if child is not None:
             if child.lease.run_id != run_id:
                 raise ownership.leases.LeaseLost("artifact execution belongs to another run")
-            metadata.update(stage_execution_id=child.lease.execution_id,
-                            lease_fence=child.lease.fence)
-    async with ownership.mutation(conn, stage=ownership.enabled() and ownership.STAGE.get() is not None):
-        if ownership.enabled() and ownership.STAGE.get() is not None:
-            actual_stage = await conn.fetchval("SELECT stage FROM stage_executions WHERE id=$1", ownership.STAGE.get().lease.execution_id)
+            metadata.update(stage_execution_id=child.lease.execution_id, lease_fence=child.lease.fence)
+    async with ownership.mutation(conn, stage=fenced and child is not None):
+        if fenced and child is not None:
+            actual_stage = await conn.fetchval("SELECT stage FROM stage_executions WHERE id=$1", child.lease.execution_id)
             if not actual_stage or factory.stage_dir(actual_stage) != factory.stage_dir(stage):
                 raise ownership.leases.LeaseLost("artifact stage differs from its owned execution")
         await conn.execute(
@@ -554,7 +556,18 @@ async def run_agent_stage(conn, run_id: str, stage: str, runner: str) -> None:
             await _run_agent_stage(conn, run_id, stage, runner, execution)
 
 
-async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution=None) -> None:
+async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution=None, *, maintenance_fix=None) -> None:
+    if maintenance_fix is not None:
+        bound = ownership.STAGE.get()
+        if factory.write_scope(run_id) != maintenance_fix["authority"]["write_scope"]:
+            raise RuntimeError("maintenance plan changed before the fix")
+        if (not bound or not bound.lease.maintenance_parent or stage != "03-coding.fix"
+                or execution is None or bound.lease.execution_id != execution[2]):
+            raise ownership.leases.LeaseLost("maintenance fix lacks inherited child authority")
+        async with ownership.leases.fenced_transaction(conn, bound.lease):
+            stored = await conn.fetchval('SELECT input FROM stage_executions WHERE id=$1', execution[2])
+            if (json.loads(stored) if isinstance(stored, str) else stored) != maintenance_fix['authority']:
+                raise ownership.leases.LeaseLost("maintenance fix authority differs from durable input")
     role = role_for_stage(stage)                      # D18: '03-coding.<x>' is coding
     sdir = STAGE_DIR.get(stage) or factory.stage_dir(stage)   # D18: builder keys are dynamic
     if execution is not None:
@@ -577,6 +590,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
     worker_token = None
     durable = None
     accepted_provenance = None
+    qa_capture = None
     try:
         await log_event(conn, run_id, "orchestrator", "stage_started",
                         {"stage": stage, "attempt": attempt, "runner": runner})
@@ -597,7 +611,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
                                " [--working-branch …]` or in Mission Control at "
                                f"/run/{run_id}/repo")
         if repo:
-            checkout = await asyncio.to_thread(product_checkout, repo, branch, run_id, work, execution_key)
+            checkout = maintenance_fix["checkout"] if maintenance_fix else await asyncio.to_thread(product_checkout, repo, branch, run_id, work, execution_key)
             os.environ["LANTERN_PRODUCT_DIR"] = str(checkout)
             os.environ["LANTERN_PRODUCT_ORIGIN"], os.environ["LANTERN_PRODUCT_BRANCH"] = repo, branch
             # D15: EVERY stage learns the working branch, not just coding — that is what
@@ -605,11 +619,15 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
             os.environ["LANTERN_PRODUCT_WORK_BRANCH"] = work
             if role == "coding":       # D14: writable, on the run's branch, bot identity (D19: role_for_stage maps 03-coding.fix to coding, so a fix execution is writable here too; 03-coding.review is not)
                 start = await asyncio.to_thread(prepare_coding_checkout, checkout, work)
+                if maintenance_fix and start != maintenance_fix["start_sha"]:
+                    raise RuntimeError("maintenance fix checkout is not the exact trial merge")
                 os.environ["LANTERN_CODING_BRANCH"] = work
                 os.environ["LANTERN_CODING_START_SHA"] = start
                 os.environ["LANTERN_PRODUCT_WRITABLE"] = "1"
                 if builders.name_for(stage):   # D18: which builder this execution is
                     os.environ["LANTERN_BUILDER"] = builders.name_for(stage)
+        import qa_execution
+        qa_capture = await qa_execution.capture_stage(conn, run_id, stage)
         session = SQLAlchemySession.from_url(f"{run_id}:{stage}", url=db_urls()[0], create_tables=True)
 
         problem = check_stage_inputs(run_id, stage)
@@ -623,7 +641,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
             from isolated_tools import IsolatedToolWorker
             media = REPO / "workflow/runs" / run_id / sdir / "media" / hashlib.sha256(execution_key.encode()).hexdigest()[:16]
             media.mkdir(parents=True, exist_ok=True)
-            worker = IsolatedToolWorker(checkout, media, execution_key, SANDBOX_IMAGE,
+            worker = IsolatedToolWorker(checkout, media, execution_key, maintenance_fix["image_id"] if maintenance_fix else SANDBOX_IMAGE,
                                         writable_product=role == "coding",
                                         protected_roots=[Path(__file__).parent])
             await asyncio.to_thread(worker.start)
@@ -643,7 +661,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
             name=role,
             model=selected_model,
             model_settings=model_settings_for(role, stage),
-            instructions=build_instructions(role, run_id, stage),
+            instructions=build_instructions(role, run_id, stage) + (maintenance_fix["task"] if maintenance_fix else ""),
             tools=stage_tools(role, run_id, stage, execution_key, paper),
             mcp_servers=mcp_servers,
         )
@@ -673,7 +691,8 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
             results, gate = await factory.coding_turns(
                 run_turn, kickoff, run_id=run_id, stage=stage,
                 root=Path(os.environ["LANTERN_PRODUCT_DIR"]), execution_key=execution_key,
-                since_sha=os.environ.get("LANTERN_CODING_START_SHA") or None)
+                since_sha=os.environ.get("LANTERN_CODING_START_SHA") or None,
+                **({"max_rounds": maintenance_fix["max_rounds"], "gate_in_thread": True} if maintenance_fix else {}))
             print(f"[{run_id}] quality gate {'green' if gate['passed'] else 'RED'} after "
                   f"{gate['round']} fix round(s)")
         else:
@@ -748,8 +767,9 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
                                 "LANTERN_CODING_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
                         os.environ.pop(var, None)   # cleanup even if ledger or MCP fails
 
-    await upload_stage_media(conn, run_id, sdir, execution_key,
-                             **({"media_root": worker.output_root} if worker else {}))
+    if not maintenance_fix and qa_capture is None:
+        await upload_stage_media(conn, run_id, sdir, execution_key,
+                                 **({"media_root": worker.output_root} if worker else {}))
 
     # D18: a builder's report is in its own subdir — point the artifact row at the file
     # that exists, not at the stage report the integrator will write later.
@@ -763,7 +783,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
         await register_design_artifacts(conn, run_id, sdir)
     async with ownership.mutation(conn, stage=True, finish=True):
         await conn.execute(
-            "UPDATE stage_executions SET status = 'succeeded', output = $1, finished_at = now() WHERE id = $2",
+            "UPDATE stage_executions SET status = 'succeeded', output = coalesce(output,'{}'::jsonb) || $1::jsonb, finished_at = now() WHERE id = $2",
             json.dumps({"final_output": final[-4000:], "report": report,
                         "provenance": accepted_provenance,
                         "diagnostics": str(durable.path) if durable else None}), exec_id,

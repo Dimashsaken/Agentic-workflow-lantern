@@ -32,6 +32,7 @@ class Gateway:
         self.total = 0
         self.clients = set()
         self.deadlines = {}
+        self.connect_deadlines = {}
 
     @fail_closed
     def running(self):
@@ -70,9 +71,9 @@ class Gateway:
     def tls_clienthello(self, data):
         tunnel = self.tunnels.get(data.context.client.id)
         sni = data.client_hello.sni
-        if (not tunnel or sni != tunnel[0] or any(p != b'http/1.1' for p in data.client_hello.alpn_protocols)):
-            data.context.client.error = 'QA TLS identity refused'
-            return
+        if (not tunnel or sni != tunnel[0] or any(p != b'http/1.1' for p in data.client_hello.alpn_protocols)
+                or any(kind == 0xfe0d for kind, _ in data.client_hello.extensions)):
+            raise TransportHeld('QA TLS identity refused')
         data.establish_server_tls_first = False
 
     @fail_closed
@@ -86,31 +87,47 @@ class Gateway:
         names = headers.get_all('host')
         if (len(names) != 1 or flow.request.http_version != 'HTTP/1.1'
                 or flow.request.scheme != 'https' or flow.request.host != host or flow.request.port != port
+                or flow.request.authority
                 or headers.get('upgrade') or headers.get('transfer-encoding')
                 or headers.get('content-encoding') or len(headers.get_all('content-length')) > 1
                 or sum(len(k)+len(v) for k, v in headers.fields) > 65536):
             flow.kill()
             return
         target = self.policy.permit(host, port, flow.client_conn.sni, names[0])
-        # Server address is numeric and SNI retains hostname certificate validation.
-        flow.server_conn.address = (target.addresses[0], port)
-        flow.server_conn.sni = host
+        # Keep the tunnel context hostname unchanged. The actual replacement
+        # server socket is pinned by server_connect after this mandatory permit.
         self.permits[flow.client_conn.id] = (host, port, target.addresses[0], target.expires_at)
         flow.request.stream = False
 
     @fail_closed
     def server_connect(self, data):
         permit = self.permits.get(data.client.id)
-        if (not permit or time.time() >= permit[3] or data.server.address != (permit[2], permit[1])
+        if (not permit or time.time() >= permit[3]
+                or data.server.address not in ((permit[0], permit[1]), (permit[2], permit[1]))
                 or data.server.sni != permit[0]):
             data.server.error = 'missing QA connection permit'
+            return
+        # HttpLayer may replace flow.server_conn after requestheaders. Pin the
+        # actual socket here, after checking its original name and live permit.
+        data.server.address = (permit[2], permit[1])
+        data.server.sni = permit[0]
+        self.connect_deadlines[data.server.id] = asyncio.get_running_loop().call_later(10, os._exit, 73)
 
     @fail_closed
     def server_connected(self, data):
+        timer = self.connect_deadlines.pop(data.server.id, None)
+        if timer:
+            timer.cancel()
         permit = self.permits[data.client.id]
         if not data.server.peername or data.server.peername[:2] != (permit[2], permit[1]):
             data.server.error = 'QA peer identity differs'
             raise TransportHeld('peer mismatch')
+
+    @fail_closed
+    def server_connect_error(self, data):
+        timer = self.connect_deadlines.pop(data.server.id, None)
+        if timer:
+            timer.cancel()
 
     @fail_closed
     def request(self, flow):

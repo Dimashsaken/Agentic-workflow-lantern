@@ -30,8 +30,8 @@ def main():
             '-s', '/opt/gateway/policy.py', '--set', 'confdir=/tmp/qa-ca']
     for option in ('connection_strategy=lazy', 'upstream_cert=false', 'ssl_insecure=false', 'http2=false',
                    'http3=false', 'websocket=false', 'rawtcp=false', 'onboarding=false',
-                   'validate_inbound_headers=true', 'body_size_limit=8m', 'stream_large_bodies=',
-                   'connect_timeout=10', 'tcp_timeout=30', 'flow_detail=0'):
+                   'validate_inbound_headers=true', 'body_size_limit=8m',
+                   'tcp_timeout=30', 'flow_detail=0'):
         args.extend(['--set', option])
     os.execv(args[0], args)
 

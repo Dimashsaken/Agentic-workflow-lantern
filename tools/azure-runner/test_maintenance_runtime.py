@@ -86,6 +86,30 @@ class Binding(unittest.IsolatedAsyncioTestCase):
             await task
         self.assertTrue(stopped.is_set())
 
+    async def test_repeated_cancel_joins_inherited_task(self):
+        from isolated_tools import CURRENT_CANCELLATION
+        started, stopped, completed = asyncio.Event(), threading.Event(), asyncio.Event()
+        async def work():
+            class Worker:
+                def stop(self):
+                    stopped.set()
+            CURRENT_CANCELLATION.get().register(Worker())
+            started.set()
+            try:
+                await asyncio.Future()
+            finally:
+                await asyncio.sleep(.05)
+                completed.set()
+        task = asyncio.create_task(maintenance.joined_task(work()))
+        await started.wait()
+        task.cancel()
+        await asyncio.sleep(.01)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(completed.is_set())
+        self.assertTrue(stopped.is_set())
+
 
 @unittest.skipUnless(os.environ.get('LANTERN_TEST_MAINTENANCE_DB') == '1', 'opt-in disposable PostgreSQL maintenance proof')
 class Postgres(unittest.IsolatedAsyncioTestCase):
@@ -174,8 +198,41 @@ class Postgres(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dict(await self.conn.fetchrow('SELECT * FROM runs')), self.run_before)
         self.assertIsNotNone(await leases.acquire_run(self.other, REQUEST['run_id'], 'dispatcher'))
 
+    async def test_inherited_fix_is_fenced_without_dispatcher_mode(self):
+        import execution_runtime as ownership
+        parent = await self.claim()
+        source = json.loads(await self.conn.fetchval('SELECT input FROM stage_executions WHERE id=$1', parent.execution_id))
+        child_input = {'maintenance_parent': parent.execution_id, 'maintenance_fence': parent.fence, 'binding': source}
+        child_id = await self.conn.fetchval("INSERT INTO stage_executions(run_id,stage,runner,attempt,idempotency_key,input,lease_owner,lease_fence,lease_expires_at) VALUES($1,'03-coding.fix','test',1,'fix-child',$2::jsonb,$3,1,clock_timestamp()+interval '60 seconds') RETURNING id", parent.run_id, json.dumps(child_input), parent.owner)
+        child = leases.Lease(parent.run_id,parent.owner,1,child_id,parent.fence,True,parent.execution_id,leases.request_hash(child_input))
+        token = ownership.STAGE.set(ownership.Ownership(child, None))
+        try:
+            with patch.dict(os.environ, {'LANTERN_EXECUTION_LEASES': '0'}):
+                async with ownership.mutation(self.conn,stage=True):
+                    await self.conn.execute("UPDATE stage_executions SET output='{}' WHERE id=$1",child_id)
+                await self.other.execute("UPDATE approvals SET decision_note='new approval binding'")
+                with self.assertRaises(leases.LeaseLost):
+                    async with ownership.mutation(self.conn,stage=True):
+                        self.fail('stale inherited fix wrote')
+        finally:
+            ownership.STAGE.reset(token)
+        self.assertEqual(await maintenance.recover(self.conn),[parent.execution_id])
+        self.assertEqual(await self.conn.fetchval('SELECT status FROM stage_executions WHERE id=$1', child_id),'failed')
+        self.assertEqual(dict(await self.conn.fetchrow('SELECT * FROM runs')), self.run_before)
+
     @unittest.skipUnless(os.environ.get('LANTERN_TEST_MAINTENANCE_DOCKER') == '1', 'opt-in actual Docker/Git maintenance pass')
     async def test_actual_trial_immutable_regate_and_conditional_local_push(self):
+        await self.actual_pass()
+
+    @unittest.skipUnless(os.environ.get('LANTERN_TEST_MAINTENANCE_DOCKER') == '1', 'opt-in actual Docker/Git maintenance fix')
+    async def test_actual_red_regate_inherited_fix_and_revalidation(self):
+        await self.actual_pass(fix=True)
+
+    @unittest.skipUnless(os.environ.get('LANTERN_TEST_MAINTENANCE_DOCKER') == '1', 'opt-in actual Docker/Git policy rejection')
+    async def test_actual_fix_policy_change_prevents_publication(self):
+        await self.actual_pass(fix=True, policy_attack=True)
+
+    async def actual_pass(self, fix=False, policy_attack=False):
         def git(*args, cwd=None):
             return subprocess.run(['git', *args], cwd=cwd, capture_output=True, text=True, timeout=30)
         with tempfile.TemporaryDirectory(prefix='lantern-maintenance-proof-') as temporary:
@@ -188,7 +245,7 @@ class Postgres(unittest.IsolatedAsyncioTestCase):
             checked('init', '-q', '-b', 'main', str(work), cwd=root)
             checked('config', 'user.name', 'Disposable Test')
             checked('config', 'user.email', 'fixture@example.invalid')
-            (work/'lantern.toml').write_text('[quality]\ntest = "python3 -c \'print(123)\'"\n')
+            (work/'lantern.toml').write_text('[quality]\ntest = "test ! -f expected.txt || cmp feature.txt expected.txt"\n')
             checked('add', '.')
             checked('commit', '-qm', 'initial')
             original_base = checked('rev-parse', 'HEAD')
@@ -199,6 +256,8 @@ class Postgres(unittest.IsolatedAsyncioTestCase):
             approved_head = checked('rev-parse', 'HEAD')
             checked('checkout', '-q', 'main')
             (work/'base.txt').write_text('new base')
+            if fix:
+                (work/'expected.txt').write_text('updated feature')
             checked('add', '.')
             checked('commit', '-qm', 'base advances')
             new_base = checked('rev-parse', 'HEAD')
@@ -226,10 +285,45 @@ class Postgres(unittest.IsolatedAsyncioTestCase):
             controller = SimpleNamespace(_gh_api=provider, sync_product_mirror=lambda repo: mirror,
                 GIT_AUTHOR_NAME='Disposable Test', GIT_AUTHOR_EMAIL='fixture@example.invalid',
                 SANDBOX_IMAGE='lantern-sandbox:agentic-infrastructure', _git=publisher, _authed=lambda repo: str(mirror))
+            import asyncpg
+            import execution_runtime as ownership
+            import factory
+            async def connect():
+                return await asyncpg.connect(**self.params,database=self.database)
+            async def scripted_fix(conn, run_id, stage, runner, execution, *, maintenance_fix):
+                # Simulated model decision; the inherited authority, Git commits,
+                # immutable Docker revalidation and CAS publication are real.
+                child = ownership.STAGE.get().lease
+                self.assertTrue(child.maintenance_parent)
+                self.assertEqual(maintenance_fix['max_rounds'],2)
+                target = maintenance_fix['checkout']
+                (target/'feature.txt').write_text('updated feature')
+                if policy_attack:
+                    (target/'lantern.toml').write_text('[quality]\ntest = "true"\n')
+                checked('add','.',cwd=target)
+                checked('-c','user.name=Test','-c','user.email=test@example.invalid','commit','-qm','scripted fix',cwd=target)
+                async with ownership.mutation(conn,stage=True,finish=True):
+                    await conn.execute("UPDATE stage_executions SET status='succeeded',finished_at=clock_timestamp() WHERE id=$1",child.execution_id)
+            controller.connect=connect
+            controller._run_agent_stage=scripted_fix
+            controller.INPROCESS_STAGE_LOCK=asyncio.Lock()
             lease = await self.claim()
             await leases.renew(self.other, lease, ttl=600)
-            with patch.dict(os.environ, {'LANTERN_ISOLATED_TOOLS': '1'}):
+            with patch.dict(os.environ, {'LANTERN_ISOLATED_TOOLS': '1', 'LANTERN_FIX_ROUNDS':'3',
+                                        'LANTERN_MAINTENANCE_CHECKOUTS':str(root/'retained'),
+                                        'LANTERN_RETENTION_AUTHORITY':str(root/'authority')}), patch.object(factory,'write_scope',return_value=['feature.txt']):
+                if policy_attack:
+                    with self.assertRaisesRegex(maintenance.publication.PublicationHeld,'scope or quality policy'):
+                        await maintenance.run_pass(self.conn,lease,controller)
+                    self.assertEqual(writes,[])
+                    self.assertEqual(await self.conn.fetch('SELECT * FROM approvals'),before)
+                    return
                 result = await maintenance.run_pass(self.conn, lease, controller)
+                if fix:
+                    self.assertIsNotNone(result['fix_execution_id'])
+                    self.assertEqual(await self.conn.fetchval('SELECT status FROM stage_executions WHERE id=$1',result['fix_execution_id']),'succeeded')
+                mappings=list((root/'authority'/'paths-v2').glob('path-*.json'))
+                self.assertGreaterEqual(len(mappings), 4 if fix else 2)
             self.assertEqual(result['outcome'], 'updated')
             self.assertEqual(len(writes), 1)
             self.assertEqual(checked('rev-parse', 'refs/heads/main', cwd=mirror), new_base)
