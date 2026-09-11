@@ -172,6 +172,14 @@ instance size.
 network + nftables or a proxy; must land before any stage touches untrusted
 third-party input) — see D12.
 
+## The first product run — `infra/ec2/tender-playbook.sh`
+
+One command per human step for carrying `feat-20260911-tender-onboarding` (the Tender
+WhatsApp assistant, product branch `product/tender-whatsapp`) through the pipeline:
+`deploy` (fetch the branch, migrate, lint, restart the services), `start` (create the
+run), `status`, `serve dev|staging <branch>` (run Tender for stages 4 and 7 on the
+docker bridge and register it with the daemon), `approve <gate>`. Gates stay human.
+
 ## Postgres + the pipeline daemon (docs/ORCHESTRATION.md)
 
 ```bash

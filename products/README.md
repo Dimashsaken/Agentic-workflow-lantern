@@ -17,3 +17,5 @@ git push https://github.com/Dimashsaken/tender-whatsapp product/tender-whatsapp:
 then update the three briefs' `Product repo:` / `Base branch:` lines (or an existing run
 with `pipeline.py set-product <run-id> --repo <url> --branch main`) and delete the
 `product/tender-whatsapp` branch here. A product never lives inside the factory for long.
+
+On the box, `bash infra/ec2/tender-playbook.sh` runs the whole thing step by step.
