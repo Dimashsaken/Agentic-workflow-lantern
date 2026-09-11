@@ -26,6 +26,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 import subprocess
@@ -2077,6 +2078,83 @@ def load_ssm_qa_env() -> tuple[list[str], list[str]]:
     return loaded, missing
 
 
+def set_qa_target(env_file: Path, role: str, base_url: str, user: str = "",
+                  password: str = "", rotate: bool = False) -> dict:
+    """Write one QA target (`LANTERN_QA_<DEV|STAGING>_{BASE_URL,USER,PASS}`) into an
+    env file, in place, without printing a value.
+
+    Why a command and not three `sed`s in a playbook: the daemon reads `.env` at start
+    and SSM only fills names that are still unset (`load_ssm_qa_env`), so whatever this
+    file says IS the stage-4/7 target. The first Tender run found the box's `.env` still
+    carrying the dogfood-era `qa-dev` user for the Mission Control target; a playbook
+    that only appended missing names would have pointed QA at Tender with a login that
+    cannot exist there. Rules: the URL is always replaced; a new `user` replaces the old
+    one and, because the credential pair belongs to one account on one app, regenerates
+    the password unless one is given; an unchanged user keeps its password unless
+    `rotate`; a missing password is always generated. Other lines, their order and
+    comments are preserved; duplicate definitions collapse to one.
+    Returns {"prefix", "base_url", "user", "password_changed", "created"}.
+    """
+    prefix = QA_TARGET_PREFIX.get(role)
+    if not prefix:
+        raise ValueError(f"role must be one of {', '.join(sorted(QA_TARGET_PREFIX))} — got '{role}'")
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError(f"base url must start with http:// or https:// — got '{base_url}'")
+    names = {"url": prefix + "_BASE_URL", "user": prefix + "_USER", "pass": prefix + "_PASS"}
+    env_file = Path(env_file)
+    created = not env_file.exists()
+    lines = env_file.read_text(encoding="utf-8").splitlines() if not created else []
+
+    def current(name: str) -> str:
+        vals = [ln.split("=", 1)[1] for ln in lines if ln.startswith(name + "=")]
+        return vals[-1].strip() if vals else ""     # dotenv semantics: the last one wins
+
+    old_user, old_pass = current(names["user"]), current(names["pass"])
+    new_user = user.strip() or old_user
+    if password:
+        new_pass, changed = password, password != old_pass
+    elif rotate or not old_pass or (user.strip() and new_user != old_user):
+        new_pass, changed = secrets.token_urlsafe(12), True
+    else:
+        new_pass, changed = old_pass, False
+    wanted = {names["url"]: base_url.strip(), names["user"]: new_user, names["pass"]: new_pass}
+
+    out, done = [], set()
+    for ln in lines:
+        key = ln.split("=", 1)[0] if "=" in ln and not ln.lstrip().startswith("#") else None
+        if key in wanted:
+            if key not in done:                       # first definition wins the slot…
+                out.append(f"{key}={wanted[key]}")
+                done.add(key)
+            continue                                  # …later duplicates are dropped
+        out.append(ln)
+    for key in (names["url"], names["user"], names["pass"]):
+        if key not in done:
+            out.append(f"{key}={wanted[key]}")
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+    env_file.write_text("\n".join(out) + "\n", encoding="utf-8")
+    if created and os.name != "nt":
+        os.chmod(env_file, 0o600)
+    return {"prefix": prefix, "base_url": wanted[names["url"]], "user": new_user,
+            "password_changed": changed, "created": created}
+
+
+def cmd_qa_target(role: str, base_url: str, user: str, password: str, rotate: bool,
+                  env_file: str) -> None:
+    path = Path(env_file) if env_file else Path(__file__).parent / ".env"
+    try:
+        r = set_qa_target(path, role, base_url, user, password, rotate)
+    except ValueError as e:
+        sys.exit(str(e))
+    pw = "regenerated — sign the account up (again) on the target" if r["password_changed"] else "kept"
+    print(f"{role} target → {path}{' (created)' if r['created'] else ''}\n"
+          f"  {r['prefix']}_BASE_URL  {r['base_url']}\n"
+          f"  {r['prefix']}_USER      {r['user'] or '(unset — pass --user)'}\n"
+          f"  {r['prefix']}_PASS      {pw}\n"
+          "The daemon reads this file at start: restart lantern-orchestrator when no stage "
+          "is executing, then `pipeline.py qa-preflight --stage " + role + "` must print READY.")
+
+
 async def cmd_qa_preflight(role: str) -> None:
     """Can a QA stage actually reach its target? Answer before burning a stage run.
 
@@ -2614,6 +2692,14 @@ def main() -> None:
     p.add_argument("--note", default="")
     p = sub.add_parser("qa-preflight", help="can a QA stage reach its target, from the sandbox?")
     p.add_argument("--stage", choices=sorted(QA_TARGET_PREFIX), default="qa-dev")
+    p = sub.add_parser("qa-target", help="point a QA stage at a running app: write its URL, user "
+                                         "and password into .env (values never printed)")
+    p.add_argument("stage", choices=sorted(QA_TARGET_PREFIX))
+    p.add_argument("--base-url", required=True, help="as a sandbox container reaches it, e.g. http://172.17.0.1:8000")
+    p.add_argument("--user", default="", help="the QA account's login; a changed user regenerates the password")
+    p.add_argument("--pass", dest="password", default="", help="use this password instead of generating one")
+    p.add_argument("--rotate-pass", action="store_true", help="generate a new password even for an unchanged user")
+    p.add_argument("--env-file", default="", help="default: tools/azure-runner/.env")
     p = sub.add_parser("status"); p.add_argument("--json", action="store_true")
     sub.add_parser("agents")
     p = sub.add_parser("ask"); p.add_argument("role"); p.add_argument("prompt")
@@ -2682,6 +2768,7 @@ def main() -> None:
         case "rework":  asyncio.run(cmd_rework(a.run_id, a.to, a.by, a.note))
         case "status":  asyncio.run(cmd_status(a.json))
         case "qa-preflight":  asyncio.run(cmd_qa_preflight(a.stage))
+        case "qa-target":     cmd_qa_target(a.stage, a.base_url, a.user, a.password, a.rotate_pass, a.env_file)
         case "agents":  asyncio.run(cmd_agents())
         case "ask":     asyncio.run(cmd_ask(a.role, a.prompt, a.session, a.by,
                                             a.new, a.interactive, a.no_browser))

@@ -96,14 +96,12 @@ UNIT
   for i in $(seq 1 20); do curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1 && break; sleep 1; done
   curl -fsS "http://127.0.0.1:$port/healthz" && echo
   say "telling the daemon where QA finds it (containers reach the host at $BRIDGE_IP)"
-  local envf=$RUNNER/.env
-  grep -q "^${prefix}_BASE_URL=" "$envf" && sed -i "s#^${prefix}_BASE_URL=.*#${prefix}_BASE_URL=http://$BRIDGE_IP:$port#" "$envf" || echo "${prefix}_BASE_URL=http://$BRIDGE_IP:$port" >> "$envf"
-  grep -q "^${prefix}_USER=" "$envf" || echo "${prefix}_USER=qa@tender.test" >> "$envf"
-  grep -q "^${prefix}_PASS=" "$envf" || echo "${prefix}_PASS=$(head -c 12 /dev/urandom | base64 | tr -d '/+=')" >> "$envf"
-  echo "   ${prefix}_BASE_URL=http://$BRIDGE_IP:$port  (+ _USER/_PASS in $envf)"
-  echo "   Sign that account up once at http://<box>:$port/signup so the QA agent can log in,"
+  # qa-target replaces the URL, sets the Tender QA login and regenerates the password when
+  # the user changes (the box .env still carried the dogfood-era Mission Control login).
+  (cd "$RUNNER" && "$PY" pipeline.py qa-target "qa-$env" --base-url "http://$BRIDGE_IP:$port" --user qa@tender.test)
+  echo "   Sign that account up once at http://<box>:$port/signup (password: ${prefix}_PASS in $RUNNER/.env),"
   echo "   then: sudo systemctl restart lantern-orchestrator   (only when no stage is executing)"
-  echo "   and:  (cd $RUNNER && $PY pipeline.py qa-preflight --stage ${env/dev/qa-dev})   # must print READY"
+  echo "   and:  (cd $RUNNER && $PY pipeline.py qa-preflight --stage qa-$env)   # must print READY"
 }
 
 approve() {
