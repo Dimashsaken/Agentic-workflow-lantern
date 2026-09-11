@@ -6,6 +6,7 @@
 #   bash infra/ec2/tender-playbook.sh status               # runs, gates, the daemon's last lines
 #   bash infra/ec2/tender-playbook.sh serve dev <branch>   # run Tender for QA (stage 4) on :8000
 #   bash infra/ec2/tender-playbook.sh serve staging <branch>   # for stage 7 on :8001 (the staging_deploy gate)
+#   bash infra/ec2/tender-playbook.sh qa-account dev|staging   # seed/verify the QA login on the served build
 #   bash infra/ec2/tender-playbook.sh approve <gate> [--by name] [--note "..."]
 #
 # Everything else — reading the story, picking the UX option, reviewing the PR — is a
@@ -99,9 +100,22 @@ UNIT
   # qa-target replaces the URL, sets the Tender QA login and regenerates the password when
   # the user changes (the box .env still carried the dogfood-era Mission Control login).
   (cd "$RUNNER" && "$PY" pipeline.py qa-target "qa-$env" --base-url "http://$BRIDGE_IP:$port" --user qa@tender.test)
-  echo "   Sign that account up once at http://<box>:$port/signup (password: ${prefix}_PASS in $RUNNER/.env),"
+  say "seeding the QA login on the served build (the qa agent types it exactly, never guesses)"
+  qa_account "$env" || true
   echo "   then: sudo systemctl restart lantern-orchestrator   (only when no stage is executing)"
   echo "   and:  (cd $RUNNER && $PY pipeline.py qa-preflight --stage qa-$env)   # must print READY"
+}
+
+qa_account() {
+  local env="${1:?dev|staging}"; local port prefix
+  case "$env" in
+    dev) port=8000; prefix=LANTERN_QA_DEV ;;
+    staging) port=8001; prefix=LANTERN_QA_STAGING ;;
+    *) echo "qa-account dev|staging"; exit 2 ;;
+  esac
+  # Creates the account through Tender's own sign-up form, or proves the stored login
+  # still opens an existing one; prints READY / NOT READY, never the password.
+  "$PY" "$MAIN/infra/ec2/tender-qa-account.py" --base-url "http://127.0.0.1:$port" --env-file "$RUNNER/.env" --prefix "$prefix"
 }
 
 approve() {
@@ -114,6 +128,7 @@ case "${1:-}" in
   start) shift; start "$@" ;;
   status) status ;;
   serve) shift; serve "$@" ;;
+  qa-account) shift; qa_account "$@" ;;
   approve) shift; approve "$@" ;;
   *) sed -n 2,14p "$0"; exit 2 ;;
 esac
