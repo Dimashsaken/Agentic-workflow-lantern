@@ -146,3 +146,21 @@ raw wall-event data remains preserved and explicitly labelled. See desktop
 actual video at 0:07, mobile actual at 0:13.5, fixture desktop at 0:02.8, fixture
 mobile at 0:01.8. Deployment-bound recording receipt acceptance remains separate;
 these local videos cannot satisfy that unfinished foundation gate.
+
+## Continuation 3 outstanding-foundation QA — 2026-09-11 preparation
+
+No new product defect is claimed before execution. Environment blocker QA-C3-E1: installed Docker CLI cannot open the Linux-engine API pipe at initial readiness inspection. Reproduction: query Docker server information using the existing CLI. Expected: the designated local Docker engine responds. Actual: named pipe absent. No browser ran, so no video/timestamp exists for this environment failure. Security owns engine startup. This is not a sev-1/sev-2 product finding and does not pass the QA gate.
+
+New execution findings and their actual recordings will be appended below. Prior closed findings and retained evidence remain unchanged.
+
+### QA-C3-E1 update — 2026-09-11
+
+The security agent reports Docker Desktop startup is blocked by a host runtime socket error before the Linux engine becomes available. No actual candidate-image browser capture can run. This remains an environment prerequisite, not a product bug or an acceptance waiver. The exact independent SQL probes in `c3-qa-controller-sql.json` passed 16/16 and found no new sev-1/sev-2 product finding in their limited executed scope. Recorder callbacks were injected; no video or live behavior is claimed by those tests.
+
+### QA-C3-E2 — disposable launcher pipe wait, resolved in QA harness
+
+The fresh PostgreSQL server became ready, but the QA Python launcher continued waiting for daemon-inherited stdout/stderr handles. Reproduction is `pg_ctl start` beneath `subprocess.run(capture_output=True)` on this Windows runtime. The helper was changed to DEVNULL plus the owned PostgreSQL log; only the identified QA launcher processes were terminated, and setup resumed against the verified fresh data directory. The configured cluster was not involved. This was a test-harness issue, not a runtime product defect; it has no browser/video evidence.
+
+### Actual recorder retest — 2026-09-11
+
+QA-C3-E1 is resolved for the tested local engine: four actual recorder sessions now pass their intended positive/negative outcomes. No new sev-1/sev-2 product issue was found. C3-Q2's failed assertion, C3-Q3's injected deployment drift and C3-Q4's actual lost execution fence are intentional denial controls, not bugs. Their exact video links/timestamps and evidence distinctions are in the latest report table; each correctly produces no controller seal or durable receipt. No previous evidence was removed, no unchanged UI proof was repeated, and external gateway/foundation acceptance remains separate.

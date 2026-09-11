@@ -1,0 +1,204 @@
+{
+  "kind": "actual_recorder_controller_negative_controls",
+  "test_only": true,
+  "transport_mode": "direct_fixture",
+  "external_transport_verified": false,
+  "gateway_accepted": false,
+  "registered_fleet_execution": false,
+  "results": [
+    {
+      "scenario": "failed_assertion",
+      "passed": true,
+      "denial": "CaptureHeld",
+      "recording_id": "5f18b40517874169baa1da59e6d8b981",
+      "all_recorded_commands_passed": false,
+      "outcomes": [
+        {
+          "command_id": "navigate",
+          "requirement": "AC-10",
+          "passed": true
+        },
+        {
+          "command_id": "heading",
+          "requirement": "AC-10",
+          "passed": true
+        },
+        {
+          "command_id": "secret",
+          "requirement": "AC-11",
+          "passed": true
+        },
+        {
+          "command_id": "status",
+          "requirement": "AC-11",
+          "passed": true
+        },
+        {
+          "command_id": "complete",
+          "requirement": "AC-11",
+          "passed": false
+        }
+      ],
+      "controller_receipt_absent": true,
+      "durable_receipt_absent": true,
+      "recorder_quiesced": true,
+      "video": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-failed_assertion/5f18b40517874169baa1da59e6d8b981.webm",
+        "sha256": "cbd2efc0e43e98dc5a7f33c538784586fb5bd658bc349965a95391c98ff670f5",
+        "duration_seconds": 3.68,
+        "streams": [
+          {
+            "codec_name": "vp8",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          }
+        ],
+        "decoded": true
+      },
+      "trace": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-failed_assertion/5f18b40517874169baa1da59e6d8b981.trace.json",
+        "sha256": "231cb46d3d9932a97615d7e87b851ccef26a30d9d94752245eaa1897f52285df"
+      },
+      "frame": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-failed_assertion/frame-3.48.png",
+        "seconds": 3.48,
+        "sha256": "d723f879ef039553efd66a2c17a32410aa0e9bb908e8a25f72bb02c498022b99"
+      }
+    },
+    {
+      "scenario": "deployment_drift",
+      "passed": true,
+      "denial": "CaptureHeld",
+      "recording_id": "5176064d3d034a68b1d66d9b15f5a7a6",
+      "all_recorded_commands_passed": true,
+      "outcomes": [
+        {
+          "command_id": "navigate",
+          "requirement": "AC-10",
+          "passed": true
+        },
+        {
+          "command_id": "heading",
+          "requirement": "AC-10",
+          "passed": true
+        },
+        {
+          "command_id": "secret",
+          "requirement": "AC-11",
+          "passed": true
+        },
+        {
+          "command_id": "status",
+          "requirement": "AC-11",
+          "passed": true
+        },
+        {
+          "command_id": "complete",
+          "requirement": "AC-11",
+          "passed": true
+        }
+      ],
+      "controller_receipt_absent": true,
+      "durable_receipt_absent": true,
+      "recorder_quiesced": true,
+      "video": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-deployment_drift/5176064d3d034a68b1d66d9b15f5a7a6.webm",
+        "sha256": "6ddbb3b8916d53578f6dc88ed3551f9f6d29c57d829bad422bf2b681d647158a",
+        "duration_seconds": 3.68,
+        "streams": [
+          {
+            "codec_name": "vp8",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          }
+        ],
+        "decoded": true
+      },
+      "trace": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-deployment_drift/5176064d3d034a68b1d66d9b15f5a7a6.trace.json",
+        "sha256": "692dfca3b52d75e1c0eecefc7ba846500b03a9d3c77621d88888f1f9410fb951"
+      },
+      "frame": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-deployment_drift/frame-3.48.png",
+        "seconds": 3.48,
+        "sha256": "d723f879ef039553efd66a2c17a32410aa0e9bb908e8a25f72bb02c498022b99"
+      }
+    },
+    {
+      "scenario": "lease_loss",
+      "passed": true,
+      "denial": "LeaseLost",
+      "recording_id": "7c54592df76447d8adf986be2b69bfa7",
+      "all_recorded_commands_passed": true,
+      "outcomes": [
+        {
+          "command_id": "navigate",
+          "requirement": "AC-10",
+          "passed": true
+        },
+        {
+          "command_id": "heading",
+          "requirement": "AC-10",
+          "passed": true
+        },
+        {
+          "command_id": "secret",
+          "requirement": "AC-11",
+          "passed": true
+        },
+        {
+          "command_id": "status",
+          "requirement": "AC-11",
+          "passed": true
+        },
+        {
+          "command_id": "complete",
+          "requirement": "AC-11",
+          "passed": true
+        }
+      ],
+      "controller_receipt_absent": true,
+      "durable_receipt_absent": true,
+      "recorder_quiesced": true,
+      "video": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-lease_loss/7c54592df76447d8adf986be2b69bfa7.webm",
+        "sha256": "17b02daf8b09489d5595ce09a0a89d647d9dee07c794c01b171e3347a623dfe4",
+        "duration_seconds": 4.28,
+        "streams": [
+          {
+            "codec_name": "vp8",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          }
+        ],
+        "decoded": true
+      },
+      "trace": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-lease_loss/7c54592df76447d8adf986be2b69bfa7.trace.json",
+        "sha256": "e557812adc56894fd7b45d871a4c780fb4e7fd385eb7bdc58093676f08c653b1"
+      },
+      "frame": {
+        "path": "media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-lease_loss/frame-4.08.png",
+        "seconds": 4.08,
+        "sha256": "013bd157266c8c7caab92761c8fbc6805f76647af420f5cc32e87381d80a3416"
+      }
+    }
+  ],
+  "passed": true,
+  "approvals_unchanged": true,
+  "fixture_cleanup": {
+    "containers_removed": true,
+    "network_removed": true,
+    "temporary_private_trust_removed": true
+  },
+  "new_test_database_removed": true,
+  "configured_database_touched": false,
+  "source_sha256": {
+    "qa_execution.py": "4f919039c7e77bf3346e484149932da89411461ec693598b04d9dcc90b77193d",
+    "qa_provenance.py": "251b6585978ea307c0c5c57b7585d20a8f0419113584c3ea1ef2ccd46b905cc1",
+    "execution_leases.py": "b2ae440feb0355c78bd5045ff8b301cff93cd3b1af98b802502bd9a428f8dd96"
+  }
+}

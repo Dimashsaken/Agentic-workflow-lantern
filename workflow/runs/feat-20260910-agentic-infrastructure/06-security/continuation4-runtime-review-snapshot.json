@@ -1,0 +1,22 @@
+{
+  "recorded_at": "2026-09-11T09:06:09.225896+00:00",
+  "scope": "final security-reviewed continuation runtime source, configured-check completion owned by integrator",
+  "source_hashes": {
+    "tools/azure-runner/execution_leases.py": "b2ae440feb0355c78bd5045ff8b301cff93cd3b1af98b802502bd9a428f8dd96",
+    "tools/azure-runner/execution_retention.py": "09069231a641b3d732cb52523ef9a5db777a664f3cd46eef30ff54a16a7fbf3a",
+    "tools/azure-runner/execution_runtime.py": "739856ba8c67f45515f720b9558ba92faad187ce477be927c426ee1b11ad08c8",
+    "tools/azure-runner/factory.py": "20606c15825f1511f1eccbc343c7749a195fd8d85ba7206fcb71910ecd3caea6",
+    "tools/azure-runner/maintenance_runtime.py": "931cf6a3daa44368b3f9f18828316e8c71267c1f41d1fe3dfd52644ddb051a68",
+    "tools/azure-runner/orchestrator.py": "cf91d220ed625d120a7888e822e216c82e3f335eb8ca1edb35c5c2af26a73811",
+    "tools/azure-runner/pipeline.py": "4df9eaec493b6250d71b75314b61101d8520d6ba3cd45b37c5dac933dd730180",
+    "tools/azure-runner/review.py": "f1277e43a0206e323961d31a2265b805f7c09f548a201ad921eb38f5930c5d74",
+    "tools/azure-runner/qa_execution.py": "4f919039c7e77bf3346e484149932da89411461ec693598b04d9dcc90b77193d",
+    "tools/azure-runner/qa_network.py": "6c4f864905ed98a0f3df84c02b81faa1705859d5b30c494f54b43e98b38e0216",
+    "tools/azure-runner/qa_transport.py": "b8a81b6f3a29ce6804fdd677e5bec94cc495c5f93d46d03a2871765f96370aee"
+  },
+  "independent_qa_network_tests": {
+    "passed": 8,
+    "elapsed_seconds": 0.003
+  },
+  "supplied_kernel_proof": "03-coding/c3-network-proof-r6.log"
+}

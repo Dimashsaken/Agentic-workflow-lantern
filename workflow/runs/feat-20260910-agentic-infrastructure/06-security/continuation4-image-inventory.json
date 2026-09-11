@@ -1,0 +1,461 @@
+{
+  "scope": "actual gateway image offline installed inventory, source hashes and vendor byte comparison; not advisory result",
+  "source_hashes": {
+    "/opt/gateway/requirements.lock": "28f276fddc1c4da8b48609ce0c2cecaea2eb561ef755180aabc98f4360efaaff",
+    "/opt/gateway/policy.py": "f0a370c079fab095890535447d53047bc39f9035a2a2a03a747b4926c008b0b5",
+    "/opt/gateway/entrypoint.py": "aa3634e35307ae2c4cb6924364115623b2c1afa946a10e5be433e326dbd8c723",
+    "/opt/gateway/vendor_wheel.py": "70c78eee8ceadd04f75a187cb3a10ddcc234cd535665eed29e6725455f5ececc",
+    "/opt/gateway/qa_transport.py": "b8a81b6f3a29ce6804fdd677e5bec94cc495c5f93d46d03a2871765f96370aee"
+  },
+  "os_release": "PRETTY_NAME=\"Ubuntu 24.04.4 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.4 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+  "gateway_packages": [
+    {
+      "name": "aioquic",
+      "version": "1.2.0"
+    },
+    {
+      "name": "argon2-cffi",
+      "version": "25.1.0"
+    },
+    {
+      "name": "argon2-cffi-bindings",
+      "version": "26.1.0"
+    },
+    {
+      "name": "asgiref",
+      "version": "3.11.1"
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0"
+    },
+    {
+      "name": "bcrypt",
+      "version": "5.0.0"
+    },
+    {
+      "name": "blinker",
+      "version": "1.9.0"
+    },
+    {
+      "name": "brotli",
+      "version": "1.2.0"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1"
+    },
+    {
+      "name": "click",
+      "version": "8.5.0"
+    },
+    {
+      "name": "cryptography",
+      "version": "50.0.1"
+    },
+    {
+      "name": "Flask",
+      "version": "3.1.3"
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0"
+    },
+    {
+      "name": "h2",
+      "version": "4.4.1"
+    },
+    {
+      "name": "hpack",
+      "version": "4.2.0"
+    },
+    {
+      "name": "hyperframe",
+      "version": "6.1.0"
+    },
+    {
+      "name": "itsdangerous",
+      "version": "2.2.0"
+    },
+    {
+      "name": "Jinja2",
+      "version": "3.1.6"
+    },
+    {
+      "name": "kaitaistruct",
+      "version": "0.11"
+    },
+    {
+      "name": "ldap3",
+      "version": "2.9.1"
+    },
+    {
+      "name": "MarkupSafe",
+      "version": "3.0.3"
+    },
+    {
+      "name": "mitmproxy",
+      "version": "12.2.3+lantern1"
+    },
+    {
+      "name": "mitmproxy_linux",
+      "version": "0.12.11"
+    },
+    {
+      "name": "mitmproxy_rs",
+      "version": "0.12.11"
+    },
+    {
+      "name": "msgpack",
+      "version": "1.2.2"
+    },
+    {
+      "name": "pip",
+      "version": "24.0"
+    },
+    {
+      "name": "publicsuffix2",
+      "version": "2.20191221"
+    },
+    {
+      "name": "pyasn1",
+      "version": "0.6.4"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0"
+    },
+    {
+      "name": "pylsqpack",
+      "version": "0.3.24"
+    },
+    {
+      "name": "pyOpenSSL",
+      "version": "26.4.0"
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.2"
+    },
+    {
+      "name": "pyperclip",
+      "version": "1.11.0"
+    },
+    {
+      "name": "ruamel.yaml",
+      "version": "0.19.1"
+    },
+    {
+      "name": "service-identity",
+      "version": "26.1.0"
+    },
+    {
+      "name": "sortedcontainers",
+      "version": "2.4.0"
+    },
+    {
+      "name": "tornado",
+      "version": "6.5.8"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.14.0"
+    },
+    {
+      "name": "urwid",
+      "version": "3.0.5"
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.8.3"
+    },
+    {
+      "name": "Werkzeug",
+      "version": "3.1.8"
+    },
+    {
+      "name": "wsproto",
+      "version": "1.3.2"
+    },
+    {
+      "name": "zstandard",
+      "version": "0.25.0"
+    }
+  ],
+  "os_packages": [
+    "adduser\t3.137ubuntu1",
+    "apt\t2.8.3",
+    "apt-transport-https\t2.8.3",
+    "at-spi2-common\t2.52.0-1build1",
+    "base-files\t13ubuntu10.4",
+    "base-passwd\t3.6.3build1",
+    "bash\t5.2.21-2ubuntu4",
+    "bsdutils\t1:2.39.3-9ubuntu6.6",
+    "ca-certificates\t20260601~24.04.1",
+    "coreutils\t9.4-3ubuntu6.3",
+    "curl\t8.5.0-2ubuntu10.13",
+    "dash\t0.5.12-6ubuntu5",
+    "debconf\t1.5.86ubuntu1",
+    "debianutils\t5.17build1",
+    "diffutils\t1:3.10-1ubuntu0.1",
+    "dirmngr\t2.4.4-2ubuntu17.6",
+    "dpkg\t1.22.6ubuntu6.6",
+    "e2fsprogs\t1.47.0-2.4~exp1ubuntu4.1",
+    "findutils\t4.9.0-5build1",
+    "fontconfig\t2.15.0-1.1ubuntu2",
+    "fontconfig-config\t2.15.0-1.1ubuntu2",
+    "fonts-freefont-ttf\t20211204+svn4273-2",
+    "fonts-ipafont-gothic\t00303-21ubuntu1",
+    "fonts-liberation\t1:2.1.5-3",
+    "fonts-noto-color-emoji\t2.047-0ubuntu0.24.04.1",
+    "fonts-tlwg-loma-otf\t1:0.7.3-1",
+    "fonts-unifont\t1:15.1.01-1build1",
+    "fonts-wqy-zenhei\t0.9.45-8",
+    "gcc-14-base\t14.2.0-4ubuntu2~24.04.1",
+    "git\t1:2.43.0-1ubuntu7.3",
+    "git-man\t1:2.43.0-1ubuntu7.3",
+    "gnupg\t2.4.4-2ubuntu17.6",
+    "gnupg-utils\t2.4.4-2ubuntu17.6",
+    "gpg\t2.4.4-2ubuntu17.6",
+    "gpg-agent\t2.4.4-2ubuntu17.6",
+    "gpgconf\t2.4.4-2ubuntu17.6",
+    "gpgsm\t2.4.4-2ubuntu17.6",
+    "gpgv\t2.4.4-2ubuntu17.6",
+    "grep\t3.11-4build1",
+    "gzip\t1.12-1ubuntu3.2",
+    "hostname\t3.23+nmu2ubuntu2",
+    "init-system-helpers\t1.66ubuntu1",
+    "keyboxd\t2.4.4-2ubuntu17.6",
+    "libacl1\t2.3.2-1build1.1",
+    "libapt-pkg6.0t64\t2.8.3",
+    "libasound2-data\t1.2.11-1ubuntu0.3",
+    "libasound2t64\t1.2.11-1ubuntu0.3",
+    "libassuan0\t2.5.6-1build1",
+    "libatk-bridge2.0-0t64\t2.52.0-1build1",
+    "libatk1.0-0t64\t2.52.0-1build1",
+    "libatspi2.0-0t64\t2.52.0-1build1",
+    "libattr1\t1:2.5.2-1ubuntu0.1",
+    "libaudit-common\t1:3.1.2-2.1build1.1",
+    "libaudit1\t1:3.1.2-2.1build1.1",
+    "libavahi-client3\t0.8-13ubuntu6.2",
+    "libavahi-common-data\t0.8-13ubuntu6.2",
+    "libavahi-common3\t0.8-13ubuntu6.2",
+    "libblkid1\t2.39.3-9ubuntu6.6",
+    "libbrotli1\t1.1.0-2build2",
+    "libbsd0\t0.12.1-1build1.1",
+    "libbz2-1.0\t1.0.8-5.1ubuntu0.1",
+    "libc-bin\t2.39-0ubuntu8.8",
+    "libc6\t2.39-0ubuntu8.8",
+    "libcairo2\t1.18.0-3build1",
+    "libcap-ng0\t0.8.4-2build2",
+    "libcap2\t1:2.66-5ubuntu2.4",
+    "libcom-err2\t1.47.0-2.4~exp1ubuntu4.1",
+    "libcrypt1\t1:4.4.36-4build1",
+    "libcups2t64\t2.4.7-1.2ubuntu7.14",
+    "libcurl3t64-gnutls\t8.5.0-2ubuntu10.13",
+    "libcurl4t64\t8.5.0-2ubuntu10.13",
+    "libdatrie1\t0.2.13-3build1",
+    "libdb5.3t64\t5.3.28+dfsg2-7",
+    "libdbus-1-3\t1.14.10-4ubuntu4.1",
+    "libdebconfclient0\t0.271ubuntu3",
+    "libdrm-amdgpu1\t2.4.125-1ubuntu0.1~24.04.2",
+    "libdrm-common\t2.4.125-1ubuntu0.1~24.04.2",
+    "libdrm-intel1\t2.4.125-1ubuntu0.1~24.04.2",
+    "libdrm2\t2.4.125-1ubuntu0.1~24.04.2",
+    "libedit2\t3.1-20230828-1build1",
+    "libelf1t64\t0.190-1.1ubuntu0.1",
+    "liberror-perl\t0.17029-2",
+    "libexpat1\t2.6.1-2ubuntu0.4",
+    "libext2fs2t64\t1.47.0-2.4~exp1ubuntu4.1",
+    "libffi8\t3.4.6-1build1",
+    "libfontconfig1\t2.15.0-1.1ubuntu2",
+    "libfontenc1\t1:1.1.8-1build1",
+    "libfreetype6\t2.13.2+dfsg-1ubuntu0.1",
+    "libfribidi0\t1.0.13-3build1",
+    "libgbm1\t25.2.8-0ubuntu0.24.04.2",
+    "libgcc-s1\t14.2.0-4ubuntu2~24.04.1",
+    "libgcrypt20\t1.10.3-2ubuntu0.2",
+    "libgdbm-compat4t64\t1.23-5.1build1",
+    "libgdbm6t64\t1.23-5.1build1",
+    "libgl1\t1.7.0-1build1",
+    "libgl1-mesa-dri\t25.2.8-0ubuntu0.24.04.2",
+    "libglib2.0-0t64\t2.80.0-6ubuntu3.8",
+    "libglvnd0\t1.7.0-1build1",
+    "libglx-mesa0\t25.2.8-0ubuntu0.24.04.2",
+    "libglx0\t1.7.0-1build1",
+    "libgmp10\t2:6.3.0+dfsg-2ubuntu6.1",
+    "libgnutls30t64\t3.8.3-1.1ubuntu3.6",
+    "libgpg-error0\t1.47-3build2.1",
+    "libgraphite2-3\t1.3.14-2ubuntu0.24.04.1",
+    "libgssapi-krb5-2\t1.20.1-6ubuntu2.8",
+    "libharfbuzz0b\t8.3.0-2build2",
+    "libhogweed6t64\t3.9.1-2.2build1.1",
+    "libice6\t2:1.0.10-1build3",
+    "libicu74\t74.2-1ubuntu3.1",
+    "libidn2-0\t2.3.7-2build1.1",
+    "libk5crypto3\t1.20.1-6ubuntu2.8",
+    "libkeyutils1\t1.6.3-3build1",
+    "libkrb5-3\t1.20.1-6ubuntu2.8",
+    "libkrb5support0\t1.20.1-6ubuntu2.8",
+    "libksba8\t1.6.6-1build1",
+    "libldap2\t2.6.10+dfsg-0ubuntu0.24.04.1",
+    "libllvm20\t1:20.1.2-0ubuntu1~24.04.3",
+    "liblz4-1\t1.9.4-1build1.1",
+    "liblzma5\t5.6.1+really5.4.5-1ubuntu0.3",
+    "libmd0\t1.1.0-2build1.1",
+    "libmount1\t2.39.3-9ubuntu6.6",
+    "libncursesw6\t6.4+20240113-1ubuntu2.2",
+    "libnettle8t64\t3.9.1-2.2build1.1",
+    "libnghttp2-14\t1.59.0-1ubuntu0.4",
+    "libnpth0t64\t1.6-3.1build1",
+    "libnspr4\t2:4.35-1.1build1",
+    "libnss3\t2:3.98-1ubuntu0.2",
+    "libp11-kit0\t0.25.3-4ubuntu2.2",
+    "libpam-modules\t1.5.3-5ubuntu5.7",
+    "libpam-modules-bin\t1.5.3-5ubuntu5.7",
+    "libpam-runtime\t1.5.3-5ubuntu5.7",
+    "libpam0g\t1.5.3-5ubuntu5.7",
+    "libpango-1.0-0\t1.52.1+ds-1build1",
+    "libpciaccess0\t0.17-3ubuntu0.24.04.2",
+    "libpcre2-8-0\t10.42-4ubuntu2.1",
+    "libperl5.38t64\t5.38.2-3.2ubuntu0.4",
+    "libpixman-1-0\t0.42.2-1build1",
+    "libpng16-16t64\t1.6.43-5ubuntu0.6",
+    "libpopt0\t1.19+dfsg-1build1",
+    "libproc2-0\t2:4.0.4-4ubuntu3.3",
+    "libpsl5t64\t0.21.2-1.1build1",
+    "libpython3-stdlib\t3.12.3-0ubuntu2.1",
+    "libpython3.12-minimal\t3.12.3-1ubuntu0.16",
+    "libpython3.12-stdlib\t3.12.3-1ubuntu0.16",
+    "libreadline8t64\t8.2-4build1",
+    "librtmp1\t2.4+20151223.gitfa8646d.1-2build7",
+    "libsasl2-2\t2.1.28+dfsg1-5ubuntu3.1",
+    "libsasl2-modules-db\t2.1.28+dfsg1-5ubuntu3.1",
+    "libseccomp2\t2.5.5-1ubuntu3.1",
+    "libselinux1\t3.5-2ubuntu2.1",
+    "libsemanage-common\t3.5-1build5",
+    "libsemanage2\t3.5-1build5",
+    "libsensors-config\t1:3.6.0-9build1",
+    "libsensors5\t1:3.6.0-9build1",
+    "libsepol2\t3.5-2build1",
+    "libsm6\t2:1.2.3-1build3",
+    "libsmartcols1\t2.39.3-9ubuntu6.6",
+    "libsqlite3-0\t3.45.1-1ubuntu2.7",
+    "libss2\t1.47.0-2.4~exp1ubuntu4.1",
+    "libssh-4\t0.10.6-2ubuntu0.5",
+    "libssl3t64\t3.0.13-0ubuntu3.15",
+    "libstdc++6\t14.2.0-4ubuntu2~24.04.1",
+    "libsystemd0\t255.4-1ubuntu8.17",
+    "libtasn1-6\t4.19.0-3ubuntu0.24.04.2",
+    "libthai-data\t0.1.29-2build1",
+    "libthai0\t0.1.29-2build1",
+    "libtinfo6\t6.4+20240113-1ubuntu2.2",
+    "libudev1\t255.4-1ubuntu8.17",
+    "libunistring5\t1.1-2build1.1",
+    "libunwind8\t1.6.2-3build1.1",
+    "libuuid1\t2.39.3-9ubuntu6.6",
+    "libvulkan1\t1.3.275.0-1build1",
+    "libx11-6\t2:1.8.7-1build1",
+    "libx11-data\t2:1.8.7-1build1",
+    "libx11-xcb1\t2:1.8.7-1build1",
+    "libxau6\t1:1.0.9-1build6",
+    "libxaw7\t2:1.0.14-1build2",
+    "libxcb-dri3-0\t1.15-1ubuntu2",
+    "libxcb-glx0\t1.15-1ubuntu2",
+    "libxcb-present0\t1.15-1ubuntu2",
+    "libxcb-randr0\t1.15-1ubuntu2",
+    "libxcb-render0\t1.15-1ubuntu2",
+    "libxcb-shm0\t1.15-1ubuntu2",
+    "libxcb-sync1\t1.15-1ubuntu2",
+    "libxcb-xfixes0\t1.15-1ubuntu2",
+    "libxcb1\t1.15-1ubuntu2",
+    "libxcomposite1\t1:0.4.5-1build3",
+    "libxdamage1\t1:1.1.6-1build1",
+    "libxdmcp6\t1:1.1.3-0ubuntu6",
+    "libxext6\t2:1.3.4-1build2",
+    "libxfixes3\t1:6.0.0-2build1",
+    "libxfont2\t1:2.0.6-1+deb13u1build0.24.04.2",
+    "libxi6\t2:1.8.1-1build1",
+    "libxkbcommon0\t1.6.0-1build1",
+    "libxkbfile1\t1:1.1.0-1build4",
+    "libxml2\t2.9.14+dfsg-1.3ubuntu3.8",
+    "libxmu6\t2:1.1.3-3build2",
+    "libxmuu1\t2:1.1.3-3build2",
+    "libxpm4\t1:3.5.17-1ubuntu0.24.04.1",
+    "libxrandr2\t2:1.5.2-2build1",
+    "libxrender1\t1:0.9.10-1.1build1",
+    "libxshmfence1\t1.3-1build5",
+    "libxt6t64\t1:1.2.1-1.2build1",
+    "libxxf86vm1\t1:1.1.4-1build4",
+    "libxxhash0\t0.8.2-2build1",
+    "libzstd1\t1.5.5+dfsg2-2build1.1",
+    "login\t1:4.13+dfsg1-4ubuntu3.2",
+    "logsave\t1.47.0-2.4~exp1ubuntu4.1",
+    "mawk\t1.3.4.20240123-1build1",
+    "media-types\t10.1.0",
+    "mesa-libgallium\t25.2.8-0ubuntu0.24.04.2",
+    "mount\t2.39.3-9ubuntu6.6",
+    "ncurses-base\t6.4+20240113-1ubuntu2.2",
+    "ncurses-bin\t6.4+20240113-1ubuntu2.2",
+    "netbase\t6.4",
+    "nodejs\t22.23.2-1nodesource1",
+    "openssl\t3.0.13-0ubuntu3.15",
+    "passwd\t1:4.13+dfsg1-4ubuntu3.2",
+    "perl\t5.38.2-3.2ubuntu0.4",
+    "perl-base\t5.38.2-3.2ubuntu0.4",
+    "perl-modules-5.38\t5.38.2-3.2ubuntu0.4",
+    "pinentry-curses\t1.2.1-3ubuntu5",
+    "procps\t2:4.0.4-4ubuntu3.3",
+    "python3\t3.12.3-0ubuntu2.1",
+    "python3-minimal\t3.12.3-0ubuntu2.1",
+    "python3-pip-whl\t24.0+dfsg-1ubuntu1.3",
+    "python3-setuptools-whl\t68.1.2-2ubuntu1.2",
+    "python3.12\t3.12.3-1ubuntu0.16",
+    "python3.12-minimal\t3.12.3-1ubuntu0.16",
+    "python3.12-venv\t3.12.3-1ubuntu0.16",
+    "readline-common\t8.2-4build1",
+    "rsync\t3.2.7-1ubuntu1.5",
+    "sed\t4.9-2ubuntu0.24.04.1",
+    "sensible-utils\t0.0.22",
+    "sysvinit-utils\t3.08-6ubuntu3",
+    "tar\t1.35+dfsg-3ubuntu0.4",
+    "tzdata\t2026c-0ubuntu0.24.04.1",
+    "ubuntu-keyring\t2023.11.28.1",
+    "unminimize\t0.2.1",
+    "util-linux\t2.39.3-9ubuntu6.6",
+    "x11-common\t1:7.7+23ubuntu3",
+    "x11-xkb-utils\t7.7+8build2",
+    "xauth\t1:1.1.2-1build1",
+    "xfonts-cyrillic\t1:1.0.5+nmu1",
+    "xfonts-encodings\t1:1.0.5-0ubuntu2",
+    "xfonts-scalable\t1:1.0.3-1.3",
+    "xfonts-utils\t1:7.7+6build3",
+    "xkb-data\t2.41-2ubuntu1.1",
+    "xserver-common\t2:21.1.12-1ubuntu1.6",
+    "xvfb\t2:21.1.12-1ubuntu1.6",
+    "zlib1g\t1:1.3.dfsg-3.1ubuntu2.2"
+  ],
+  "stdlib_tls": "OpenSSL 3.0.13 30 Jan 2024",
+  "gateway_tls": "OpenSSL 4.0.2 25 Aug 2026",
+  "vendor_runtime_members_identical": true,
+  "vendor_runtime_member_count": 285,
+  "vendor_provenance": {
+    "candidate_sha256": "0a9a452a2e22be9cf3fd2fd2a09865280293095f282c6e614b7c907d2546ae5d",
+    "changes": {
+      "Requires-Dist: cryptography<=48.1,>=42.0": "Requires-Dist: cryptography==50.0.1",
+      "Requires-Dist: h2<=4.3.0,>=4.3.0": "Requires-Dist: h2==4.4.1",
+      "Requires-Dist: msgpack<=1.1.2,>=1.0.0": "Requires-Dist: msgpack==1.2.2",
+      "Requires-Dist: tornado<=6.5.5,>=6.5.0": "Requires-Dist: tornado==6.5.8",
+      "Version: 12.2.3": "Version: 12.2.3+lantern1"
+    },
+    "members": 291,
+    "runtime_members_changed": 0,
+    "upstream_sha256": "df75ccd15ccb39ab55ce9dd4130312270e8ba208eb927a7cbe50cb52678ec722",
+    "version": "12.2.3+lantern1"
+  },
+  "installed_pth_files": []
+}

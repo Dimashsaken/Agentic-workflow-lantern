@@ -433,3 +433,33 @@ Status: PASS-WITH-NOTES (scoped local B/C/D review); complete foundation/formal 
 Reviewed the explicit direct_fixture transport contract, shared validation at capture construction/seal/verify/persist, durable attempt/key checks and read-only retirement inventory. No new fix-now finding. Independent reruns: 16 retention and 9 provenance tests passed; diff whitespace check passed. Supplied actual local TLS recorder/PostgreSQL proof was inspected, not independently rerun; it remains explicitly test-only with no gateway/external transport acceptance. BCD-PC-2/3 retention debts remain open. Updated source hashes and evidence distinctions are appended in [bcd-review.md](bcd-review.md).
 
 Status: PASS-WITH-NOTES (narrow local supplement); full foundation and external activation remain unaccepted.
+
+## Continuation-3 outstanding infrastructure review - 2026-09-11
+
+Independent post-coding review of the scoped infrastructure diff found and verified fixes for D20 fingerprint coverage, retention clone-lock duration and legacy-index races, immutable maintenance scope, actual child artifact fencing and missing Git base refs. Full findings table, compatibility notes and local debt amendment: [c3-outstanding-review.md](c3-outstanding-review.md).
+
+| ID | Area | Severity | Tag | Disposition |
+|---|---|---|---|---|
+| C3-PC-1 | D20 fingerprint | medium | fix-now - resolved | Actual vendor helper/upstream lock and authority entry modules covered. |
+| C3-PC-2/3 | Retention locking/index | major | fix-now - resolved | Unrelated mounts no longer wait through clone; verified legacy reconciliation and old-reader sentinels preserve ancestor/ownership holds. |
+| C3-PC-4 | Maintenance scope | major | fix-now - resolved | Parent revalidation uses captured child scope, policy and image. |
+| C3-PC-5/6 | Actual child handoff | major | fix-now - resolved | Artifact insertion fenced with dispatcher flag 0/1; exact base ref preserved; real finalize_coding passes and earlier handoff remains unchanged. |
+| C3-PC-7 | Test import | minor | fix-now - resolved | Missing asyncio import corrected; final suite green. |
+| C3-PC-8 | Allocation history scan | medium | debt-ticket - open | LANTERN-DEBT-EXECUTION-GC narrowed to allocation/rebuild scaling; steady mount lookup is bounded. |
+| C3-PC-9 | External acceptance | acceptance limit | waived - local scope only | Disabled candidate may remain locally; actual image/TLS/native-host and trusted deployment acceptance are not waived. |
+
+Independent evidence: [c3-review-probes.json](c3-review-probes.json) records 16/16 custom checks, including actual Git/handoff and baseline-reader probes; [c3-retention-retest-final.log](c3-retention-retest-final.log) records 21/21 retention tests. Initial defect/failed-test logs are preserved. Inspected supplied 18/18 disposable PostgreSQL/Git/Docker maintenance integration and new QA direct-TLS recordings without relabelling scripted model/provider behavior as live acceptance. Final full checks/D20 and actual append_memory receipt remain integrator-owned at this report cutoff; no rendered memory edit is claimed.
+
+Status: PASS-WITH-NOTES (scoped local post-coding review); full foundation, external activation and staging remain unaccepted.
+
+### Permanent lock-identity final retest - 2026-09-11
+
+C3-PC-10 (major, **fix-now - resolved**) covers a final old-reader race: choosing a different lock pathname after an older reader created it split the lifecycle lock. The corrected implementation always acquires the same top-level lock. [c3-lock-compat-retest.json](c3-lock-compat-retest.json) records three passing old-reader/current-holder controls; [c3-retention-lock-retest.log](c3-retention-lock-retest.log) records the final 21/21 affected-suite pass in 12.199 seconds. [c3-final-review-snapshot.json](c3-final-review-snapshot.json) records the remaining inspected source identities and a separate malformed-mapping rejection; its retention hash is superseded by the lock-retest JSON. All fix-now findings are resolved and verified; allocation-scan debt and external-foundation prerequisites remain open.
+
+Status: PASS-WITH-NOTES (final scoped local review); external foundation and staging remain unaccepted.
+
+### Actual append_memory completion - 2026-09-11
+
+Inspected the integrator's actual [c3-foundation-memory.json](../03-coding/c3-foundation-memory.json) receipt: post-coding row **66**, manual key `manual:feat-20260910-agentic-infrastructure:post-coding:pending-639f48d9e2ae`. It records the legacy-index, frozen-scope and permanent-lock lessons. Configured runs/executions/approvals remain **12/23/8** with unchanged approval snapshot; no migration/new cluster or rendered-memory edit is claimed. The earlier pending memory item is complete; exact inserted learning is copied into the detailed review.
+
+Status: PASS-WITH-NOTES (final scoped local review; memory complete); external foundation and staging remain unaccepted.

@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/test_image.py", line 159, in <module>
+    case('positive_both_tls_legs',lambda p,ca,port: request(connect(ca,port),port),positive=True)
+  File "/test_image.py", line 145, in case
+    with gateway(server,ttl=ttl) as info:
+  File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/test_image.py", line 100, in gateway
+    raise AssertionError('gateway startup failed: '+process.communicate()[1].decode()[:2000])
+AssertionError: gateway startup failed: /opt/gateway/bin/mitmdump: Invalid stream_large_bodies specification: 
+

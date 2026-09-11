@@ -1,0 +1,22 @@
+...............Executing <Task finished name='Task-77' coro=<Retirement.test_mount_lookup_does_not_enumerate_retained_history() done, defined at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_execution_retention.py:62> result=None created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 7.797 seconds
+.Executing <Task finished name='Task-82' coro=<Retirement.test_real_other_process_lock_blocks_retirement() done, defined at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_execution_retention.py:247> result=None created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.235 seconds
+.E...
+======================================================================
+ERROR: test_slow_allocation_does_not_block_unrelated_mount (__main__.Retirement.test_slow_allocation_does_not_block_unrelated_mount)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_execution_retention.py", line 130, in test_slow_allocation_does_not_block_unrelated_mount
+    task = asyncio.create_task(asyncio.to_thread(allocate))
+           ^^^^^^^
+NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'
+
+----------------------------------------------------------------------
+Ran 21 tests in 11.072s
+
+FAILED (errors=1)

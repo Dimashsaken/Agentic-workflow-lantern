@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/test_image.py", line 167, in <module>
+    case('absolute_target_mismatch',lambda p,ca,port: request(connect(ca,port),port,target='https://forbidden.example/'))
+  File "/test_image.py", line 153, in case
+    assert after[1]==before[1],(name,'upstream application reached',before,after)
+           ^^^^^^^^^^^^^^^^^^^
+AssertionError: ('absolute_target_mismatch', 'upstream application reached', (1, 1), (2, 2))

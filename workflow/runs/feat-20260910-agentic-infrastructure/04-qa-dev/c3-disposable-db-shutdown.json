@@ -1,0 +1,16 @@
+{
+  "kind": "owned_disposable_postgres_shutdown",
+  "recorded_at": "2026-09-11T09:09:48.331634+00:00",
+  "data_directory": "C:\\Users\\dimas\\AppData\\Local\\Temp\\lantern-c3-qa-postgres-azmxldyt\\data",
+  "server_version": "16.9",
+  "disposable_port": 55432,
+  "other_clients_before": 0,
+  "disposable_listener_stopped": true,
+  "configured_listener_reachable_before": true,
+  "configured_listener_reachable_after": true,
+  "data_retained": true,
+  "postgres_log_retained": true,
+  "state_retained": true,
+  "configured_cluster_stop_requested": false,
+  "existing_evidence_deleted": false
+}

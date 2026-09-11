@@ -1,0 +1,104 @@
+{
+  "kind": "independent_post_coding_local_retest",
+  "external_provider": false,
+  "database": false,
+  "scope": "Actual retention filesystem/thread API and actual artifact function with injected SQL/fence",
+  "results": [
+    {
+      "name": "slow_clone_does_not_block_unrelated_mount",
+      "passed": true,
+      "detail": {
+        "seconds": 0.016,
+        "errors": []
+      }
+    },
+    {
+      "name": "late_legacy_ancestor_held",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "late_legacy_other_owner_held",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "registered_owner_mount_still_works",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "legacy_write_during_current_allocation_held",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "artifact_child_fenced_flag_0",
+      "passed": true,
+      "detail": {
+        "stage_execution_id": 42,
+        "lease_fence": 1
+      }
+    },
+    {
+      "name": "artifact_stale_child_denied_flag_0",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "artifact_child_fenced_flag_1",
+      "passed": true,
+      "detail": {
+        "stage_execution_id": 42,
+        "lease_fence": 1
+      }
+    },
+    {
+      "name": "artifact_stale_child_denied_flag_1",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "actual_trial_merge_is_clean",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "fix_clone_pins_exact_observed_base",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "real_finalize_coding_accepts_fixed_child",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "child_handoff_preserves_earlier_evidence",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "legacy_same_owner_held",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "legacy_wrong_owner_held",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "legacy_ancestor_held",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "source_sha256": {
+    "tools/azure-runner/execution_retention.py": "61cafc20e51e81313346fba0bc11d33dbe96ba13fe65a400256e3cf15a2d87ef",
+    "tools/azure-runner/pipeline.py": "4df9eaec493b6250d71b75314b61101d8520d6ba3cd45b37c5dac933dd730180",
+    "tools/azure-runner/maintenance_runtime.py": "931cf6a3daa44368b3f9f18828316e8c71267c1f41d1fe3dfd52644ddb051a68",
+    "tools/azure-runner/factory.py": "20606c15825f1511f1eccbc343c7749a195fd8d85ba7206fcb71910ecd3caea6",
+    "tools/evals/check_pr.py": "56deafbbecbbdcd3a5387bfbfd9483a1b781c952a15f3650ca7aba507f277d12"
+  }
+}

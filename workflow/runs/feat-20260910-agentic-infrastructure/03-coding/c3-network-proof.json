@@ -1,0 +1,37 @@
+{
+  "scope": "actual nft kernel packet proof in disposable Linux namespaces; not native Docker host adapter acceptance",
+  "image_id": "sha256:0ca542dc2de2b9f1d98b05f466b185ebce5230c9a00be44704020a1690176080",
+  "docker_command": [
+    "docker",
+    "run",
+    "--rm",
+    "--network",
+    "none",
+    "--cap-add",
+    "NET_ADMIN",
+    "--cap-add",
+    "SYS_ADMIN",
+    "--security-opt",
+    "apparmor=unconfined",
+    "--pids-limit",
+    "128",
+    "--memory",
+    "512m",
+    "--mount",
+    "runtime read-only at /source/tools/azure-runner",
+    "--mount",
+    "proof read-only at /proof.py",
+    "sha256:0ca542dc2de2b9f1d98b05f466b185ebce5230c9a00be44704020a1690176080",
+    "/proof.py"
+  ],
+  "no_docker_socket": true,
+  "no_host_network_or_pid": true,
+  "output": "c3-network-proof-r6.log",
+  "passed": true,
+  "proof_sha256": "cbb6876bae32f3c20021bab43eb365f6d8e79ac8ebafaecbd817987bd5ba17cb",
+  "packet_function_ast_sha256": {
+    "rule_plan": "1e79bbadccbc1a0b21caa0b15a999e659bdf95ad81b4dc01e167442038b9290d",
+    "normalize_rules": "23ab1c3e4d5671c8ed4602f2817056f982e3431f50e634f837cb0b5a81244a74"
+  },
+  "cutoff_note": "The packet functions were unchanged after the successful proof. Later local Docker socket/cgroup binding changes are separately unit tested; no actual native host adapter claim."
+}

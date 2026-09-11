@@ -567,3 +567,80 @@ QA independently reran the same 13 actual-media controls after transport-mode va
 The integration owner completed the actual QA `append_memory` insertion as row **63**, manual key `manual:feat-20260910-agentic-infrastructure:qa-dev:pending-02d0970f1059`, recorded in `03-coding/bcd-memory.json`. QA inspected that receipt: configured runs/executions/approvals remain 12/23/8, the approval snapshot is unchanged, and no migration or new cluster was created. This satisfies the previously pending memory insertion for the supplied redacted-trace learning; it is not a fleet QA execution or a direct edit to rendered memory.
 
 Status: PASS-WITH-NOTES (final local direct TLS capture retest; external acceptance remains open)
+
+## Continuation 3 outstanding-foundation QA — preparation 2026-09-11
+
+The QA role read its charter/skills/memory, runboard, available local plan/report artifacts and the recorder contract. The run has no registered story/brief envelope; proposed AC-7a/8a/9b/10a/11a mappings come from the continuation task plan. Branch and baseline are `codex/agentic-infrastructure-continuation-3` at `09fdb11`; existing untracked media and retest evidence remains preserved.
+
+The new charter is in `test-charter.md`. `c3-capture-fixture.py` prepares an environment-only, owned direct-TLS fixture for exercising the real fleet capture controller; syntax validation passed. It creates fresh names, pins image IDs, trusts only a temporary public CA in the recorder, observes the controller-owned fixture, and joins/stops the owned recorder on cancellation. This is preparation, not a browser run or live acceptance result. No new video is yet claimed.
+
+Initial Docker readiness is blocked: the installed CLI cannot open its Linux-engine API pipe. The security/integration owners are restoring the existing engine. QA target, trusted deployment/image identity and disposable DB configuration are not present in this child agent's environment. `c3-foundation-readiness.md` records the exact prerequisite. Independent harness preparation continues; unchanged Mission Control UI proofs are not repeated.
+
+Status: BLOCKED (initial test runtime; charter and helper prepared).
+
+## Continuation 3 QA controller real-SQL probes — 2026-09-11
+
+Author: qa-dev. **16/16 new controller boundary probes pass** against a freshly created, loopback-only disposable PostgreSQL 16.9 cluster. Production `qa_execution.execute_capture` and lease/persistence code execute with injected recorder/descriptor callbacks. This is real SQL with injected browser behavior, not a registered fleet stage, Azure model execution, live deployment acceptance or new browser recording.
+
+The initial disposable listener was absent. QA initialized a separately named temporary cluster on the designated test port, used a fresh random credential supplied through process environment, created a uniquely named test database and applied schema only there. The test database was dropped after probes; the temporary cluster remains running for the integration owner's maintenance checks. The configured database, gates, approvals and existing evidence were untouched. Windows PostgreSQL inherited pipe handles initially stalled the QA launcher; the helper now sends daemon startup output to local log/DEVNULL, and only the two identified QA launcher processes were stopped. The already-ready disposable server was preserved.
+
+| Probe group | Result |
+|---|---|
+| Direct fixture requires explicit test injection; external gateway remains held; non-QA row; wrong execution key; missing requirement mapping; changed initial descriptor | Pass; zero recorder launches and no capture receipt |
+| Wrong recording ID; writers not closed; duplicate/extra outcome; non-Boolean outcome | Pass; owned stop awaited before hold; no capture receipt |
+| Failed requirement; changed final deployment descriptor; policy expired | Pass; no capture receipt |
+| Stale owner before launch; fence lost during capture | Pass; stale acceptance refused; launched recorder is quiesced |
+| Second cancellation while stop is pending | Pass; controller returns cancellation only after stop finishes; no capture receipt |
+
+`c3-qa-controller-proof.py` and `c3-qa-controller-sql.json` contain the executed scenarios and exact source hashes. `c3-disposable-db.py` and `c3-disposable-db-readiness.json` record the isolated database substrate. `c3-capture-fixture.py` plus the proof's `--capture` path prepare real image-local Playwright recording with independent fixture descriptor observation, sealed receipt verification and redacted outcomes; that path is **not executed** at this cutoff.
+
+No new product bug was found in these executed probes. No new video exists to link: Docker Desktop startup remains blocked by its host runtime socket error, so no browser was launched around the failure. Prior unchanged UI/recorder videos remain the previous round's evidence and are not counted again. Maintenance repair and actual-image transport checks remain owned by the integration/security agents. No external-mode, foundation or staging acceptance is granted.
+
+Pending durable memory supplied to the integration owner for actual `append_memory`: “2026-09-11: Probe cancellation a second time while recorder shutdown is still pending, because receipt validation alone cannot show that an interrupted writer has quiesced before the controller returns.” No direct append tool is exposed to this child and no rendered memory was edited.
+
+Exact remaining prerequisite: the designated Docker Linux engine must start and execute the actual pinned recorder image; external foundation additionally needs its audited gateway and host-network positive/denial controls plus trusted target/deployment configuration.
+
+Status: BLOCKED (actual browser/runtime acceptance); 16/16 bounded real-SQL controller probes pass.
+
+## Continuation 3 actual controller/recorder QA — 2026-09-11
+
+**Local controller/recorder integration passes: 16 real-SQL fault probes and four actual browser recordings.** Docker recovery by the security agent resolved QA-C3-E1. The actual pinned recorder executes five commands through production `qa_execution.execute_capture`, and the controller observes the fixture deployment before/after recording, removes the recorder, decodes media, seals its receipt and persists that receipt under the execution fence. The positive saved receipt matches independent verification.
+
+All four recordings use a controller-owned disposable HTTPS fixture, temporary recorder-only public CA trust and a fresh test database. The production controller function is called directly by the integration harness; these recordings do not claim a registered `_run_agent_stage`, Azure model execution, remote deployment, gateway transport or live foundation acceptance. `direct_fixture`, `test_only: true` and `gateway: null` remain explicit. Targets and credentials were supplied through process environment and are omitted from these reports. The trace is redacted command-outcome JSON, not a replayable Playwright network trace.
+
+The positive recording has five passing commands. Three additional actual-recorder controls intentionally fail acceptance: the final assertion reports false; the trusted end-descriptor callback reports a changed revision; or the real database execution fence advances after recording. In all three, the recorder is quiesced and removed, no controller seal is written and no durable QA receipt is saved. Deployment drift is an injected controller observation, not an actual redeployment; the fence mutation is real SQL. These controls establish that even successful browser steps cannot override changed authority or deployment identity. The 16 injected/SQL cases were rerun with the positive adapter and remain 16 unique cases, not 32.
+
+### New video evidence
+
+Each WebM fully decodes as VP8 1280×720. Every listed frame was extracted and visually inspected at its media-relative timestamp. Videos show the browser fixture; receipt refusals are established by the accompanying trace/results/database checks, not by a browser badge. Password input is visibly masked. Nothing was uploaded, and no remote artifact URL is claimed.
+
+| Session | Video / redacted trace | Verified media timestamp | Duration |
+|---|---|---|---|
+| C3-Q1 positive receipt | [video](media/c3-fleet-78f38df1026546a1861c639a1a8a1ed1/f56a254ea023456690fbff184cf81307.webm) / [trace](media/c3-fleet-78f38df1026546a1861c639a1a8a1ed1/f56a254ea023456690fbff184cf81307.trace.json) | 0:01.50 fixture ready and secret masked; 0:03.80 final step visible | 4.28 s |
+| C3-Q2 failed assertion | [video](media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-failed_assertion/5f18b40517874169baa1da59e6d8b981.webm) / [trace](media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-failed_assertion/5f18b40517874169baa1da59e6d8b981.trace.json) | 0:03.48 completed fixture; deliberately different expected text fails in trace | 3.68 s |
+| C3-Q3 descriptor drift | [video](media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-deployment_drift/5176064d3d034a68b1d66d9b15f5a7a6.webm) / [trace](media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-deployment_drift/5176064d3d034a68b1d66d9b15f5a7a6.trace.json) | 0:03.48 successful browser steps before controller drift refusal | 3.68 s |
+| C3-Q4 lost fence | [video](media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-lease_loss/7c54592df76447d8adf986be2b69bfa7.webm) / [trace](media/c3-fleet-denial-437d64d396a34dcd9e868c56fc71d277-lease_loss/7c54592df76447d8adf986be2b69bfa7.trace.json) | 0:04.08 successful browser steps before stale-lease refusal | 4.28 s |
+
+`c3-qa-controller-capture.json` binds the positive receipt, exact image, source hashes and media hashes; `c3-capture-frames.json` binds its inspected frames. `c3-actual-capture-denials.json` supplies each denial, media/trace/frame hash and cleanup check. The positive video SHA-256 is `be0fcb8a178c89f7d174716edb55583996d1de46d09ed6f6e32586cc9b50e8ab`; `qa_execution.py` is `4f919039c7e77bf3346e484149932da89411461ec693598b04d9dcc90b77193d`. Decoder/receipt-only controls already completed against unchanged `qa_provenance.py` remain the prior round's evidence and were not presented as new coverage.
+
+All owned recorder/fixture containers, isolated networks and temporary private trust were removed; each newly created test database was dropped after its proof. The configured database and existing approvals/evidence were untouched. The separate temporary PostgreSQL server remains available for the integration owner's maintenance tests and will be stopped after those users finish; its data/logs stay retained. No new product defect was found within this executed QA scope. Maintenance and retention acceptance still depends on the integration/post-coding evidence at the final corrected source; gateway image and host-network acceptance remain security-owned.
+
+The remaining external prerequisite is an accepted gateway image with effective TLS hooks and actual host-network positive/denial tests, plus a trusted target/deployment descriptor and scoped QA configuration. External launch and staging remain NO-GO until those prerequisites and existing human gates pass. The previously supplied cancellation learning still awaits the integration owner's actual append_memory receipt; no rendered memory edit is claimed.
+
+Status: PASS-WITH-NOTES (executed local controller/recorder QA only); external foundation acceptance remains BLOCKED.
+
+### Durable QA memory receipt — 2026-09-11
+
+The integration owner invoked the actual bound `append_memory` tool for the supplied QA cancellation learning, creating role_memory row **65** with manual execution key `manual:feat-20260910-agentic-infrastructure:qa-dev:pending-12ca5a229e32`. QA inspected [c3-foundation-memory.json](../03-coding/c3-foundation-memory.json): the receipt identifies `qa-dev`, `append_memory` and `fleet_stage: false`; configured runs/executions/approvals remained **12/23/8**, and the approval snapshot is unchanged. Four role-memory entries were inserted across the collaborating roles, with no migration or new configured cluster. This completes the previously pending QA memory postcondition without claiming a registered fleet execution or a manual edit to rendered memory.
+
+Learning recorded: “2026-09-11: Probe cancellation a second time while recorder shutdown is still pending, because receipt validation alone cannot show that an interrupted writer has quiesced before the controller returns.”
+
+The QA-owned disposable PostgreSQL test server remains running for the integration owner's final checks; the restored configured PostgreSQL server is separate and is not a QA shutdown target. The local recording verdict and external foundation limits above remain unchanged.
+
+Status: PASS-WITH-NOTES (executed local controller/recorder QA and actual memory receipt complete); external foundation acceptance remains BLOCKED.
+
+### Disposable QA PostgreSQL shutdown — 2026-09-11
+
+After the integration owner confirmed all disposable database tests were complete, QA verified the live PostgreSQL 16.9 data directory exactly matched the retained `lantern-c3-qa-postgres-azmxldyt/data` state and found zero other client connections. QA then stopped only that owned cluster on port **55432**. [c3-disposable-db-shutdown.json](c3-disposable-db-shutdown.json) records the identity and checks: the disposable listener is stopped; its data directory, PostgreSQL log and state file are retained; the configured **5432** listener was reachable both before and after. No stop was requested for the configured cluster, and no existing evidence was deleted. No browser/media proof was rerun.
+
+Status: PASS-WITH-NOTES (local QA, durable memory and owned test-cluster shutdown complete); external foundation acceptance remains governed by the separate gateway/target prerequisites.

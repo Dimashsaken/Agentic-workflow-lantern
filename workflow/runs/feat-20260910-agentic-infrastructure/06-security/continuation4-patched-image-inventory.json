@@ -1,0 +1,297 @@
+{
+  "scope": "actual gateway image offline installed inventory, source hashes and vendor byte comparison; not advisory result",
+  "source_hashes": {
+    "/opt/gateway/requirements.lock": "28f276fddc1c4da8b48609ce0c2cecaea2eb561ef755180aabc98f4360efaaff",
+    "/opt/gateway/policy.py": "f0a370c079fab095890535447d53047bc39f9035a2a2a03a747b4926c008b0b5",
+    "/opt/gateway/entrypoint.py": "aa3634e35307ae2c4cb6924364115623b2c1afa946a10e5be433e326dbd8c723",
+    "/opt/gateway/vendor_wheel.py": "70c78eee8ceadd04f75a187cb3a10ddcc234cd535665eed29e6725455f5ececc",
+    "/opt/gateway/qa_transport.py": "b8a81b6f3a29ce6804fdd677e5bec94cc495c5f93d46d03a2871765f96370aee"
+  },
+  "os_release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nVERSION=\"13 (trixie)\"\nVERSION_CODENAME=trixie\nDEBIAN_VERSION_FULL=13.6\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"\n",
+  "gateway_packages": [
+    {
+      "name": "aioquic",
+      "version": "1.2.0"
+    },
+    {
+      "name": "argon2-cffi",
+      "version": "25.1.0"
+    },
+    {
+      "name": "argon2-cffi-bindings",
+      "version": "26.1.0"
+    },
+    {
+      "name": "asgiref",
+      "version": "3.11.1"
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0"
+    },
+    {
+      "name": "bcrypt",
+      "version": "5.0.0"
+    },
+    {
+      "name": "blinker",
+      "version": "1.9.0"
+    },
+    {
+      "name": "brotli",
+      "version": "1.2.0"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1"
+    },
+    {
+      "name": "click",
+      "version": "8.5.0"
+    },
+    {
+      "name": "cryptography",
+      "version": "50.0.1"
+    },
+    {
+      "name": "Flask",
+      "version": "3.1.3"
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0"
+    },
+    {
+      "name": "h2",
+      "version": "4.4.1"
+    },
+    {
+      "name": "hpack",
+      "version": "4.2.0"
+    },
+    {
+      "name": "hyperframe",
+      "version": "6.1.0"
+    },
+    {
+      "name": "itsdangerous",
+      "version": "2.2.0"
+    },
+    {
+      "name": "Jinja2",
+      "version": "3.1.6"
+    },
+    {
+      "name": "kaitaistruct",
+      "version": "0.11"
+    },
+    {
+      "name": "ldap3",
+      "version": "2.9.1"
+    },
+    {
+      "name": "MarkupSafe",
+      "version": "3.0.3"
+    },
+    {
+      "name": "mitmproxy",
+      "version": "12.2.3+lantern1"
+    },
+    {
+      "name": "mitmproxy_linux",
+      "version": "0.12.11"
+    },
+    {
+      "name": "mitmproxy_rs",
+      "version": "0.12.11"
+    },
+    {
+      "name": "msgpack",
+      "version": "1.2.2"
+    },
+    {
+      "name": "pip",
+      "version": "26.2.1"
+    },
+    {
+      "name": "publicsuffix2",
+      "version": "2.20191221"
+    },
+    {
+      "name": "pyasn1",
+      "version": "0.6.4"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0"
+    },
+    {
+      "name": "pylsqpack",
+      "version": "0.3.24"
+    },
+    {
+      "name": "pyOpenSSL",
+      "version": "26.4.0"
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.2"
+    },
+    {
+      "name": "pyperclip",
+      "version": "1.11.0"
+    },
+    {
+      "name": "ruamel.yaml",
+      "version": "0.19.1"
+    },
+    {
+      "name": "service-identity",
+      "version": "26.1.0"
+    },
+    {
+      "name": "sortedcontainers",
+      "version": "2.4.0"
+    },
+    {
+      "name": "tornado",
+      "version": "6.5.8"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.14.0"
+    },
+    {
+      "name": "urwid",
+      "version": "3.0.5"
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.8.3"
+    },
+    {
+      "name": "Werkzeug",
+      "version": "3.1.8"
+    },
+    {
+      "name": "wsproto",
+      "version": "1.3.2"
+    },
+    {
+      "name": "zstandard",
+      "version": "0.25.0"
+    }
+  ],
+  "os_packages": [
+    "adduser\t3.152",
+    "apt\t3.0.3",
+    "base-files\t13.8+deb13u6",
+    "base-passwd\t3.6.7",
+    "bash\t5.2.37-2+b9",
+    "bsdutils\t1:2.41.5-0+deb13u1",
+    "ca-certificates\t20250419",
+    "coreutils\t9.7-3",
+    "dash\t0.5.12-12",
+    "debconf\t1.5.91",
+    "debian-archive-keyring\t2025.1",
+    "debianutils\t5.23.2",
+    "diffutils\t1:3.10-4",
+    "dpkg\t1.22.22",
+    "findutils\t4.10.0-3",
+    "gcc-14-base\t14.2.0-19",
+    "grep\t3.11-4",
+    "gzip\t1.13-1",
+    "hostname\t3.25",
+    "init-system-helpers\t1.69~deb13u1",
+    "libacl1\t2.3.2-2+b1",
+    "libapt-pkg7.0\t3.0.3",
+    "libattr1\t1:2.5.2-3",
+    "libaudit-common\t1:4.0.2-2",
+    "libaudit1\t1:4.0.2-2+b2",
+    "libblkid1\t2.41.5-0+deb13u1",
+    "libbsd0\t0.12.2-2",
+    "libbz2-1.0\t1.0.8-6",
+    "libc-bin\t2.41-12+deb13u3",
+    "libc6\t2.41-12+deb13u3",
+    "libcap-ng0\t0.8.5-4+b1",
+    "libcap2\t1:2.75-10+deb13u1+b1",
+    "libcrypt1\t1:4.4.38-1",
+    "libdb5.3t64\t5.3.28+dfsg2-9",
+    "libdebconfclient0\t0.280",
+    "libffi8\t3.4.8-2",
+    "libgcc-s1\t14.2.0-19",
+    "libgdbm6t64\t1.24-2",
+    "libgmp10\t2:6.3.0+dfsg-3",
+    "libhogweed6t64\t3.10.1-1",
+    "liblastlog2-2\t2.41.5-0+deb13u1",
+    "liblz4-1\t1.10.0-4",
+    "liblzma5\t5.8.1-1+deb13u1",
+    "libmd0\t1.1.0-2+b1",
+    "libmount1\t2.41.5-0+deb13u1",
+    "libncursesw6\t6.5+20250216-2",
+    "libnettle8t64\t3.10.1-1",
+    "libpam-modules\t1.7.0-5",
+    "libpam-modules-bin\t1.7.0-5",
+    "libpam-runtime\t1.7.0-5",
+    "libpam0g\t1.7.0-5",
+    "libpcre2-8-0\t10.46-1~deb13u1",
+    "libreadline8t64\t8.2-6",
+    "libseccomp2\t2.6.0-2",
+    "libselinux1\t3.8.1-1",
+    "libsemanage-common\t3.8.1-1",
+    "libsemanage2\t3.8.1-1",
+    "libsepol2\t3.8.1-1",
+    "libsmartcols1\t2.41.5-0+deb13u1",
+    "libsqlite3-0\t3.46.1-7+deb13u1",
+    "libssl3t64\t3.5.7-1~deb13u2",
+    "libstdc++6\t14.2.0-19",
+    "libsystemd0\t257.13-1~deb13u1",
+    "libtinfo6\t6.5+20250216-2",
+    "libudev1\t257.13-1~deb13u1",
+    "libuuid1\t2.41.5-0+deb13u1",
+    "libxxhash0\t0.8.3-2",
+    "libzstd1\t1.5.7+dfsg-1",
+    "login\t1:4.16.0-2+really2.41.5-0+deb13u1",
+    "login.defs\t1:4.17.4-2",
+    "mawk\t1.3.4.20250131-1",
+    "mount\t2.41.5-0+deb13u1",
+    "ncurses-base\t6.5+20250216-2",
+    "ncurses-bin\t6.5+20250216-2",
+    "netbase\t6.5",
+    "openssl\t3.5.7-1~deb13u2",
+    "openssl-provider-legacy\t3.5.7-1~deb13u2",
+    "passwd\t1:4.17.4-2",
+    "perl-base\t5.40.1-6",
+    "readline-common\t8.2-6",
+    "sed\t4.9-2+deb13u1",
+    "sqv\t1.3.0-3+b2",
+    "sysvinit-utils\t3.14-4",
+    "tar\t1.35+dfsg-3.1",
+    "tzdata\t2026b-0+deb13u1",
+    "util-linux\t2.41.5-0+deb13u1",
+    "zlib1g\t1:1.3.dfsg+really1.3.1-1+b1"
+  ],
+  "stdlib_tls": "OpenSSL 3.5.7 9 Jun 2026",
+  "gateway_tls": "OpenSSL 4.0.2 25 Aug 2026",
+  "vendor_runtime_members_identical": true,
+  "vendor_runtime_member_count": 285,
+  "vendor_provenance": {
+    "candidate_sha256": "0a9a452a2e22be9cf3fd2fd2a09865280293095f282c6e614b7c907d2546ae5d",
+    "changes": {
+      "Requires-Dist: cryptography<=48.1,>=42.0": "Requires-Dist: cryptography==50.0.1",
+      "Requires-Dist: h2<=4.3.0,>=4.3.0": "Requires-Dist: h2==4.4.1",
+      "Requires-Dist: msgpack<=1.1.2,>=1.0.0": "Requires-Dist: msgpack==1.2.2",
+      "Requires-Dist: tornado<=6.5.5,>=6.5.0": "Requires-Dist: tornado==6.5.8",
+      "Version: 12.2.3": "Version: 12.2.3+lantern1"
+    },
+    "members": 291,
+    "runtime_members_changed": 0,
+    "upstream_sha256": "df75ccd15ccb39ab55ce9dd4130312270e8ba208eb927a7cbe50cb52678ec722",
+    "version": "12.2.3+lantern1"
+  },
+  "installed_pth_files": []
+}
