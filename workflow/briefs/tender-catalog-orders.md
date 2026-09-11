@@ -5,8 +5,8 @@
 - **Assigned developer:** dimash
 - **Date:** 2026-09-11
 - **Target release:** Tender v0.2
-- **Product repo:** https://github.com/Dimashsaken/tender-whatsapp
-- **Base branch:** main
+- **Product repo:** https://github.com/Dimashsaken/Agentic-workflow-lantern   <!-- the seed lives on this repo's product/tender-whatsapp branch until Dimashsaken/tender-whatsapp exists -->
+- **Base branch:** product/tender-whatsapp
 - **Working branch:**
 - **Coding mode:** auto
 - **Design mode:** html

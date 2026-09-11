@@ -1,23 +1,19 @@
-# products/ — product seeds the factory is pointed at
+# products/ — where the factory's product seeds are
 
-`tender-whatsapp/` is the seed of **Tender**, the AI WhatsApp assistant for small sellers,
-kept here because this session could not create `Dimashsaken/tender-whatsapp` (the
-GitHub API from a Claude Code web session is bound to this repository only). It is a
-snapshot of the product's `main` at commit `81e39c4` of the local proof repository; the
-pipeline runs in `workflow/runs/feat-20260911-tender-*` were executed against that
-local repository (`/home/user/products/tender-whatsapp`, a path-based product target).
+**Tender** (the AI WhatsApp assistant for small sellers) lives on this repository's
+`product/tender-whatsapp` branch — an orphan branch holding only the product (seed
+commit `81e39c4`), pushed 2026-09-11 because this session could not create
+`Dimashsaken/tender-whatsapp`. The briefs under `workflow/briefs/tender-*.md` point at
+it (`Product repo:` this repo, `Base branch: product/tender-whatsapp`); the coding
+agent's `feat/*` branches land here too, and pull requests target that base.
 
-To give the product its own repository (one minute, from any laptop):
+To give Tender its own repository (one minute, from any laptop):
 
 ```bash
 gh repo create Dimashsaken/tender-whatsapp --private
-cd products/tender-whatsapp && git init -b main && git add -A \
-  && git commit -m "Seed: Tender product skeleton" \
-  && git remote add origin https://github.com/Dimashsaken/tender-whatsapp \
-  && git push -u origin main
+git push https://github.com/Dimashsaken/tender-whatsapp product/tender-whatsapp:main
 ```
 
-then point the briefs at it (`- **Product repo:** https://github.com/Dimashsaken/tender-whatsapp`)
-or an existing run with `pipeline.py set-product <run-id> --repo <url> --branch main`.
-Once the repository exists this directory should be deleted from the Lantern repo — a
-product never lives inside the factory.
+then update the three briefs' `Product repo:` / `Base branch:` lines (or an existing run
+with `pipeline.py set-product <run-id> --repo <url> --branch main`) and delete the
+`product/tender-whatsapp` branch here. A product never lives inside the factory for long.

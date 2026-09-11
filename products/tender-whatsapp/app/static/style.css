@@ -1,8 +1,0 @@
-:root { --ink: #1c1c1c; --muted: #6b6b6b; --line: #e6e6e6; --accent: #0b7a4b; --bg: #fff; }
-* { box-sizing: border-box; }
-body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
-.topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--line); }
-.brand { font-weight: 700; color: var(--accent); text-decoration: none; font-size: 18px; }
-.page { max-width: 960px; margin: 0 auto; padding: 24px; }
-.hero h1 { margin: 0 0 8px; font-size: 32px; }
-.muted { color: var(--muted); }
