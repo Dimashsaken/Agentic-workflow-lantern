@@ -747,7 +747,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
             worker = inspection
             worker_token = tool_execution.CURRENT.set(worker)
         # D14: bundle the committed branch into the run folder while the checkout exists.
-        finalize_problems = finalize_coding(run_id, stage) if role == "coding" else []
+        finalize_problems = finalize_coding(run_id, stage, execution_key) if role == "coding" else []
 
         if finalize_problems:
             raise RuntimeError("coding handoff failed: " + "; ".join(finalize_problems))

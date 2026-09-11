@@ -279,18 +279,34 @@ def main() -> int:
           not probs_without, f"expected the old behaviour, got {probs_without}")
 
     os.environ["LANTERN_CODING_START_SHA"] = start
+    hf_path = fake_repo / "workflow" / "runs" / run2 / "03-coding" / "handoff.json"
+    check("(the vacuous pass above did write a handoff)", hf_path.exists())
     probs_with = o.finalize_coding(run2, "03-coding")
     check("WITH a start sha an idle stage is caught",
           any("added no commits" in x for x in probs_with), probs_with)
+    # 2026-09-11: the idle attempt's early return used to leave the PREVIOUS handoff on
+    # disk, and check_coding_handoff validated it as this execution's.
+    check("...and the idle execution leaves NO handoff behind for the postcondition",
+          not hf_path.exists() and not (hf_path.parent / "branch.bundle").exists())
+    check("...so the postcondition reports the handoff missing",
+          any("missing" in x for x in o.check_coding_handoff(run2, "03-coding", co)))
 
     (co / "new_work.py").write_text("NEW = 1\n", encoding="utf-8")
     git("add", "-A", cwd=co)
     git("commit", "-q", "-m", "the agent's own commit", cwd=co)
-    probs_real = o.finalize_coding(run2, "03-coding")
+    key7 = f"{run2}:03-coding:7"
+    probs_real = o.finalize_coding(run2, "03-coding", execution_key=key7)
     check("...and real work passes", not probs_real, probs_real)
-    hf2 = json.loads((fake_repo / "workflow" / "runs" / run2 / "03-coding"
-                      / "handoff.json").read_text(encoding="utf-8"))
+    hf2 = json.loads(hf_path.read_text(encoding="utf-8"))
     check("handoff records the start sha", hf2.get("start_sha") == start, hf2.get("start_sha"))
+    check("handoff records whose execution it is", hf2.get("execution_key") == key7, hf2.get("execution_key"))
+    check("the execution that wrote it passes the ownership check",
+          o.check_coding_handoff(run2, "03-coding", co, execution_key=key7) == [])
+    other = o.check_coding_handoff(run2, "03-coding", co, execution_key=f"{run2}:03-coding:8")
+    check("another execution is told the handoff is not its own",
+          any("not by" in x for x in other), other)
+    check("callers without a key (host publish, babysit) are unaffected",
+          o.check_coding_handoff(run2, "03-coding", co) == [])
     check("the bundle still spans base..HEAD, so the PR shows the whole branch",
           len(hf2["commits"]) == 3, [c["subject"] for c in hf2["commits"]])
 

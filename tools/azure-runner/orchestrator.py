@@ -958,9 +958,17 @@ CODING_BRANCH_PREFIXES = tuple(
 CODING_BUNDLE = "branch.bundle"
 
 
-def finalize_coding(run_id: str, stage: str) -> list[str]:
+def finalize_coding(run_id: str, stage: str, execution_key: str | None = None) -> list[str]:
     """Turn the agent's committed branch into the stage's handoff: a git bundle plus
     handoff.json in the stage dir. Returns problems (empty = the handoff is valid).
+
+    An execution EARNS its handoff or leaves none: the stage dir is cleared of the
+    previous execution's handoff.json and bundle before anything is decided. Found
+    2026-09-11 (feat-20260911-tender-onboarding): a rework attempt that added no
+    commits returned early here, the postcondition then validated the attempt-before's
+    handoff — internally consistent, still on disk — and the host republished that
+    bundle. The handoff also records `execution_key`, so check_coding_handoff can tell
+    whose it is.
 
     Runs INSIDE the execution (container or in-process) right after the agent's turn,
     because the checkout is gone the moment the container exits — the bundle is the
@@ -975,6 +983,16 @@ def finalize_coding(run_id: str, stage: str) -> list[str]:
     base = os.environ.get("LANTERN_PRODUCT_BRANCH", "main")
     if not branch:
         return ["LANTERN_CODING_BRANCH is not set — the dispatcher must name the run's branch"]
+    builder = factory.builder_of(stage) or factory.current_builder()
+    # D18: a named builder's handoff lives in its own subdirectory — the integrator (and
+    # a single-builder run) writes the stage dir itself, so 03-coding/ always carries
+    # exactly ONE handoff, the one _publish_branch pushes.
+    rel = f"workflow/runs/{run_id}/{factory.exec_dir(stage_dir(stage), builder)}"
+    sdir = REPO / rel
+    sdir.mkdir(parents=True, exist_ok=True)
+    for stale in ("handoff.json", CODING_BUNDLE):
+        (sdir / stale).unlink(missing_ok=True)      # this execution's or nobody's
+    execution_key = execution_key or os.environ.get("LANTERN_EXECUTION_KEY") or None
     head_name = _git_out(["rev-parse", "--abbrev-ref", "HEAD"], root).stdout.strip()
     if head_name != branch:
         co = _git_out(["checkout", branch], root)
@@ -1014,7 +1032,6 @@ def finalize_coding(run_id: str, stage: str) -> list[str]:
     # add commits" would fail an integrator that found nothing to fix — a legitimate
     # outcome. The honest question for it is whether stage 3 produced anything at all,
     # so it is measured from the pre-merge start point the merge recorded.
-    builder = factory.builder_of(stage) or factory.current_builder()
     if builder == factory.INTEGRATOR:
         record = factory.merge_record(run_id)
         if record and str(record.get("start_sha") or ""):
@@ -1037,15 +1054,7 @@ def finalize_coding(run_id: str, stage: str) -> list[str]:
             "the coding branch has no commits beyond the base — nothing to hand off. "
             "Implement the task plan and commit (one task, one commit).")
         return problems
-    # D18: a named builder's handoff lives in its own subdirectory — the integrator (and
-    # a single-builder run) writes the stage dir itself, so 03-coding/ always carries
-    # exactly ONE handoff, the one _publish_branch pushes.
-    rel = f"workflow/runs/{run_id}/{factory.exec_dir(stage_dir(stage), builder)}"
-    sdir = REPO / rel
-    sdir.mkdir(parents=True, exist_ok=True)
     bundle = sdir / CODING_BUNDLE
-    if bundle.exists():
-        bundle.unlink()
     b = _git_out(["bundle", "create", str(bundle), f"refs/heads/{branch}", f"^{base_sha}"], root)
     if b.returncode != 0 or not bundle.is_file() or bundle.stat().st_size == 0:
         problems.append(f"git bundle create failed: {b.stderr.strip()[-400:]}")
@@ -1057,6 +1066,7 @@ def finalize_coding(run_id: str, stage: str) -> list[str]:
     handoff = {
         "kind": "coding_branch",
         "run_id": run_id,
+        "execution_key": execution_key,   # whose handoff this is (check_coding_handoff)
         "branch": branch,
         "base": base,
         "base_sha": base_sha,
@@ -1079,7 +1089,7 @@ def _has_commit(repo: Path, sha: str) -> bool:
 
 
 def check_coding_handoff(run_id: str, sdir: str, verify_in: Path | None = None,
-                         builder: str | None = None) -> list[str]:
+                         builder: str | None = None, execution_key: str | None = None) -> list[str]:
     """Presence AND validity of the coding handoff (the fabrication lesson, applied to
     code): handoff.json must name a feat/* or fix/* branch with ≥1 commit, the bundle
     must exist, be non-empty, verify against a repo that has the base (when one is
@@ -1104,6 +1114,14 @@ def check_coding_handoff(run_id: str, sdir: str, verify_in: Path | None = None,
     except ValueError as e:
         return [f"{sdir}/handoff.json is not valid JSON: {e}"]
     problems = []
+    if execution_key and str(h.get("execution_key") or "") != execution_key:
+        # In-execution and host re-check know which execution is being judged; a
+        # handoff another execution wrote (or an older harness wrote without a key) is
+        # not evidence that THIS one produced anything (found 2026-09-11, see
+        # finalize_coding). The host's later publish/babysit calls pass no key.
+        return [f"{sdir}/handoff.json was written by execution "
+                f"'{h.get('execution_key') or 'unknown'}', not by {execution_key} — this "
+                "execution handed off nothing (finalize_coding found no new commits or failed)"]
     branch = str(h.get("branch") or "")
     if not branch.startswith(CODING_BRANCH_PREFIXES):
         problems.append(f"handoff branch '{branch}' is outside the pushable "
@@ -1286,6 +1304,59 @@ def _section(text: str, heading: str, limit: int) -> str:
     return body[:limit] + ("…" if len(body) > limit else "")
 
 
+def rework_context(run_id: str, stage: str) -> str:
+    """Why this stage is running AGAIN, when the run was sent back to it (D17 rework).
+
+    `pipeline.py rework` records the human's decision in `gate-decisions.md` and the run
+    folder is the only handoff channel (D4) — but a stage's task block used to be the
+    same on a rework as on day one, so the coding agent of the first Tender run re-read
+    the approved review, found "no code change warranted" and handed the unchanged
+    head straight back to the stage that had sent it (2026-09-11). The latest rework
+    decision whose target is THIS stage dir is therefore quoted here, with every later
+    stage's findings files named, and the rule that an execution must actually act.
+    """
+    rd = REPO / "workflow" / "runs" / run_id
+    try:
+        text = (rd / "gate-decisions.md").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    # Sections are `## <gate> — <STATUS>` followed by bullet lines; the last one wins.
+    sections = re.split(r"^##\s+", text, flags=re.M)[1:]
+    if not sections:
+        return ""
+    last = sections[-1]
+    m = re.match(r"rework\s*->\s*(\S+)\s+—\s+REWORKED", last)
+    if not m or stage_dir(m.group(1)) != stage_dir(stage):
+        return ""
+    by = re.search(r"^- \*\*Decided by:\*\*\s*(.*)$", last, re.M)
+    when = re.search(r"^- \*\*When:\*\*\s*(.*)$", last, re.M)
+    note = re.search(r"^- \*\*Note:\*\*\s*(.*)$", last, re.M | re.S)
+    note_text = (note.group(1).strip() if note else "(no note)")[:1500]
+    this_ordinal = stage_dir(stage).split("-", 1)[0]
+    later: list[str] = []
+    if this_ordinal.isdigit():
+        for d in sorted(p for p in rd.iterdir() if p.is_dir()):
+            ordinal = d.name.split("-", 1)[0]
+            if not ordinal.isdigit() or int(ordinal) <= int(this_ordinal):
+                continue
+            for name in ("report.md", "bugs.md", "debt-tickets.md", "validation.md", "validation.json"):
+                if (d / name).is_file():
+                    later.append(f"workflow/runs/{run_id}/{d.name}/{name}")
+    out = [f"\n\n## Why this stage is running AGAIN — rework decided by "
+           f"{by.group(1).strip() if by else '?'} ({when.group(1).strip() if when else '?'})\n",
+           f"\n{note_text}\n"]
+    if later:
+        out.append("\nThe stages after this one already ran on the current branch and sent the "
+                   "work back; their findings ARE the task now — read each before you start:\n"
+                   + "\n".join(f"- `read_file('{p}')`" for p in later) + "\n")
+    out.append("\nAct on what the rework note names and commit the change (one item, one "
+               "commit). An execution that changes nothing is a failed execution: the stage "
+               "that sent this back will only re-run on new commits. Do NOT re-decide the "
+               "plan or re-open approved findings; do NOT treat an earlier approval as a reason "
+               "to skip the rework.\n")
+    return "".join(out)
+
+
 def product_task_block(run_id: str, stage: str) -> str:
     """What you are here to do — the brief's intent plus the approved plan's shape.
 
@@ -1352,6 +1423,7 @@ def product_task_block(run_id: str, stage: str) -> str:
                        "architecture or schema.\n")
     if stage in review.TASK_BLOCK_STAGES:   # D19: a review round or a fix execution
         out.append(review.task_block(run_id, stage))
+    out.append(rework_context(run_id, stage))   # D17: why the run is back at this stage, if it is
     out.append(f"\nThis stage's deliverable is "
                f"`workflow/runs/{run_id}/{factory.exec_dir(stage_dir(stage))}/report.md` "
                "plus at least one `append_memory` call. Both are verified mechanically.\n")
@@ -1902,7 +1974,8 @@ async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
         # in-process); the host re-check verifies again against its mirror before
         # anything is pushed (pipeline.publish_coding_branch).
         verify_in = product_root() if (product_root() / ".git").exists() else None
-        missing.extend(check_coding_handoff(run_id, sdir, verify_in, builder))
+        missing.extend(check_coding_handoff(run_id, sdir, verify_in, builder,
+                                            execution_key=execution_key))
     if is_qa_video_stage(stage):
         # Presence AND validity AND recency (the fabrication lesson, applied to video):
         # a real, non-empty .webm recorded by THIS attempt — a stale file from a failed
@@ -2019,17 +2092,23 @@ async def main() -> None:
             results = [await run_turn(kickoff)]
         result = results[-1]
         print(result.final_output)
+        finalize_problems: list[str] = []
         if role == "coding":
             # The checkout dies with this process; bundle the committed branch into
             # the run folder NOW so the host can verify, push and open the PR (D14).
-            for p in finalize_coding(args.run_id, args.stage):
+            # A finalize problem IS a failed stage (an idle execution, a branch with
+            # nothing on it) — printing it alone let the postcondition pass on a
+            # previous execution's handoff (2026-09-11).
+            finalize_problems = finalize_coding(args.run_id, args.stage, execution_key)
+            for p in finalize_problems:
                 print(f"FINALIZE: {p}", file=sys.stderr)
         calls = sum(1 for r in results for i in r.new_items if type(i).__name__ == "ToolCallItem")
         if calls == 0:
             print("\nDIAGNOSIS: the agent ended its turn without calling a single tool — the "
                   "stage stopped before doing any work. Re-run it (see 'How to run your turn' "
                   "in the system prompt).", file=sys.stderr)
-        missing = await check_postconditions(conn, role, args.run_id, args.stage, execution_key)
+        missing = finalize_problems + await check_postconditions(
+            conn, role, args.run_id, args.stage, execution_key)
         if missing:
             raise RuntimeError("postconditions failed: " + "; ".join(missing))
     except BaseException as exc:
