@@ -119,6 +119,19 @@ def read_state(run_id: str) -> dict:
     return _read_json(review_dir(run_id) / STATE_FILE) or {}
 
 
+def prior_rounds(run_id: str) -> list[int]:
+    """Round numbers already on disk in review/ (`round-<k>.md`): the earlier review
+    cycles of this branch, left there when the run was reworked back to coding (D17).
+    Round numbers are branch-wide — a new cycle continues them, never restarts at 1."""
+    d = review_dir(run_id)
+    out: list[int] = []
+    for path in (d.glob("round-*.md") if d.is_dir() else []):
+        m = re.fullmatch(r"round-(\d+)\.md", path.name)
+        if m:
+            out.append(int(m.group(1)))
+    return sorted(out)
+
+
 def write_state(run_id: str, **fields) -> dict:
     """review/state.json — what the next execution is for (round, phase, must_fix …).
 
@@ -191,7 +204,9 @@ def task_block(run_id: str, stage: str) -> str:
 def _review_block(run_id: str, st: dict) -> str:
     h = load_handoff(run_id)
     n, total = st.get("round", 1), st.get("max_rounds", review_rounds())
-    out = [f"\n\n## This review round — {n} of {total}\n",
+    start = int(st.get("cycle_start", 1) or 1)
+    last = start + total - 1          # this cycle's final round number (numbering is branch-wide)
+    out = [f"\n\n## This review round — {n} of {last}\n",
            f"You are the review bot for branch `{h.get('branch', '?')}`. Review EXACTLY the "
            f"handoff range `{str(h.get('base_sha', ''))[:12]}..{str(h.get('head_sha', ''))[:12]}` "
            f"({len(h.get('commits', []))} commit(s), {len(h.get('files_changed', []))} file(s) — "
@@ -211,12 +226,19 @@ def _review_block(run_id: str, st: dict) -> str:
         out.append(f"Read `{CODING_DIR}/{REVIEW_DIR}/round-{n - 1}.md` and the `## Fix — round {n - 1}` "
                    f"section of `{CODING_DIR}/report.md`; verify each earlier must-fix id in the new "
                    "diff and carry forward, same id, anything not actually resolved.\n")
+    prior = [int(x) for x in (st.get("prior_rounds") or [])]
+    if prior:
+        out.append(f"\nRounds {', '.join(map(str, prior))} on this branch belong to an EARLIER review "
+                   "cycle: the run was reworked back to coding since (see `gate-decisions.md` in the "
+                   f"run folder). Read their `{CODING_DIR}/{REVIEW_DIR}/round-<k>.md` for what was asked, "
+                   "verify each of those must-fix ids in the new diff, and carry forward, same id, "
+                   "anything still open.\n")
     out.append(f"\nDeliverables: `{CODING_DIR}/{REVIEW_DIR}/round-{n}.md`, "
                f"`{CODING_DIR}/{REVIEW_DIR}/review.json` with `\"round\": {n}` (skills §4 — validated: "
                "approve ⇔ no blocker/major, must_fix ⊇ every blocker/major), a `## Review — round "
                f"{n}` section APPENDED to `{CODING_DIR}/report.md` with its own `- **Status:**` line, "
                "and append_memory. "
-               + ("This is the LAST round: whatever you write goes to the human as-is.\n" if n >= total
+               + ("This is the LAST round: whatever you write goes to the human as-is.\n" if n >= last
                   else "If you request changes, a fix execution works your must_fix list and you "
                        "review again.\n"))
     return "".join(out)
@@ -363,8 +385,18 @@ async def after_publish(conn, run_id: str, payload: dict, runner: str = "ec2",
         payload["review"] = summary
         return payload
     history: list[dict] = []
-    for n in range(1, rounds + 1):
-        write_state(run_id, phase="review", round=n, max_rounds=rounds, history=history)
+    # A rework (D17) brings the branch back here with the previous cycle's round-<k>.md
+    # files still in review/ — and with the reviewer's session memory of them. Round
+    # numbers are branch-wide, so this cycle continues the numbering instead of
+    # restarting at 1. Found 2026-09-11 on feat-20260911-tender-onboarding: after a
+    # rework the reviewer wrote a valid `"round": 3` approve and the loop, expecting
+    # round 1, discarded it as an error and opened the gate without a review.
+    prior = prior_rounds(run_id)
+    start = (prior[-1] + 1) if prior else 1
+    for i in range(rounds):
+        n = start + i
+        write_state(run_id, phase="review", round=n, max_rounds=rounds, cycle_start=start,
+                    prior_rounds=prior, history=history)
         try:
             await deps.execute(conn, run_id, REVIEW_STAGE, runner)
             review = load_review(run_id)
@@ -386,17 +418,18 @@ async def after_publish(conn, run_id: str, payload: dict, runner: str = "ec2",
         summary["verdict"] = review.get("verdict")
         await deps.event(conn, run_id, "agent:reviewer", "review_round",
                          {k: entry[k] for k in ("round", "verdict", "findings", "must_fix", "pr_review")})
-        print(f"[{run_id}] review round {n}/{rounds}: {review.get('verdict')} "
+        print(f"[{run_id}] review round {n}/{start + rounds - 1}: {review.get('verdict')} "
               f"({entry['findings']} finding(s), must-fix {len(entry['must_fix'])})")
         if review.get("verdict") == "approve":
             break
-        if n >= rounds:
+        if i >= rounds - 1:
             summary["capped"] = True
             await deps.event(conn, run_id, "orchestrator", "review_capped",
                              {"rounds": rounds, "must_fix": entry["must_fix"]})
             print(f"[{run_id}] review rounds exhausted with request_changes — a human decides")
             break
-        write_state(run_id, phase="fix", round=n, max_rounds=rounds, history=history,
+        write_state(run_id, phase="fix", round=n, max_rounds=rounds, cycle_start=start,
+                    prior_rounds=prior, history=history,
                     fix={"source": "review", "round": n, "must_fix": entry["must_fix"]})
         summary["fix_executions"] += 1
         try:
@@ -414,7 +447,8 @@ async def after_publish(conn, run_id: str, payload: dict, runner: str = "ec2",
         entry["fixed"] = {"head_sha": fresh.get("head_sha"), "commits": fresh.get("commit_count")}
     summary["rounds"] = history
     summary["last"] = history[-1] if history else None
-    write_state(run_id, phase="done", round=len(history), max_rounds=rounds, history=history,
+    write_state(run_id, phase="done", round=(history[-1]["round"] if history else start - 1),
+                max_rounds=rounds, cycle_start=start, prior_rounds=prior, history=history,
                 verdict=summary["verdict"], capped=summary["capped"])
     payload["review"] = summary
     return payload
