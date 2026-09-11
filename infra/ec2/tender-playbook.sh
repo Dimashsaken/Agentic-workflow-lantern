@@ -78,7 +78,18 @@ serve() {
   git fetch -q origin "$branch"
   git checkout -q -B serve "origin/$branch"
   python3 -m venv .venv >/dev/null && .venv/bin/pip install -q -e '.[dev]'
-  say "installing systemd unit $unit on 0.0.0.0:$port"
+  # The product's secrets live in ONE env file outside the checkout, generated once and
+  # kept across re-serves: a new TENDER_SECRET_KEY would sign every QA session out, and a
+  # new TENDER_CREDENTIAL_KEY would make every saved Cloud credential unreadable. Stage 4
+  # attempt 1 (2026-09-11) was BLOCKED because the unit set no credential key at all —
+  # Tender refuses to save Cloud API credentials without a Fernet key (.env.example).
+  local envfile=/home/ubuntu/$unit.env
+  [ -f "$envfile" ] || { umask 077; : > "$envfile"; }
+  grep -q '^TENDER_SECRET_KEY=' "$envfile" || echo "TENDER_SECRET_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '/+=')" >> "$envfile"
+  grep -q '^TENDER_CREDENTIAL_KEY=' "$envfile" || echo "TENDER_CREDENTIAL_KEY=$(python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')" >> "$envfile"
+  grep -q '^TENDER_DATABASE_URL=' "$envfile" || echo "TENDER_DATABASE_URL=sqlite:///$dir/tender.db" >> "$envfile"
+  chmod 600 "$envfile"
+  say "installing systemd unit $unit on 0.0.0.0:$port (secrets from $envfile)"
   sudo tee "/etc/systemd/system/$unit.service" >/dev/null <<UNIT
 [Unit]
 Description=Tender ($env) for Lantern QA
@@ -86,8 +97,7 @@ After=network.target
 [Service]
 User=ubuntu
 WorkingDirectory=$dir
-Environment=TENDER_SECRET_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '/+=')
-Environment=TENDER_DATABASE_URL=sqlite:///$dir/tender.db
+EnvironmentFile=$envfile
 ExecStart=$dir/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $port
 Restart=always
 [Install]
@@ -96,6 +106,11 @@ UNIT
   sudo systemctl daemon-reload && sudo systemctl enable -q "$unit" && sudo systemctl restart "$unit"
   for i in $(seq 1 20); do curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1 && break; sleep 1; done
   curl -fsS "http://127.0.0.1:$port/healthz" && echo
+  # Every variable the served build documents as required must be present, or QA blocks
+  # on an environment finding three stages later (ENV-1, 2026-09-11).
+  for var in $(grep -oE '^TENDER_[A-Z_]+=' "$dir/.env.example" | tr -d '='); do
+    case "$var" in TENDER_SECRET_KEY|TENDER_CREDENTIAL_KEY|TENDER_DATABASE_URL) grep -q "^$var=." "$envfile" && echo "   $var: set" || echo "!! $var missing in $envfile" ;; esac
+  done
   say "telling the daemon where QA finds it (containers reach the host at $BRIDGE_IP)"
   # qa-target replaces the URL, sets the Tender QA login and regenerates the password when
   # the user changes (the box .env still carried the dogfood-era Mission Control login).
