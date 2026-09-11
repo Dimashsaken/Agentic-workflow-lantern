@@ -176,22 +176,35 @@ def work_branch(run_id: str, working_branch: str = "") -> str:
     return (working_branch or "").strip() or coding_branch(run_id)
 
 
-def parse_brief_coding_mode(text: str) -> str:
-    """`- **Coding mode:** auto|human` in a brief; anything else reads as unset ('')."""
+_BRIEF_HTML_COMMENT = re.compile(r"<!--.*?(?:-->|$)")
+
+
+def brief_field(text: str, label: str) -> str:
+    """The value of `- **<label>:** …` in a brief, or '' when the line is absent or blank.
+
+    An inline `<!-- … -->` annotation is documentation, not value: the brief template
+    ships `- **Coding mode:** human   <!-- human = … -->` on the same line, and the
+    Tender briefs annotate `Product repo:` the same way (found 2026-09-12: the comment
+    rode along into the repo URL and `auto`/`html` read as unset). Backticks and the
+    surrounding whitespace are dropped too.
+    """
     # [ \t]* not \s*: an empty field must not swallow the next line (found 2026-09-08).
-    m = re.search(r"^\s*-\s*\*\*Coding mode:\*\*[ \t]*(.*?)[ \t]*$", text, re.M | re.I)
+    m = re.search(rf"^\s*-\s*\*\*{re.escape(label)}:\*\*[ \t]*(.*?)[ \t]*$",
+                  text, re.M | re.I)
     if not m:
         return ""
-    v = m.group(1).strip().strip("`").lower()
+    return _BRIEF_HTML_COMMENT.sub("", m.group(1)).strip().strip("`").strip()
+
+
+def parse_brief_coding_mode(text: str) -> str:
+    """`- **Coding mode:** auto|human` in a brief; anything else reads as unset ('')."""
+    v = brief_field(text, "Coding mode").lower()
     return v if v in CODING_MODES else ""
 
 
 def parse_brief_design_mode(text: str) -> str:
     """`- **Design mode:** paper|html` in a brief (D25); anything else reads as unset ('')."""
-    m = re.search(r"^\s*-\s*\*\*Design mode:\*\*[ \t]*(.*?)[ \t]*$", text, re.M | re.I)
-    if not m:
-        return ""
-    v = m.group(1).strip().strip("`").lower()
+    v = brief_field(text, "Design mode").lower()
     return v if v in DESIGN_MODES else ""
 
 
@@ -212,12 +225,10 @@ def parse_brief_product(text: str) -> tuple[str, str, str]:
     read as 'not set' — an unfilled template must not look like a configured target.
     """
     def field(label: str) -> str:
-        # [ \t]* not \s*: `- **Working branch:**` left blank (the template says "leave
-        # blank for a fresh one") must read as '', not as the following line.
-        m = re.search(rf"^\s*-\s*\*\*{label}:\*\*[ \t]*(.*?)[ \t]*$", text, re.M | re.I)
-        if not m:
-            return ""
-        v = m.group(1).strip().strip("`")
+        # brief_field: `- **Working branch:**` left blank (the template says "leave
+        # blank for a fresh one") reads as '', not as the following line, and an
+        # inline <!-- annotation --> is not part of the value.
+        v = brief_field(text, label)
         if v in ("—", "-", "") or v.upper() in ("TBD", "N/A", "NONE"):
             return ""
         if v.startswith("<") and v.endswith(">"):
