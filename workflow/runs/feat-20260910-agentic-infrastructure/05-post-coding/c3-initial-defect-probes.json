@@ -1,0 +1,29 @@
+{
+  "kind": "post_coding_initial_defect_probes",
+  "date": "2026-09-11",
+  "run_id": "feat-20260910-agentic-infrastructure",
+  "branch": "codex/agentic-infrastructure-continuation-3",
+  "head_at_review": "09fdb11c18f8a12f8b625d4c2e7ceeebd1deb8e5",
+  "scope": "Independent disposable temporary-directory/thread/Git probes and extraction of the actual insert_artifact function AST with injected SQL; no external provider or configured database",
+  "initial_retention": {
+    "unrelated_mount": "RetentionHeld: checkout lifecycle lock is busy",
+    "elapsed_seconds": 10.016,
+    "late_legacy_ancestor_mount": "allowed"
+  },
+  "initial_artifact": {
+    "dispatcher_flag_0": {"result": "inserted", "fenced_executions": [], "metadata": null},
+    "dispatcher_flag_1": {"result": "LeaseLost: artifact has no matching run ownership", "fenced_executions": []}
+  },
+  "initial_fix_clone": {
+    "trial_refs": ["refs/heads/feat/example", "refs/remotes/origin/HEAD", "refs/remotes/origin/feat/example", "refs/remotes/origin/main"],
+    "fix_refs": ["refs/heads/feat/example", "refs/remotes/origin/HEAD", "refs/remotes/origin/feat/example"]
+  },
+  "notes": [
+    "These are pre-fix defect observations, not acceptance results.",
+    "Thread test held allocation's yielded clone body while an unrelated mount tried its lock.",
+    "Legacy test added a prior-protocol path mapping after the new index completeness marker existed.",
+    "Artifact probe used actual parsed function and real execution_runtime.mutation with a recording fence replacement; it did not write SQL.",
+    "Clone probe used actual git init/commit/clone in one owned temporary root; no remote provider was contacted.",
+    "All temporary roots created by these probes were cleaned by TemporaryDirectory. Existing evidence remains untouched."
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "kind": "local_fixture_provenance_renderer",
+  "fleet_execution": false,
+  "live_dev": false,
+  "recorded_at": "2026-09-10T18:01:05.990Z",
+  "source_sha256": {
+    "tools/mission-control/drawer.py": "dc3e00de45089ef3a78aac8b7068e06f58b2e53cdfa5c4058435d9e3a3e300cb",
+    "tools/mission-control/ui.py": "c89f863508a86d7444cd3bb9322ae78138a03a92fd1deef22caf2e85f4f6e51a",
+    "tools/mission-control/app.py": "0cfb48b03e33e0898d167239f3135e05f7925a8b0520bb7fb0e1f513012b4291",
+    "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/local-browser-fixtures.py": "3a59d5349cdfa32622e65d717e74997b8c6865b95fba4e2e0e3a6c7e86ed282c"
+  },
+  "results": [
+    {
+      "name": "provenance-fixture-desktop-bcd",
+      "passed": true,
+      "events": [
+        {
+          "seconds": 0.2,
+          "title": "verified: evidence section visible"
+        },
+        {
+          "seconds": 1.28,
+          "title": "forged-mirror: evidence section visible"
+        },
+        {
+          "seconds": 2.37,
+          "title": "stale: evidence section visible"
+        },
+        {
+          "seconds": 3.47,
+          "title": "cross-run: evidence section visible"
+        },
+        {
+          "seconds": 4.58,
+          "title": "Back and refresh retain stale receipt refusal"
+        }
+      ],
+      "errors": [],
+      "video": "media/provenance-fixture-desktop-bcd.webm",
+      "trace": "media/provenance-fixture-desktop-bcd.zip",
+      "video_sha256": "965ac4e0e3aacb095982e3744a3d886a1d2d47fa4a88027f21229ee32fa52850"
+    },
+    {
+      "name": "provenance-fixture-mobile-bcd",
+      "passed": false,
+      "events": [
+        {
+          "seconds": 0.16,
+          "title": "Verified hashes and test links fit mobile viewport"
+        }
+      ],
+      "errors": [],
+      "failure": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'dark mode', exact: true })\u001b[22m\n",
+      "video": "media/provenance-fixture-mobile-bcd.webm",
+      "trace": "media/provenance-fixture-mobile-bcd.zip",
+      "video_sha256": "889e8cdcc9b933f0ee3b86c6c17590d2e71435552376cf46665ab1abeed1b8a5"
+    }
+  ]
+}

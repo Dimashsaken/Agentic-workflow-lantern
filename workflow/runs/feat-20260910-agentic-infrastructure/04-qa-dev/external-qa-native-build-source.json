@@ -1,0 +1,54 @@
+[
+  {
+    "path": "infra/qa-gateway/Dockerfile",
+    "sha256": "b08c72d47eb3f87901b6058fa2096a14f38dcfc9065d9ac30351dea79ff29289"
+  },
+  {
+    "path": "infra/qa-gateway/build_zlib.py",
+    "sha256": "46301c522465e599681215c3efc9a6c79088d4d2a222fc5627e60f0f2238cdd2"
+  },
+  {
+    "path": "infra/qa-gateway/test_zlib.py",
+    "sha256": "181797d477e04dea8310055f9207dadaa3b2bf90caf783b5469433bd06447186"
+  },
+  {
+    "path": "infra/qa-gateway/vendor_wheel.py",
+    "sha256": "1ee7f7260a5ca3d7a7233c8c6077ee55043227590b3d05c294057a8366d50ccf"
+  },
+  {
+    "path": "infra/qa-gateway/policy.py",
+    "sha256": "f0a370c079fab095890535447d53047bc39f9035a2a2a03a747b4926c008b0b5"
+  },
+  {
+    "path": "infra/qa-gateway/entrypoint.py",
+    "sha256": "aa3634e35307ae2c4cb6924364115623b2c1afa946a10e5be433e326dbd8c723"
+  },
+  {
+    "path": "infra/qa-gateway/test_image.py",
+    "sha256": "82e09952700804e20760f00f0e471d49b31f7d05cb0018a02b06e8d44374763e"
+  },
+  {
+    "path": "infra/qa-gateway/build-tools.lock",
+    "sha256": "abaae88ac8bd25cf01d4ee2ca7c71699da61aca54bc778a474cc17c4d6adc201"
+  },
+  {
+    "path": "infra/qa-gateway/requirements.lock",
+    "sha256": "28f276fddc1c4da8b48609ce0c2cecaea2eb561ef755180aabc98f4360efaaff"
+  },
+  {
+    "path": "infra/qa-gateway/upstream.lock",
+    "sha256": "615a94d32e907d6a6a3f889181a99382ee413421f782535033e685dedad285cd"
+  },
+  {
+    "path": "tools/azure-runner/qa_transport.py",
+    "sha256": "efc591c26affa5a492bdc7bae4bd02dc90f2c35adefd14d58f71babbc49b85a0"
+  },
+  {
+    "path": "tools/azure-runner/qa_recorder_worker.py",
+    "sha256": "37ab3957fac008fedda4c04fcd4b44c6ba527be22f6f07c0f3634c7e7ae6251b"
+  },
+  {
+    "path": "infra/qa-recorder/Dockerfile",
+    "sha256": "feb16b5fc1c0a375bcf5e730259e9d852892ba8855905241ca7073d013029ee0"
+  }
+]

@@ -1,0 +1,6 @@
+    ...Storing image for indexing
+    v Image stored for indexing
+    ...Indexing
+    v Indexed 170 packages
+    ! failed to delete temporary image archive C:\Users\dimas\AppData\Local\Temp\docker-scout\sha256\fb0b441665d40004901f86dc7f62957a2deb1f29ffddb13bc5f855870683a525\87d5b44a-3c2e-4f24-9699-f32aca26b513: unlinkat C:\Users\dimas\AppData\Local\Temp\docker-scout\sha256\fb0b441665d40004901f86dc7f62957a2deb1f29ffddb13bc5f855870683a525\87d5b44a-3c2e-4f24-9699-f32aca26b513: The process cannot access the file because it is being used by another process.    x Detected 13 vulnerable packages with a total of 33 vulnerabilities
+    v Report written to workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-minimal-image-audit.sarif

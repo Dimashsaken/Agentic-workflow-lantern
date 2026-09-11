@@ -1035,3 +1035,27 @@ Azure run, Docker isolation proof or recorded browser QA is claimed here. Deploy
 the host and sandbox image together; old green gates without fingerprints fail,
 and new validation executions must replace prose-only citations. No schema change,
 deployment or human gate decision is included in this local engineering change.
+
+### D24 continuation — 2026-09-11 — Maintenance and retention authority
+
+The continuation-3 request authorizes local implementation of the reviewed B–D
+work order. Dedicated maintenance attempts bind an existing human approval and
+exact publication target without impersonating a dispatcher or changing a gate.
+All ownership transitions share a parent-row lock; conflict observations happen
+in a fresh statement after lock acquisition. Trial merges regate immutable source
+before conditional publication. Red regates hold until inherited fix authority
+exists. The opt-in fenced babysitter remains default off.
+
+Checkout allocation, Docker mounts and retirement share a controller-owned OS
+lock and permanent identity tombstone. Only proven terminal, unreferenced
+checkouts may enter quarantine; evidence remains retained indefinitely. Inventory
+is diagnostic and cleanup defaults to dry-run. Unknown paths and unverified
+Desktop mount mappings hold. No automatic deletion schedule is added.
+
+The proposed TLS gateway is still unaccepted: dependency advisories and missing
+actual-image/host-network acceptance block activation. A separately tested direct
+HTTPS fixture establishes the narrow recorder's certificate validation, redacted
+command trace and controller receipt mechanics only. Azure, Agents SDK, Codex,
+the fixed lifecycle and human approval/merge/deployment ownership stay unchanged.
+The engineering reports distinguish local fixtures from live GitHub, external
+QA and production acceptance; staging is NO-GO.

@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/proof.py", line 72, in <module>
+    ns('g','sysctl','-w','net.ipv4.ip_forward=1')
+  File "/proof.py", line 23, in ns
+    return command('ip','netns','exec',name,*args,input=input)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/proof.py", line 19, in command
+    if p.returncode: raise RuntimeError(str(args)+': '+p.stderr)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: ('ip', 'netns', 'exec', 'g', 'sysctl', '-w', 'net.ipv4.ip_forward=1'): sysctl: permission denied on key "net.ipv4.ip_forward"
+

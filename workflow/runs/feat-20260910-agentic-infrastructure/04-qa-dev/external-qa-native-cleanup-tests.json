@@ -1,0 +1,5 @@
+{
+  "command_id": "49560d49-339c-4289-84c0-14d9b1f63934",
+  "status": "Success",
+  "output": "test_container_remove_failure_continues_and_timeout_escalates_owned_process (test_qa_native_acceptance.NativeCleanup.test_container_remove_failure_continues_and_timeout_escalates_owned_process) ... ok\ntest_signal_failure_does_not_skip_container_or_network_cleanup (test_qa_native_acceptance.NativeCleanup.test_signal_failure_does_not_skip_container_or_network_cleanup) ... ok\ntest_wrong_owner_refuses_only_that_resource_and_continues (test_qa_native_acceptance.NativeCleanup.test_wrong_owner_refuses_only_that_resource_and_continues) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.002s\n\nOK\n"
+}

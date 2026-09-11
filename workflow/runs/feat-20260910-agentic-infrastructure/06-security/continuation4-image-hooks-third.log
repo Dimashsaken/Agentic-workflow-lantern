@@ -1,0 +1,96 @@
+{
+  "scope": "actual candidate image; loopback TLS, test-only upstream CA; no host egress acceptance",
+  "results": [
+    {
+      "name": "positive_both_tls_legs",
+      "passed": true,
+      "upstream_connections": 1,
+      "upstream_requests": 1
+    },
+    {
+      "name": "keepalive_positive",
+      "passed": true,
+      "upstream_connections": 2,
+      "upstream_requests": 2
+    },
+    {
+      "name": "keepalive_host_changed",
+      "passed": true,
+      "upstream_connections": 1,
+      "upstream_requests": 1
+    },
+    {
+      "name": "connect_denied",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "sni_mismatch",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "no_sni",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "http2_alpn",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "untrusted_gateway_ca",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "host_mismatch",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "duplicate_host",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "absolute_target_mismatch",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "websocket_upgrade",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "ambiguous_content_length",
+      "passed": true,
+      "upstream_connections": 0,
+      "upstream_requests": 0
+    },
+    {
+      "name": "upstream_hostname_mismatch",
+      "passed": true,
+      "upstream_connections": 1,
+      "upstream_requests": 0
+    },
+    {
+      "name": "upstream_expired_certificate",
+      "passed": true,
+      "upstream_connections": 1,
+      "upstream_requests": 0
+    }
+  ],
+  "passed": 15
+}

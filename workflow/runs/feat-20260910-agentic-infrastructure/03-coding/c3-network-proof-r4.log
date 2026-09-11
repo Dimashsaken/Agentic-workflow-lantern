@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/proof.py", line 98, in <module>
+    ns('r','nft','-f','-',input='table ip simulated_docker_dns { chain output { type nat hook output priority -100; ip daddr 127.0.0.11 udp dport 53 dnat to 10.210.2.2:53; } }')
+  File "/proof.py", line 23, in ns
+    return command('ip','netns','exec',name,*args,input=input)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/proof.py", line 19, in command
+    if p.returncode: raise RuntimeError(str(args)+': '+p.stderr)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: ('ip', 'netns', 'exec', 'r', 'nft', '-f', '-'): /dev/stdin:1:142-142: Error: syntax error, unexpected '}', expecting newline or semicolon
+table ip simulated_docker_dns { chain output { type nat hook output priority -100; ip daddr 127.0.0.11 udp dport 53 dnat to 10.210.2.2:53; } }
+                                                                                                                                             ^
+

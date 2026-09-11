@@ -1,0 +1,9 @@
+  File "<string>", line 12
+    with open('/tmp/observations','a') as f:f.write(str(port)+'
+                                                              ^
+SyntaxError: unterminated string literal (detected at line 12)
+Traceback (most recent call last):
+  File "/proof.py", line 80, in <module>
+    assert results['permissive_'+label]=='ok',results
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'permissive_direct': 'denied'}

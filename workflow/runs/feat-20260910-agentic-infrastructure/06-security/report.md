@@ -352,3 +352,88 @@ The actual security `append_memory` postcondition remains satisfied by configure
 **Open question:** Do you approve the schema-free local contracts B–D in `02-pre-coding/continuation-3-task-plan.md`, preserving existing live rollout and evidence-deletion gates?
 
 Status: BLOCKED (full continuation / staging); bounded local pilot GO with conditions
+
+## Continuation 3 B–D implementation pre-review — 2026-09-11
+
+**GO with conditions for local implementation; NO-GO for staging or external-mode activation.** The user's current continuation-3 instruction authorizes implementing the concrete local B–D contracts, as recorded by the integration owner. The older unanswered local implementation question is superseded; no fleet gate, live migration, publication, deployment or evidence-deletion approval is inferred.
+
+See [continuation3-bcd-prereview.md](continuation3-bcd-prereview.md) for the severity-ranked constraints, file evidence, concrete mitigations, source/API review limits and deploy-day checklist. This is a design pre-review at `80babd0`, not acceptance of concurrently written implementation. The required boundaries are shared maintenance/dispatch/rework exclusion, separately fenced maintenance publication, enforceable host egress plus per-request TLS destination checks, isolated ephemeral CA trust, controller-owned sealed capture, and shared launch/retirement OS locks with irreversible tombstones. All require the plan's actual integration and negative controls before activation.
+
+No dependency/lockfile/image diff exists in the reviewed continuation baseline through this cutoff. New gateway packages and images still require exact inventory and audit. No tests or external effects were executed by this pre-review. A dated gateway authorization learning was sent to the integration owner for actual `append_memory`; no tool is exposed in this reviewer session and no new durable insertion or rendered memory edit is claimed here.
+
+Status: PASS-WITH-NOTES (local design pre-review); staging and external-mode activation NO-GO pending implementation evidence.
+
+## Final continuation-3 B/D security disposition — 2026-09-11
+
+**GO with conditions for the bounded local B/D pilot only. C is unaccepted and NO-GO for activation; staging remains NO-GO.** Full findings, concrete mitigations, evidence limits and deploy-day checklist are in [continuation3-bcd-prereview.md](continuation3-bcd-prereview.md), section “Final bounded B/D retest and disabled C review”. No confirmed unmitigated high finding remains in that reviewed B/D scope. Final configured checks/evals and post-coding review remain integration conditions, not results assumed by this report.
+
+Review artifacts now live only in `C:/Users/dimas/.lantern/worktrees/continuation-3`, branch `codex/agentic-infrastructure-continuation-3`. [continuation3-final-review-snapshot.json](continuation3-final-review-snapshot.json) binds the runtime/image/lock review to exact file hashes. This review excludes unrelated concurrent Mission Control changes.
+
+Closed findings cover exact merge ancestry, repeated-cancellation worker joining, path/key and quarantine retirement ownership, post-deletion audit recovery, and both direct/scheduled claim exclusion. An additional actual two-connection PostgreSQL probe exposed stale NOT EXISTS evaluation after a lock wait; the final helper acquires the run lock before reading child conflicts in a new statement, and its regression passes. Current-provider reobservation and site-local IPv6 denial were also verified. Independent worktree checks: 15 retirement tests, 6 added adversarial probes, 6 transport unit tests and 7 capture unit tests passed. Earlier independent SQL/Git/Docker maintenance run passed 13/13; the integrator's separately supplied final run records 14/14 and retains its original path/provenance.
+
+C remains safely blocked by the launcher. Actual host egress/TLS denial proof, candidate image builds/audit, trusted deployment-bound capture and recorder-secret controls are incomplete. The new 43-package lock matches official PyPI wheel hashes, but four pinned packages have reported advisories; [continuation3-dependency-review.json](continuation3-dependency-review.json) records exact versions and references. The recorder was changed from raw Playwright network traces to redacted command-outcome JSON; actual image acceptance remains outstanding. These package findings do not claim demonstrated reachability in an activated service.
+
+The deploy-day checklist requires final-source checks, default-off maintenance, dry-run retention with indefinite evidence, continued hard hold on C, worker drain/fencing and preserved effect ledger on rollback, and every existing human rollout gate. No live provider write, configured-database migration, deployment, existing-evidence deletion or human approval was performed by this reviewer. Actual append_memory remains the integrator's pending final action; its fresh-statement PostgreSQL learning is included in the detailed report, without a fabricated insert or rendered-memory edit.
+
+Status: PASS-WITH-NOTES (bounded local B/D pilot only); C activation and staging NO-GO.
+
+## Fixture-capture and inventory verification supplement — 2026-09-11
+
+**GO with conditions remains limited to local B/D and the explicitly test-only recorder fixture; external C and staging remain NO-GO.** The latest detailed supplement in [continuation3-bcd-prereview.md](continuation3-bcd-prereview.md) reviews strict fixture/gateway mode validation at every receipt boundary, durable attempt/key checks under the fence, and diagnostic-only retention inventory. No new unmitigated high finding was identified. Final source hashes and proof-driver/result hashes are in the updated snapshot.
+
+Supplied evidence now establishes one actual recorder image exercised against a direct local TLS fixture with certificate validation and ephemeral NSS trust. Independently verified media hashes, full video decoding and redacted trace schema are in [continuation3-capture-media-review.json](continuation3-capture-media-review.json). Updated independent checks passed: 9 receipt tests, 16 retention tests and 7 security probes. The actual Docker/PostgreSQL fixture driver was inspected rather than rerun by security; its synthetic deployment identity and direct networking remain clearly test-only. Gateway/firewall negative acceptance and dependency advisory resolution remain open, and the external launcher remains unconditionally held. Previous deploy-day conditions and human gates are unchanged.
+
+Status: PASS-WITH-NOTES (bounded local B/D and explicitly test-only recorder fixture); external C activation and staging NO-GO.
+
+
+## Continuation-3 outstanding foundation implementation and actual gateway review — 2026-09-11
+
+**GO with conditions for the authorized local implementation and disabled candidate; NO-GO for external gateway activation, complete foundation acceptance or staging.** The previous B-D local permission question is superseded by the current user instruction. No new approval, gate decision or deployment is inferred.
+
+The full severity-ranked findings, source evidence, concrete mitigations, review scope and deploy-day checklist are in [continuation4-security-review.md](continuation4-security-review.md). Reviewed the complete continuation runtime and lockfile delta, including inherited maintenance authority/cancellation/revalidation/publication, retention compatibility/index growth, controller-sealed recording and host namespace restrictions. The gateway's actual core exposed and now fixes ineffective ClientHello denial, replacement-socket pinning, absolute-target normalization and invalid startup options. A deterministic metadata-only local mitmproxy candidate resolves the patched43-package runtime lock without resolver suppression. The minimal pinned image removes unrelated sandbox tooling and the complete unused pip/ensurepip installer.
+
+The frozen final image `sha256:b5f5a8a7d6116711e797f36d532f5050036e1a8b7fe7ebd1c2930edd8dedeb8c` passes **20/20 actual packaged loopback TLS/HTTP controls**. Its complete Scout scan still reports **27 OS advisories:1 high,2 medium,24 low** across12 packages. High CVE-2026-85091 affects the exact Debian zlib package according to Debian's current tracker and has no fixed distro version listed. It is retained as an open blocker, not waived from a conflicting upstream version range. [continuation4-final-image-summary.json](continuation4-final-image-summary.json) records the exact image/source hashes and compact findings; the detailed report links full build, inventory, scan and request-counter evidence.
+
+External launch remains unconditionally disabled. Actual native-host/container identity and packet-denial acceptance, cross-execution CA/lifecycle controls and a trusted external deployment through the real gateway/controller path remain mandatory. Docker namespace and direct-TLS Playwright fixtures are explicitly separate evidence. The exact remaining prerequisites are a reviewed zlib disposition plus an authorized native host and target capable of those positive/denial and lifecycle tests; none is replaced by successful dependency resolution or media decoding. Final configured checks/evals and source-cutoff handoff remain the integrator's responsibility.
+
+The required durable security learning was appended via the actual append_memory tool: row **67**, key `manual:feat-20260910-agentic-infrastructure:security:pending-e48b28231f26`, in [c3-foundation-memory.json](../03-coding/c3-foundation-memory.json). This manual engineering receipt is not a fleet stage pass. No rendered memory edit occurred; configured runs, executions and approvals stayed unchanged, and no migration was applied.
+
+Status: PASS-WITH-NOTES for bounded local implementation; external foundation and staging NO-GO.
+
+Final host-adapter supplement: reviewed and independently passed **8/8** controls for local Unix-socket pinning, exact process cgroup/container binding, rule normalization and refusal of remote-PID collisions. The supplied actual nftables namespace proof passes calibrated positive controls, seven denial checks and zero forbidden observer bytes; it remains separate from native Docker-host/external TLS acceptance. Final reviewed runtime hashes are in [continuation4-runtime-review-snapshot.json](continuation4-runtime-review-snapshot.json). No additional unmitigated high code defect was found in the local maintenance/retention/controller scope. The zlib and external acceptance blockers remain unchanged.
+
+Status: PASS-WITH-NOTES for bounded local implementation; external foundation and staging NO-GO.
+
+## External QA dependency mitigation and watchdog supplement — 2026-09-11
+
+**GO with conditions for the disabled local candidate; NO-GO for external activation or staging.** Independent scoped review of the uncommitted zlib builder/test/Dockerfile and QA execution/transport/test changes found no new high-severity code defect. Details, severity-ranked conditions, exact source hashes and deploy-day checklist are in [external-qa-mitigation-review.md](external-qa-mitigation-review.md).
+
+Independent execution/transport tests passed 20/20; an additional ordinary API probe confirmed repeated whole-controller cancellation finishes owned cleanup once without live child tasks. Supplied final image evidence passes the ordinary installed zlib roundtrip/terminal-error check and 24/24 packaged TLS controls. The local zlib change is an explicitly reviewed terminal-writer mitigation with retained exported-symbol parity, not an upstream fix or advisory waiver. Installed-file digest binding and a fresh complete image scan remain acceptance conditions at this cutoff; the first offline scanner database download failed and its log is retained. Native-host, actual fleet lifecycle and human deployment acceptance remain separate requirements. The unconditional external launcher hold is intact.
+
+The bound append_memory tool is unavailable in this reviewer session. A dated learning is recorded in the detailed report for the integrator's actual insertion; no rendered memory edit or fabricated receipt is claimed. No implementation edit, live deployment, gate decision, schema modification or exploit test was performed by this reviewer.
+
+Status: PASS-WITH-NOTES for the disabled local candidate; complete dependency acceptance, external activation and staging remain unaccepted.
+
+### Integrator evidence after review cutoff — 2026-09-11
+
+The installed-library binding is now verified on both the local and native image:
+`ddb09e9720925b71d2946e265c4d4b0f1c55dce3dd7f5bb2cec2fa8d1a067997` matches the
+mitigation provenance. The final native pair passes 14 calibrated network denials,
+two allowed paths, complete cleanup and the native gateway's 24 packaged tests.
+These results are linked in `../04-qa-dev/external-qa-native-report.md`.
+
+The native offline Trivy 0.74.0 audit completed with networking disabled and a
+registry-digest-verified public database. It reports 176 gateway findings (3
+critical, 51 high) and 191 recorder findings (1 critical, 10 high), recorded in
+[external-qa-offline-audit-status.json](external-qa-offline-audit-status.json).
+These are untriaged raw counts, not a demonstrated exploitability verdict or a
+clean image claim. Automatic approval review rejected transfer of package versions
+and vulnerability IDs; explicit approval has been requested. Full reports remain
+on the owned native host, and no details transfer was attempted after rejection.
+The zlib source mitigation does not close the additional unreviewed findings.
+
+Actual append_memory row 71 is recorded in `../03-coding/external-qa-memory.json`;
+existing run/execution/approval counts and approval snapshot remained unchanged.
+
+Status: BLOCKED for complete dependency and external QA acceptance, pending audit
+detail review and the trusted target/combined recorder lifecycle prerequisites.

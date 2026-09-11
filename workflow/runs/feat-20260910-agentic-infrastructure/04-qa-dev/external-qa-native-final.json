@@ -1,0 +1,131 @@
+{
+  "passed": true,
+  "scope": "native Docker adapter with test-only socket fixtures",
+  "external_transport_verified": false,
+  "trusted_deployment_verified": false,
+  "kernel": "7.0.0-1012-aws",
+  "images": {
+    "recorder": "sha256:bbf5ea982390470ce5d0331ac07fc004906ac1e896df5ebe2d84e7e6ff8d59fd",
+    "gateway": "sha256:05b1729428c8cdcfb099758f81d916afb94550eae48fad72e4c075e151d0b378"
+  },
+  "source_sha256": {
+    "qa_native_acceptance.py": "0cd01f82c63c669d4541223d7a6f5de1c006bafca1638822314a1628b401d2cc",
+    "qa_network.py": "6c4f864905ed98a0f3df84c02b81faa1705859d5b30c494f54b43e98b38e0216",
+    "qa_transport.py": "efc591c26affa5a492bdc7bae4bd02dc90f2c35adefd14d58f71babbc49b85a0"
+  },
+  "calibration": {
+    "recorder_alternate_tcp": true,
+    "recorder_direct_dns": true,
+    "recorder_quic_udp": true,
+    "recorder_ipv6": true,
+    "recorder_simulated_metadata": true,
+    "recorder_host_listener": true,
+    "gateway_forbidden_tcp": true,
+    "gateway_direct_dns": true,
+    "gateway_quic_udp": true,
+    "gateway_ipv6": true,
+    "gateway_cross_execution": true,
+    "gateway_simulated_metadata": true,
+    "gateway_host_listener": true,
+    "docker_embedded_dns": true
+  },
+  "denials": {
+    "recorder_alternate_tcp": true,
+    "recorder_direct_dns": true,
+    "recorder_quic_udp": true,
+    "recorder_ipv6": true,
+    "recorder_simulated_metadata": true,
+    "recorder_host_listener": true,
+    "gateway_forbidden_tcp": true,
+    "gateway_direct_dns": true,
+    "gateway_quic_udp": true,
+    "gateway_ipv6": true,
+    "gateway_cross_execution": true,
+    "gateway_simulated_metadata": true,
+    "gateway_host_listener": true,
+    "docker_embedded_dns": true
+  },
+  "permissive_observer_packets": {
+    "gateway-permissive.packets.json": 23,
+    "endpoint-permissive.packets.json": 13,
+    "peer-permissive.packets.json": 6,
+    "host-permissive.packets.json": 20
+  },
+  "adapter": {
+    "candidate_only": true,
+    "external_transport_verified": false,
+    "installed": [
+      {
+        "container": "f901151b4d67fea97464cac48d7ec9dc237dbada904b111efb3a987d61d9a3de",
+        "namespace": 4026532291,
+        "rules_sha256": "849b3ef9d79de6b61ea9f115c8029828dd3c98fcb41d78284c2948f325499f56",
+        "role": "recorder"
+      },
+      {
+        "container": "3a4711965bc7bba907f74e729535991106bed7d8a474e154cff55787ac1fff3a",
+        "namespace": 4026532356,
+        "rules_sha256": "ba81bacdc87d37a1a51df5cdadd6aa463315524484a244446927d15d3dad9981",
+        "role": "gateway"
+      }
+    ]
+  },
+  "recorder_identity": {
+    "id": "f901151b4d67fea97464cac48d7ec9dc237dbada904b111efb3a987d61d9a3de",
+    "namespace": 4026532291,
+    "cgroup": "0::/system.slice/docker-f901151b4d67fea97464cac48d7ec9dc237dbada904b111efb3a987d61d9a3de.scope"
+  },
+  "gateway_identity": {
+    "id": "3a4711965bc7bba907f74e729535991106bed7d8a474e154cff55787ac1fff3a",
+    "namespace": 4026532356,
+    "cgroup": "0::/system.slice/docker-3a4711965bc7bba907f74e729535991106bed7d8a474e154cff55787ac1fff3a.scope"
+  },
+  "positive": {
+    "recorder_proxy": true,
+    "gateway_pinned_endpoint": true
+  },
+  "zero_forbidden_observer_bytes": true,
+  "forbidden_observer_packets": {
+    "gateway-forbidden.packets.json": 0,
+    "endpoint-forbidden.packets.json": 0,
+    "peer-forbidden.packets.json": 0,
+    "host-forbidden.packets.json": 0
+  },
+  "observer_counts": {
+    "gateway-observer.jsonl": 7,
+    "endpoint-observer.jsonl": 5,
+    "other-execution-observer.jsonl": 1,
+    "host-observer.jsonl": 2
+  },
+  "wrong_execution_refused": true,
+  "peer_execution_refused": true,
+  "cleanup": {
+    "complete": true,
+    "errors": [],
+    "observers_stopped": [
+      70478,
+      70477,
+      70469,
+      70460,
+      69938,
+      69937,
+      69929,
+      69921,
+      69912,
+      69910,
+      69897,
+      69883
+    ],
+    "containers_removed": [
+      "8e97d836b491da9186b56da273291667721f3002e721ddf823d90a446fa62490",
+      "3b29b0469aea5d55abec53a59c024d09b25efe4cdce8e2f910c03e70b9e6fe0b",
+      "3a4711965bc7bba907f74e729535991106bed7d8a474e154cff55787ac1fff3a",
+      "f901151b4d67fea97464cac48d7ec9dc237dbada904b111efb3a987d61d9a3de"
+    ],
+    "networks_removed": [
+      "202a9e4e5a76280c64d00cfc3f0e66a51f31081cc0ec1a8e1e64f4667cd30fa7",
+      "45930408c32bd849ccc49482812fc44670cc18520763f2b2dd9c8111c86608df"
+    ],
+    "evidence_retained": "/tmp/lantern-external-qa-054d0a998dd8-fbn5od5x"
+  }
+}
+

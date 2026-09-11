@@ -702,7 +702,7 @@ def make_append_memory(role: str, run_id: str, stage: str, execution_key: str):
         try:
             import execution_runtime as ownership
             async with ownership.mutation(conn, stage=True):
-                if ownership.enabled():
+                if ownership.enabled() or ownership.STAGE.get() is not None:
                     child = ownership.STAGE.get()
                     if child.lease.run_id != run_id or not await conn.fetchval(
                         "SELECT EXISTS(SELECT 1 FROM stage_executions WHERE id=$1 AND run_id=$2 AND stage=$3 AND idempotency_key=$4)",

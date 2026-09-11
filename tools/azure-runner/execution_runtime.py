@@ -61,7 +61,7 @@ async def run_scope(conn, connect, run_id):
 @asynccontextmanager
 async def mutation(conn, *, stage=False, finish=False):
     ownership = STAGE.get() if stage else RUN.get()
-    if not enabled():
+    if not enabled() and not (ownership and ownership.lease.maintenance):
         yield
         return
     if ownership is None:

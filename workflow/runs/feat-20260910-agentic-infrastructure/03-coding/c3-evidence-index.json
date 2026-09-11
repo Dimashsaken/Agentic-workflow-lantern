@@ -1,0 +1,423 @@
+{
+  "run_id": "feat-20260910-agentic-infrastructure",
+  "baseline": "09fdb11",
+  "implementation_commit": "d0186cc01ce8a32155fc25065c0b198a2e2ca903",
+  "branch": "codex/agentic-infrastructure-continuation-3",
+  "source_matches_final_configured_checks": true,
+  "external_gateway_enabled": false,
+  "foundation_accepted": false,
+  "scope": "manual local engineering; actual integration and injected fixture scopes are identified per report",
+  "evidence": [
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-append-memory.py",
+      "bytes": 1900,
+      "sha256": "a6f3aa0a7553c68c0dc17c9d6c926a23e4ea20b04247abfa6704cb5884b4567e"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-complete-checks.py",
+      "bytes": 1915,
+      "sha256": "412f62510e90f3262c47f5617dc8d9f544cca6a9c537a6e735f52c7aa3d32e4f"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-final-lint.log",
+      "bytes": 85,
+      "sha256": "43f8a757a5b254e76a6887386974a6e2669d7f4371f85d7a80d7290ed122ce74"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-final-quality.json",
+      "bytes": 27301,
+      "sha256": "1876d197c03579d59850b120787511faf2d5ef90ddf761d2a505442f80be0237"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-final-test.log",
+      "bytes": 49053,
+      "sha256": "3f9dc171be6d0126a10828c7088415ff2d50806524fd7ed7a8252937e958cdf4"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-foundation-lint.log",
+      "bytes": 85,
+      "sha256": "ca1b46d79856e07a6a4cd73f7b945a7f935aa173cdc65deefcdef4c846d55275"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-foundation-maintenance-r2.log",
+      "bytes": 2046,
+      "sha256": "30f956efe0a228fcfba7b744e97ffd693368028d357ae410aa4a6fac721fe72d"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-foundation-maintenance.log",
+      "bytes": 11369,
+      "sha256": "d08481eaaabb02fa33a220d29ce08a04b514d3cd4070b27369d71bf6a441f0d4"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-foundation-memory.json",
+      "bytes": 1533,
+      "sha256": "8c2b1774abb1989843134357207a7fa1e39dd54d3e58baae5553525b370a3f8e"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-foundation-quality.json",
+      "bytes": 27091,
+      "sha256": "becadd5d8e396663d8ecd807b67d50783b1e2aaf153d34d8b55393b0d09d2428"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-foundation-test.log",
+      "bytes": 49049,
+      "sha256": "dcedd8f96a5d107b8b8a24c248997d1c972a7297916970ab9fd0c967e195a908"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-build-r2.log",
+      "bytes": 14468,
+      "sha256": "04ae6cbb0f83e4ade45643263d1834b4728e12fba746920124e990d9e0f59cce"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-build.log",
+      "bytes": 21913,
+      "sha256": "989cf1158622902265793b44f4acfce040c2ce0b7fa2d8977403cf4d790a47e2"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-proof-r2.log",
+      "bytes": 451,
+      "sha256": "8df81ddc835b0fbc15776ed335aa5ee4bf939d3e886aaf1bd058edc6ab8c09fd"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-proof-r3.log",
+      "bytes": 3024,
+      "sha256": "61937a77b4e4dd6e64e695877bdafbf2f51314f74edf224698e57f6a5b97749c"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-proof-r4.log",
+      "bytes": 1037,
+      "sha256": "93cf9877ef4d534d69f1cdc8c760925ce34be9ceefee6475722da864e22eb2e6"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-proof-r5.log",
+      "bytes": 183,
+      "sha256": "413b37657aa79090e27ef8c6124cb823eafb207f60386d287c466fa6e6138f70"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-proof-r6.log",
+      "bytes": 494,
+      "sha256": "3206183c0eaf1c6edcf7644193827333f478d60ab35f0737240199588be5f426"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-proof.json",
+      "bytes": 1350,
+      "sha256": "13f95b2164b3f2169810a803c2bbde6a64b3eeff03fea9f6a8d34110586ce1e6"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-proof.log",
+      "bytes": 609,
+      "sha256": "04bc5c8342a948ee0828d501249f580f244c51eff31f8e276d241dc015e453bd"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-proof.py",
+      "bytes": 5535,
+      "sha256": "cbb6876bae32f3c20021bab43eb365f6d8e79ac8ebafaecbd817987bd5ba17cb"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/03-coding/c3-network-test.Dockerfile",
+      "bytes": 445,
+      "sha256": "4ec0173a707f6d3d9761d38508c9819e7351d081c9bf2d090e40f6a1e79f1e1d"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-actual-capture-denials.json",
+      "bytes": 6641,
+      "sha256": "e5b673207649be3d86a27188dbc813ae7d840721c530470edea95303312f8c3e"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-actual-capture-denials.py",
+      "bytes": 6941,
+      "sha256": "7eb77a397528bd26c1bb85ddd14b5fb59fcf50c0065de5bbeeca8dbb388ac3a4"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-capture-fixture.py",
+      "bytes": 10039,
+      "sha256": "f54bcc58cf3ea15e94f61c96f95fa53659df9ba56b70317c924ada632a45c1f9"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-capture-frames.json",
+      "bytes": 545,
+      "sha256": "fb881745d8567c9fabde919907e2905e546e2898179952f06007c7272b53881c"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-disposable-db-readiness.json",
+      "bytes": 293,
+      "sha256": "6f59c95614fd0d2f7285e6083fa14d636af895a99e0da77e0015baaddcfac550"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-disposable-db-shutdown.json",
+      "bytes": 608,
+      "sha256": "2c73e6d30199923a3c1af937cc6240deec228723bcbb1b10085a0945b05ab89a"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-disposable-db.py",
+      "bytes": 3109,
+      "sha256": "6e46a77622e98fb3c5819b3c173f404f8ae08cc1e9ebb9514f7f3685b081a459"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-foundation-readiness.md",
+      "bytes": 2968,
+      "sha256": "17d18810f6010a7f010a9651c7ef24a5d1b0568da6ecde40ad66d45248b81557"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-qa-controller-capture.json",
+      "bytes": 4931,
+      "sha256": "8af9cd101293a2911a8d4b42ee44fa17dbc36626f4c09181dd9d169b6b517b13"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-qa-controller-proof.py",
+      "bytes": 12297,
+      "sha256": "a8bfb0e99c5a706aa6b4fd42bf7df18a79f3f6d798a2fe20d835e6f40ecc007a"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/04-qa-dev/c3-qa-controller-sql.json",
+      "bytes": 3231,
+      "sha256": "e314ab4a256c97aeee9531cff4f96d3575af12721be6524f12cb31330ac38eb1"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-final-review-snapshot.json",
+      "bytes": 2226,
+      "sha256": "ca6753123eb65e04147f93c26dc50829741d6ab1db873704c911df986a70ccfd"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-initial-defect-probes.json",
+      "bytes": 1808,
+      "sha256": "40cf929ec374125f89ceb8ee99a536fc1f002e6145320824e12f98c8e2317b73"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-lock-compat-retest.json",
+      "bytes": 589,
+      "sha256": "b835c2b19088e1f95659d774c74c2416aaa3997f212632d823cab1c844a88c07"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-outstanding-review.md",
+      "bytes": 15644,
+      "sha256": "5d778e8b7b268e7affed1d7ad5fb119f695430139720b5449fb6763c23caaad7"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-retention-lock-retest.log",
+      "bytes": 832,
+      "sha256": "298c43acadac4e13f6fbc6c08a75a7769610175f631856180a20348fb0896af5"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-retention-retest-final.log",
+      "bytes": 831,
+      "sha256": "718adf2f282c8815bbbbf5190db6d43222d7903563f03f69f4b024dbf0b99e87"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-retention-retest.log",
+      "bytes": 1877,
+      "sha256": "f1a9191487e2bf61fdd7c6ce2fcb8fca5b6f3a724e0b7ed5050aeb1410ebcf6e"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-review-probes.json",
+      "bytes": 2765,
+      "sha256": "8c2e84f4ad81314cdfb4b61062af9518da0523005e9501f2b3aa61687a29f6d3"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/05-post-coding/c3-review-probes.py",
+      "bytes": 10614,
+      "sha256": "df17d2fa7f9eb4657d69d17ce5cfff655d982d767d24c77b7cc3703e439ea317"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-final-image-summary.json",
+      "bytes": 8057,
+      "sha256": "158c0322d0e4f435ad11ddac8a88ed71661b3e7b96aaa4cf09bd8ebee7f17e88"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-hook-unit.log",
+      "bytes": 107,
+      "sha256": "327d4e41e5072cef686b750f74b63ca495ed468a6aa7aaa7f6c96e8c3739c632"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-audit-pinned.log",
+      "bytes": 764,
+      "sha256": "18b3942494a355a91e2e9cf0e31e0b33d2db9d8c1deb1dbfb4d53476e22f1f03"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-audit-pinned.sarif",
+      "bytes": 558359,
+      "sha256": "8b99c1baabe09cb6633aef380b4087d0d66e1da6f3c5c16299afca3a7cbf243d"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-audit.log",
+      "bytes": 202,
+      "sha256": "5cd36bac05992d5b07a37f5c49caeed6af42154bd056dfe39de5884d8236ace9"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-build-final.log",
+      "bytes": 12806,
+      "sha256": "2f9d8081c09c3f33498df44c5de077668a0b378dc409b25c02a4945e3f8ed479"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-build-hooks.log",
+      "bytes": 2929,
+      "sha256": "649928346ed43f9900696c1d3f49f6edfed90ab6950486a4df382643cdc3046d"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-build-tag.log",
+      "bytes": 17391,
+      "sha256": "a5927bd37a20667b5c6a931ee7e795d9aab74afcf14cccade7d646e89d96c26c"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-build-target.log",
+      "bytes": 2834,
+      "sha256": "0d2e449f84a8dc0f5c3a34dbea4f09c7ee007370a242347db909872e0629d4c4"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-build.log",
+      "bytes": 1753,
+      "sha256": "cd903accd816214297e2c5239f42a70cb955a0bc17ef3c436577f97349ddbde7"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-hooks-final.json",
+      "bytes": 2941,
+      "sha256": "82a70cbb5afb9e531268026d6673a3c770fb5fe8674a10267f50330997dd1474"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-hooks-initial.log",
+      "bytes": 648,
+      "sha256": "3d521d8fbe9fd31be526ac35bcc5e2eb427d0e87f82b5c4fce926824e5fd2aad"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-hooks-second.log",
+      "bytes": 460,
+      "sha256": "b5d28989c9c96019e750437a9c1e5481333087ad6dc7a4115697a1078b4f3fbe"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-hooks-third.log",
+      "bytes": 2230,
+      "sha256": "4d9e75b648e90ab01525dc1653a74335ceff258437d478d85eb660e0d3db77a9"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-inventory.json",
+      "bytes": 14767,
+      "sha256": "aa25a9f4c1f882d3f50a3b380b339d7ba43b251617d494801bcf665783b7b4af"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-image-inventory.py",
+      "bytes": 1631,
+      "sha256": "1120d94abfa1d9acf90458c7b7169a5413e255a9f12b27f9c4d042cb20a55394"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-lock-audit.json",
+      "bytes": 19141,
+      "sha256": "f7b5a8e1ef33845cd13a071ac8a308520ab9ef3b689c882d1ced1cba40f10198"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-lock-audit.py",
+      "bytes": 2884,
+      "sha256": "008507964a51e85e622df7e9b21d0a66a6fd7f3fdded54ad70c712d3b4907c57"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-minimal-base-manifest.json",
+      "bytes": 12934,
+      "sha256": "eb66a94ae667e1e7e485ac787dad57d34815358fc4ea31fe389b8ee519a2641d"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-minimal-image-audit.log",
+      "bytes": 764,
+      "sha256": "e3778765e1bdade989f0271c562f5d38954dfd6ce3ab86ee7f9e1a90b33a6ee7"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-minimal-image-audit.sarif",
+      "bytes": 189802,
+      "sha256": "5b886d9895affb87a1e33bfd74b5a19f4276f287191228edb3a1202f7d581152"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-minimal-image-build.log",
+      "bytes": 14702,
+      "sha256": "60a7c998fd259f6ed8ba8d978bbfd1389f44042fd9016223dd79d8d8f901304a"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-minimal-image-hooks.json",
+      "bytes": 2941,
+      "sha256": "82a70cbb5afb9e531268026d6673a3c770fb5fe8674a10267f50330997dd1474"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-minimal-image-inventory.json",
+      "bytes": 7763,
+      "sha256": "ba0e799d5dfba5d66948b3a1e32a228c9aaa0687ef67dc640189a9d243b513e7"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-patched-image-audit.log",
+      "bytes": 764,
+      "sha256": "beabf074de91d763f140184bff0ad6bc2e1b1304eab2d27c438a7cb7c2c0e920"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-patched-image-audit.sarif",
+      "bytes": 189416,
+      "sha256": "810cbc10542669359bff70d568918c29f0dbf033f30761fb79aa9f3b0c3f9513"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-patched-image-build.log",
+      "bytes": 13234,
+      "sha256": "6907b43efef6576078ec31bb87a6630ed64547a90726ed7c51806a4ed1574ba1"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-patched-image-hooks.json",
+      "bytes": 2941,
+      "sha256": "82a70cbb5afb9e531268026d6673a3c770fb5fe8674a10267f50330997dd1474"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-patched-image-inventory.json",
+      "bytes": 7466,
+      "sha256": "e71d6b3f2afa93fda07cfa3afdbd9ef9e63797ae80914f52b40d570925e31010"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-runtime-image-audit.log",
+      "bytes": 764,
+      "sha256": "24c1f57050f682545d6ec242e9bf3be2e49c96cae3bc4948c72a77d305fba1ed"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-runtime-image-audit.sarif",
+      "bytes": 165483,
+      "sha256": "ef02f920a5be1c3aacf29b49ebd432414ddc6c882dd68a4ff6b1bb5d3b4261f5"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-runtime-image-build.log",
+      "bytes": 13855,
+      "sha256": "fcd7653fa35edbfdf8b0c788aa305d00d217179ecf17dd52454bc55ed50a3055"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-runtime-image-hooks.json",
+      "bytes": 2941,
+      "sha256": "82a70cbb5afb9e531268026d6673a3c770fb5fe8674a10267f50330997dd1474"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-runtime-image-inventory.json",
+      "bytes": 7406,
+      "sha256": "71204f5d44b0e698b5f3c84139ff2831a782c42e01e6572917e128057726d212"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-runtime-review-snapshot.json",
+      "bytes": 1585,
+      "sha256": "874d8cf5ab5915449f16b76c47a09183f185acd7fe093f848399bc54e27533ba"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-security-review.md",
+      "bytes": 18232,
+      "sha256": "641e1c6ed09f92b7255410ac87c88e62f310c8eba37054249076876e9cd3a610"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-vendor-provenance.json",
+      "bytes": 4492,
+      "sha256": "ce6ffb3d25e26e5ff2c53d89d5fbf98cc41ef62d595a3cd4fe11ccada84bf46c"
+    },
+    {
+      "path": "workflow/runs/feat-20260910-agentic-infrastructure/06-security/continuation4-vendor-test.log",
+      "bytes": 106,
+      "sha256": "ccdeed50397d60467aa49189c1602a123cebda7c5779e234842581ae9a8410b7"
+    }
+  ],
+  "local_only_preserved": [
+    "All pre-existing untracked bcd QA media and bcd-final-capture-retest.md",
+    "New QA recordings/screenshots under 04-qa-dev/media",
+    "Running configured PostgreSQL startup log 03-coding/c3-existing-postgres-start.log",
+    "Stopped disposable PostgreSQL data/logs and retained Docker socket directories"
+  ],
+  "retained_docker_runtime_paths": [
+    "C:/Users/dimas/AppData/Local/Docker/run-retained-continuation3-70dfb6bea8cd4194be08b3f1601f0bee",
+    "C:/Users/dimas/AppData/Local/docker-secrets-engine-retained-c3-d71fa2ca942345efba9b24a7445d9189",
+    "C:/Users/dimas/AppData/Local/Docker/run-retained-coordinated-c4-b719212630984616b4c7ecaa0646100d"
+  ]
+}

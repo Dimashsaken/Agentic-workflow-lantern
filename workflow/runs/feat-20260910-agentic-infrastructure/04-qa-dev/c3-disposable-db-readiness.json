@@ -1,0 +1,10 @@
+{
+  "kind": "fresh_disposable_postgres_readiness",
+  "passed": true,
+  "configured_cluster_touched": false,
+  "schema_applied": false,
+  "bind_scope": "loopback-only",
+  "existing_disposable_listener": false,
+  "new_cluster": true,
+  "launcher_inherited_pipe_hang_recovered": true
+}

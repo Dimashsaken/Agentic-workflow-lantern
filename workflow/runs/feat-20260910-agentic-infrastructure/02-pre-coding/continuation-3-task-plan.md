@@ -1,5 +1,16 @@
 # Continuation 3 work order proposal
 
+## Local implementation authorization — 2026-09-11
+
+The follow-up instruction, "do the continuation-3 of the work we are doing with
+agent infrastructure thing", authorizes continuing the concrete local B–D work
+below. The engineering session used that instruction for implementation, isolated
+test images and disposable fixture tests. This records conversation authority;
+it is not a registered pipeline approval or a fabricated gate decision. No
+configured-database migration, external publication, deployment or evidence
+deletion is included. The proposal text below is retained as the historical work
+order; final implementation/acceptance status is in `../03-coding/report.md`.
+
 Date: 2026-09-10. Baseline `a64c229`. **HITL: required** for the new architecture
 contracts B–D below. No new schema is proposed. Section C now explicitly proposes
 new isolated gateway/recorder images, dependencies and ephemeral certificate trust

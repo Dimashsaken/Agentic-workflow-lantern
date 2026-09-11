@@ -1,0 +1,787 @@
+{
+  "kind": "independent_gateway_pypi_metadata_review",
+  "observed_at": "2026-09-10T18:12:12.275487+00:00",
+  "source": "https://pypi.org/pypi/{name}/{version}/json",
+  "scope": "Exact release metadata, hashes, wheel format, yanked flag and PyPI-reported advisories. No installation, image scan, wheel content or OS advisory audit.",
+  "packages": [
+    {
+      "name": "mitmproxy",
+      "version": "12.2.3",
+      "metadata_name": "mitmproxy",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-05-12T14:09:49.694864Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "aioquic",
+      "version": "1.2.0",
+      "metadata_name": "aioquic",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2024-07-06T23:26:30.682751Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "argon2-cffi",
+      "version": "25.1.0",
+      "metadata_name": "argon2-cffi",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-06-03T06:55:30.804163Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "asgiref",
+      "version": "3.11.1",
+      "metadata_name": "asgiref",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-02-03T13:30:13.039625Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "bcrypt",
+      "version": "5.0.0",
+      "metadata_name": "bcrypt",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-09-25T19:50:23.305392Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "brotli",
+      "version": "1.2.0",
+      "metadata_name": "brotli",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-11-05T18:38:28.295147Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "metadata_name": "certifi",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-07-22T03:35:11.276376Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "cryptography",
+      "version": "48.0.1",
+      "metadata_name": "cryptography",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-06-09T22:32:30.070658Z"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-m2h6-j472-rp4c",
+          "aliases": [
+            "CVE-2026-69248",
+            "PYSEC-2026-3554"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "49.0.0"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-m2h6-j472-rp4c",
+          "withdrawn": null
+        },
+        {
+          "id": "GHSA-g6cj-pr64-35w5",
+          "aliases": [
+            "CVE-2026-69247",
+            "PYSEC-2026-3552"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "50.0.0"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-g6cj-pr64-35w5",
+          "withdrawn": null
+        },
+        {
+          "id": "GHSA-jwv3-5hgf-82ww",
+          "aliases": [
+            "CVE-2026-69249",
+            "PYSEC-2026-3553"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "49.0.0"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-jwv3-5hgf-82ww",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3552",
+          "aliases": [
+            "CVE-2026-69247",
+            "GHSA-g6cj-pr64-35w5"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "50.0.0"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3552",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3553",
+          "aliases": [
+            "CVE-2026-69249",
+            "GHSA-jwv3-5hgf-82ww"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "49.0.0"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3553",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3554",
+          "aliases": [
+            "CVE-2026-69248",
+            "GHSA-m2h6-j472-rp4c"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "49.0.0"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3554",
+          "withdrawn": null
+        }
+      ]
+    },
+    {
+      "name": "Flask",
+      "version": "3.1.3",
+      "metadata_name": "Flask",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-02-19T05:00:56.027585Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "metadata_name": "h11",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-04-24T03:35:24.344199Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "h2",
+      "version": "4.3.0",
+      "metadata_name": "h2",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-08-23T18:12:17.779568Z"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-6hr6-w5qg-qmwg",
+          "aliases": [
+            "CVE-2026-71554"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "4.4.1"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-6hr6-w5qg-qmwg",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3628",
+          "aliases": [
+            "CVE-2026-71554",
+            "GHSA-6hr6-w5qg-qmwg"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "4.4.1"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3628",
+          "withdrawn": null
+        }
+      ]
+    },
+    {
+      "name": "hyperframe",
+      "version": "6.1.0",
+      "metadata_name": "hyperframe",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-01-22T21:41:47.295426Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "kaitaistruct",
+      "version": "0.11",
+      "metadata_name": "kaitaistruct",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-09-08T15:46:23.635209Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "ldap3",
+      "version": "2.9.1",
+      "metadata_name": "ldap3",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2021-07-18T06:34:12.905786Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "mitmproxy_rs",
+      "version": "0.12.11",
+      "metadata_name": "mitmproxy-rs",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-07-20T22:02:06.370062Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "mitmproxy_linux",
+      "version": "0.12.11",
+      "metadata_name": "mitmproxy-linux",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-07-20T22:02:00.660756Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "msgpack",
+      "version": "1.1.2",
+      "metadata_name": "msgpack",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-10-08T09:15:06.837099Z"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-6v7p-g79w-8964",
+          "aliases": [],
+          "summary": null,
+          "fixed_in": [
+            "1.2.1"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-6v7p-g79w-8964",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3625",
+          "aliases": [
+            "CVE-2026-57585",
+            "GHSA-6v7p-g79w-8964"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "1.2.1"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3625",
+          "withdrawn": null
+        }
+      ]
+    },
+    {
+      "name": "publicsuffix2",
+      "version": "2.20191221",
+      "metadata_name": "publicsuffix2",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2019-12-21T11:30:41.744145Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "pyOpenSSL",
+      "version": "26.2.0",
+      "metadata_name": "pyOpenSSL",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-05-04T23:06:08.395604Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.2",
+      "metadata_name": "pyparsing",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-01-21T03:57:55.912473Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "pyperclip",
+      "version": "1.11.0",
+      "metadata_name": "pyperclip",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-09-26T14:40:36.069557Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "ruamel.yaml",
+      "version": "0.19.1",
+      "metadata_name": "ruamel.yaml",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-01-02T16:50:29.201949Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "sortedcontainers",
+      "version": "2.4.0",
+      "metadata_name": "sortedcontainers",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2021-05-16T22:03:41.177807Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "tornado",
+      "version": "6.5.5",
+      "metadata_name": "tornado",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-03-10T21:30:48.273381Z"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-cx3h-4qpv-8hc9",
+          "aliases": [
+            "CVE-2026-49854",
+            "PYSEC-2026-3388"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "6.5.6"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-cx3h-4qpv-8hc9",
+          "withdrawn": null
+        },
+        {
+          "id": "GHSA-3x9g-8vmp-wqvf",
+          "aliases": [
+            "CVE-2026-49853",
+            "PYSEC-2026-3387"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "6.5.6"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-3x9g-8vmp-wqvf",
+          "withdrawn": null
+        },
+        {
+          "id": "GHSA-mgf9-4vpg-hj56",
+          "aliases": [
+            "CVE-2026-49855",
+            "PYSEC-2026-3389"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "6.5.6"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-mgf9-4vpg-hj56",
+          "withdrawn": null
+        },
+        {
+          "id": "GHSA-pw6j-qg29-8w7f",
+          "aliases": [],
+          "summary": null,
+          "fixed_in": [
+            "6.5.7"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-pw6j-qg29-8w7f",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3387",
+          "aliases": [
+            "CVE-2026-49853",
+            "GHSA-3x9g-8vmp-wqvf"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "6.5.6"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3387",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3388",
+          "aliases": [
+            "CVE-2026-49854",
+            "GHSA-cx3h-4qpv-8hc9"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "6.5.6"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3388",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3389",
+          "aliases": [
+            "CVE-2026-49855",
+            "GHSA-mgf9-4vpg-hj56"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "6.5.6"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3389",
+          "withdrawn": null
+        },
+        {
+          "id": "GHSA-wwv5-g3v4-889x",
+          "aliases": [],
+          "summary": null,
+          "fixed_in": [
+            "6.5.8"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-wwv5-g3v4-889x",
+          "withdrawn": null
+        },
+        {
+          "id": "GHSA-8423-8fgw-73vq",
+          "aliases": [],
+          "summary": null,
+          "fixed_in": [
+            "6.5.8"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-8423-8fgw-73vq",
+          "withdrawn": null
+        },
+        {
+          "id": "GHSA-mpf4-983q-p7j4",
+          "aliases": [
+            "CVE-2026-82397"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "6.5.8"
+          ],
+          "link": "https://osv.dev/vulnerability/GHSA-mpf4-983q-p7j4",
+          "withdrawn": null
+        },
+        {
+          "id": "PYSEC-2026-3928",
+          "aliases": [
+            "CVE-2026-82397",
+            "GHSA-mpf4-983q-p7j4"
+          ],
+          "summary": null,
+          "fixed_in": [
+            "6.5.8"
+          ],
+          "link": "https://osv.dev/vulnerability/PYSEC-2026-3928",
+          "withdrawn": null
+        }
+      ]
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.14.0",
+      "metadata_name": "typing-extensions",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-06-02T14:52:10.026868Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "urwid",
+      "version": "3.0.5",
+      "metadata_name": "urwid",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-02-02T14:38:42.044947Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "wsproto",
+      "version": "1.3.2",
+      "metadata_name": "wsproto",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-11-20T18:18:00.454632Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "zstandard",
+      "version": "0.25.0",
+      "metadata_name": "zstandard",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-09-14T22:17:06.781336Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "blinker",
+      "version": "1.9.0",
+      "metadata_name": "blinker",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2024-11-08T17:25:46.184412Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "metadata_name": "cffi",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-08-03T21:19:52.054167Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "click",
+      "version": "8.5.0",
+      "metadata_name": "click",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-08-26T13:33:12.928043Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "hpack",
+      "version": "4.2.0",
+      "metadata_name": "hpack",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-06-23T18:34:45.472685Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "itsdangerous",
+      "version": "2.2.0",
+      "metadata_name": "itsdangerous",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2024-04-16T21:28:14.499616Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "Jinja2",
+      "version": "3.1.6",
+      "metadata_name": "Jinja2",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-03-05T20:05:00.369721Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "MarkupSafe",
+      "version": "3.0.3",
+      "metadata_name": "MarkupSafe",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2025-09-27T18:36:33.860371Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "pyasn1",
+      "version": "0.6.4",
+      "metadata_name": "pyasn1",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-07-09T01:12:32.920042Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "pylsqpack",
+      "version": "0.3.24",
+      "metadata_name": "pylsqpack",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-03-29T15:42:31.030002Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "service-identity",
+      "version": "26.1.0",
+      "metadata_name": "service-identity",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-05-30T12:04:53.911741Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.8.3",
+      "metadata_name": "wcwidth",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-08-28T18:10:04.909801Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "Werkzeug",
+      "version": "3.1.8",
+      "metadata_name": "Werkzeug",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-04-02T18:49:12.720503Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "argon2-cffi-bindings",
+      "version": "26.1.0",
+      "metadata_name": "argon2-cffi-bindings",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-08-20T07:32:45.172418Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0",
+      "metadata_name": "attrs",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-03-19T14:22:23.645947Z"
+      ],
+      "advisories": []
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "metadata_name": "pycparser",
+      "pinned_hash_matches_pypi": true,
+      "wheel_only": true,
+      "yanked": false,
+      "uploaded_at": [
+        "2026-01-21T14:26:50.693739Z"
+      ],
+      "advisories": []
+    }
+  ]
+}

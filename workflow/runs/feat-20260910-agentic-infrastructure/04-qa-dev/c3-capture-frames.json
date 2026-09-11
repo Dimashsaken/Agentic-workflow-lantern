@@ -1,0 +1,16 @@
+{
+  "video_sha256": "be0fcb8a178c89f7d174716edb55583996d1de46d09ed6f6e32586cc9b50e8ab",
+  "duration_seconds": 4.28,
+  "frames": [
+    {
+      "seconds": 1.5,
+      "path": "media/c3-fleet-78f38df1026546a1861c639a1a8a1ed1/frame-1.5.png",
+      "sha256": "b77e9934db6250c14aa236711cab4b436e0f9ed786b4714d35ff068ae189ed18"
+    },
+    {
+      "seconds": 3.8,
+      "path": "media/c3-fleet-78f38df1026546a1861c639a1a8a1ed1/frame-3.8.png",
+      "sha256": "eccc8452f7618ca62f9a121b327a0b4cdff96c2895e741d5b9778100e3edbdd3"
+    }
+  ]
+}

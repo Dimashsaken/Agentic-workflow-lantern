@@ -1,0 +1,60 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.41kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 286B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 5.82kB done
+#4 DONE 0.0s
+
+#5 [zlib-builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79
+#5 resolve docker.io/library/python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79 done
+#5 DONE 0.0s
+
+#6 [zlib-builder 3/4] COPY infra/qa-gateway/build_zlib.py infra/qa-gateway/test_zlib.py /build/
+#6 CACHED
+
+#7 [stage-1 2/8] COPY --from=zlib-builder /out/zlib1g-lantern.deb /tmp/zlib1g-lantern.deb
+#7 CACHED
+
+#8 [zlib-builder 4/4] RUN python3.12 /build/test_zlib.py /usr/lib/x86_64-linux-gnu/libz.so.1.3.1 --baseline     && python3.12 /build/build_zlib.py
+#8 CACHED
+
+#9 [stage-1 5/8] COPY infra/qa-gateway/build-tools.lock infra/qa-gateway/requirements.lock infra/qa-gateway/upstream.lock infra/qa-gateway/vendor_wheel.py /opt/gateway/
+#9 CACHED
+
+#10 [stage-1 4/8] RUN python3.12 -m venv /opt/gateway
+#10 CACHED
+
+#11 [zlib-builder 2/4] RUN apt-get update && apt-get install -y --no-install-recommends gcc make libc6-dev binutils
+#11 CACHED
+
+#12 [stage-1 3/8] RUN dpkg -i /tmp/zlib1g-lantern.deb && rm /tmp/zlib1g-lantern.deb
+#12 CACHED
+
+#13 [stage-1 6/8] RUN --mount=type=cache,target=/root/.cache/pip     export PIP_CACHE_DIR=/root/.cache/pip && python3.12 -m pip install --require-hashes --only-binary=:all: -r /opt/gateway/build-tools.lock     && /opt/gateway/bin/pip install --require-hashes --only-binary=:all: -r /opt/gateway/build-tools.lock     && /opt/gateway/bin/pip download --timeout 120 --retries 3 --require-hashes --only-binary=:all: --no-deps       -r /opt/gateway/upstream.lock -d /opt/gateway/upstream     && /opt/gateway/bin/python /opt/gateway/vendor_wheel.py       /opt/gateway/upstream/mitmproxy-12.2.3-py3-none-any.whl       /opt/gateway/vendor/mitmproxy-12.2.3+lantern1-py3-none-any.whl > /opt/gateway/vendor-provenance.json     && /opt/gateway/bin/pip install --timeout 120 --retries 3 --require-hashes --only-binary=:all:       --find-links /opt/gateway/vendor -r /opt/gateway/requirements.lock     && /opt/gateway/bin/pip check     && /opt/gateway/bin/pip uninstall --yes pip     && python3.12 -m pip uninstall --yes pip     && python3.12 -c "import shutil; shutil.rmtree('/usr/local/lib/python3.12/ensurepip')"
+#13 CACHED
+
+#14 [stage-1 7/8] COPY infra/qa-gateway/policy.py infra/qa-gateway/entrypoint.py /opt/gateway/
+#14 CACHED
+
+#15 [stage-1 8/8] COPY tools/azure-runner/qa_transport.py /opt/gateway/qa_transport.py
+#15 DONE 0.1s
+
+#16 exporting to image
+#16 exporting layers 0.0s done
+#16 exporting manifest sha256:d63e13f6d17200cbcc60ec1ff3386616a67e31e645286b09b1f4ae21d7b0bb5e done
+#16 exporting config sha256:053b421e9882bf7a2ff895fc9bbf4950ad9f0ab03279b429682d3f517e68f1fd done
+#16 exporting attestation manifest sha256:730f00b68374ff5017fe74e04fbe85c2958d8eddf60ed34eed63cef955665585 done
+#16 exporting manifest list sha256:9521f9ace86b7ff946b3ca4561029079b03575184f9fcf86cac3d1fd446d24b9 done
+#16 naming to docker.io/library/lantern-qa-gateway:external-qa-acceptance done
+#16 unpacking to docker.io/library/lantern-qa-gateway:external-qa-acceptance 0.0s done
+#16 DONE 0.1s

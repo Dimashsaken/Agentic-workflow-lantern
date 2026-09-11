@@ -408,3 +408,75 @@ Open question: Do you approve the schema-free local contracts B–D in
 and evidence-deletion gates?
 
 Status: BLOCKED (complete foundation/formal stage); scoped v3 publication review PASS-WITH-NOTES
+
+
+## Continuation-3 B/C/D independent post-coding review - 2026-09-11
+
+Reviewed the full local diff versus main 80babd0 and the untracked maintenance, retention, QA capture and image candidate files in the isolated continuation-3 worktree. Detailed findings, source hashes and evidence limits: [bcd-review.md](bcd-review.md).
+
+| ID | Area | Severity | Tag | Evidence/disposition |
+|---|---|---|---|---|
+| BCD-PC-1 | Pilot flag routing | major | fix-now - resolved | Integrator changed review.babysit_run to select maintenance when the fenced pilot is enabled independently of dispatcher leasing. Independent injected call verified one fenced call and zero legacy calls. |
+| BCD-PC-2 | Temporary maintenance retention | medium | debt-ticket - open | LANTERN-DEBT-EXECUTION-GC amended in bcd-review.md: retained trial clones lack allocation descriptors and are not eligible for automatic retirement. |
+| BCD-PC-3 | Descriptor history overhead | medium | debt-ticket - open | Same local ticket now requires bounded mount-lookup cost without weakening ancestor checks or tombstones. Every current launch scans all historical path mappings. |
+| BCD-PC-4 | External candidate acceptance | acceptance limit | waived - scope only | Keeping held candidate files is acceptable for local review. Actual external HTTPS transport/capture, version-2 receipt display, image and dependency acceptance remain unaccepted, not waived. |
+
+Independent checks: 35 focused tests passed, seven PostgreSQL tests skipped; pilot routing probe and diff whitespace check passed. Inspected supplied 14-test real PostgreSQL/Git/Docker green-path log with simulated GitHub; no independent live service proof claimed. Final configured quality run and independent security retest remain integrator-owned. No new schema, database modification, gate movement, deployment, external publication or runtime edit was performed by this reviewer.
+
+Memory candidate and local execution-GC ticket amendment are in bcd-review.md; integrator owns actual append_memory insertion. No rendered memory edit claimed.
+
+Status: PASS-WITH-NOTES (scoped local B/C/D review); complete foundation/formal stage and external activation remain unaccepted.
+
+
+### B/C/D narrow supplement - 2026-09-11
+
+Reviewed the explicit direct_fixture transport contract, shared validation at capture construction/seal/verify/persist, durable attempt/key checks and read-only retirement inventory. No new fix-now finding. Independent reruns: 16 retention and 9 provenance tests passed; diff whitespace check passed. Supplied actual local TLS recorder/PostgreSQL proof was inspected, not independently rerun; it remains explicitly test-only with no gateway/external transport acceptance. BCD-PC-2/3 retention debts remain open. Updated source hashes and evidence distinctions are appended in [bcd-review.md](bcd-review.md).
+
+Status: PASS-WITH-NOTES (narrow local supplement); full foundation and external activation remain unaccepted.
+
+## Continuation-3 outstanding infrastructure review - 2026-09-11
+
+Independent post-coding review of the scoped infrastructure diff found and verified fixes for D20 fingerprint coverage, retention clone-lock duration and legacy-index races, immutable maintenance scope, actual child artifact fencing and missing Git base refs. Full findings table, compatibility notes and local debt amendment: [c3-outstanding-review.md](c3-outstanding-review.md).
+
+| ID | Area | Severity | Tag | Disposition |
+|---|---|---|---|---|
+| C3-PC-1 | D20 fingerprint | medium | fix-now - resolved | Actual vendor helper/upstream lock and authority entry modules covered. |
+| C3-PC-2/3 | Retention locking/index | major | fix-now - resolved | Unrelated mounts no longer wait through clone; verified legacy reconciliation and old-reader sentinels preserve ancestor/ownership holds. |
+| C3-PC-4 | Maintenance scope | major | fix-now - resolved | Parent revalidation uses captured child scope, policy and image. |
+| C3-PC-5/6 | Actual child handoff | major | fix-now - resolved | Artifact insertion fenced with dispatcher flag 0/1; exact base ref preserved; real finalize_coding passes and earlier handoff remains unchanged. |
+| C3-PC-7 | Test import | minor | fix-now - resolved | Missing asyncio import corrected; final suite green. |
+| C3-PC-8 | Allocation history scan | medium | debt-ticket - open | LANTERN-DEBT-EXECUTION-GC narrowed to allocation/rebuild scaling; steady mount lookup is bounded. |
+| C3-PC-9 | External acceptance | acceptance limit | waived - local scope only | Disabled candidate may remain locally; actual image/TLS/native-host and trusted deployment acceptance are not waived. |
+
+Independent evidence: [c3-review-probes.json](c3-review-probes.json) records 16/16 custom checks, including actual Git/handoff and baseline-reader probes; [c3-retention-retest-final.log](c3-retention-retest-final.log) records 21/21 retention tests. Initial defect/failed-test logs are preserved. Inspected supplied 18/18 disposable PostgreSQL/Git/Docker maintenance integration and new QA direct-TLS recordings without relabelling scripted model/provider behavior as live acceptance. Final full checks/D20 and actual append_memory receipt remain integrator-owned at this report cutoff; no rendered memory edit is claimed.
+
+Status: PASS-WITH-NOTES (scoped local post-coding review); full foundation, external activation and staging remain unaccepted.
+
+### Permanent lock-identity final retest - 2026-09-11
+
+C3-PC-10 (major, **fix-now - resolved**) covers a final old-reader race: choosing a different lock pathname after an older reader created it split the lifecycle lock. The corrected implementation always acquires the same top-level lock. [c3-lock-compat-retest.json](c3-lock-compat-retest.json) records three passing old-reader/current-holder controls; [c3-retention-lock-retest.log](c3-retention-lock-retest.log) records the final 21/21 affected-suite pass in 12.199 seconds. [c3-final-review-snapshot.json](c3-final-review-snapshot.json) records the remaining inspected source identities and a separate malformed-mapping rejection; its retention hash is superseded by the lock-retest JSON. All fix-now findings are resolved and verified; allocation-scan debt and external-foundation prerequisites remain open.
+
+Status: PASS-WITH-NOTES (final scoped local review); external foundation and staging remain unaccepted.
+
+### Actual append_memory completion - 2026-09-11
+
+Inspected the integrator's actual [c3-foundation-memory.json](../03-coding/c3-foundation-memory.json) receipt: post-coding row **66**, manual key `manual:feat-20260910-agentic-infrastructure:post-coding:pending-639f48d9e2ae`. It records the legacy-index, frozen-scope and permanent-lock lessons. Configured runs/executions/approvals remain **12/23/8** with unchanged approval snapshot; no migration/new cluster or rendered-memory edit is claimed. The earlier pending memory item is complete; exact inserted learning is copied into the detailed review.
+
+Status: PASS-WITH-NOTES (final scoped local review; memory complete); external foundation and staging remain unaccepted.
+
+## External QA acceptance candidate review — 2026-09-11
+
+The bounded independent source review found and verified one native cleanup defect. Full scope, findings, source hashes, compatibility limits and verification are in [external-qa-review.md](external-qa-review.md).
+
+| ID | Area | Severity | Tag | Disposition |
+|---|---|---|---|---|
+| EQA-PC-1 | Native cleanup | medium | fix-now — resolved | Each owned resource is attempted independently; bounded termination/join errors are aggregated and prevent a passing result. Verified with injected observer/container failures. |
+| EQA-PC-2 | Library error recovery | compatibility limit | waived — local candidate only | Terminal writer errors and close/reopen contract documented; exported symbols do not imply universal behavior compatibility. |
+| EQA-PC-3 | Evidence cutoff | acceptance limit | waived — source review only | Earlier socket-fixture results are not final image-pair, browser/deployment or external transport acceptance. |
+| EQA-PC-4 | Toolchain rebuild | reproducibility limit | waived — immutable candidate only | Source/base pinned; later toolchain rebuild requires fresh inventory/audit/testing. |
+
+Independent verification: 28/28 controller/transport/firewall unit tests and three additional ordinary async/cleanup probes passed. Monitor cancellation is joined before final connection reuse; failed monitoring or cleanup cannot produce accepted receipts. No unresolved fix-now remains in this bounded review. Final configured frozen-source check, image-pair/whole-image evidence and actual append_memory receipt remain parent-owned at this cutoff. The earlier configured run's source-stability failure is retained and is not treated as a pass.
+
+Memory candidate supplied to parent: cleanup must attempt every independently owned resource despite earlier failures and fail on uncertainty; join periodic database checks before final connection reuse. No direct rendered-memory edit, database mutation, gate approval or deployment was performed by this reviewer.
+
+Status: PASS-WITH-NOTES (bounded disabled external QA source review); external activation and staging remain unaccepted.

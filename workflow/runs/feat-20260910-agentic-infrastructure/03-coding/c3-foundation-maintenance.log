@@ -1,0 +1,70 @@
+........Executing <Task pending name='Task-47' coro=<Postgres.asyncSetUp() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:121> wait_for=<_OverlappedFuture pending cb=[Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\windows_events.py:605> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.156 seconds
+Executing <Task pending name='Task-51' coro=<Postgres.test_actual_fix_policy_change_prevents_publication() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:233> wait_for=<Future pending cb=[BaseProtocol._on_waiter_completed(), Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.594 seconds
+Executing <Task pending name='Task-57' coro=<Postgres.actual_pass.<locals>.scripted_fix() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:305> wait_for=<Task cancelling name='Task-54' coro=<lease_guard.<locals>.heartbeat() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\execution_leases.py:165> wait_for=<Future cancelled created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\tasks.py:420> cb=[shield.<locals>._inner_done_callback() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\tasks.py:905] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\tasks.py:420> took 0.125 seconds
+Executing <Task finished name='Task-51' coro=<Postgres.test_actual_fix_policy_change_prevents_publication() done, defined at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:231> exception=IsolationError('isolated product execution requires its bound worker and product cwd') created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.125 seconds
+EExecuting <Task pending name='Task-65' coro=<Postgres.test_actual_red_regate_inherited_fix_and_revalidation() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:229> wait_for=<Future pending cb=[BaseProtocol._on_waiter_completed(), Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.812 seconds
+Executing <Task pending name='Task-65' coro=<Postgres.test_actual_red_regate_inherited_fix_and_revalidation() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:229> wait_for=<Future pending cb=[shield.<locals>._outer_done_callback() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\tasks.py:922, Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.110 seconds
+Executing <Task pending name='Task-71' coro=<Postgres.actual_pass.<locals>.scripted_fix() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:305> wait_for=<Task cancelling name='Task-68' coro=<lease_guard.<locals>.heartbeat() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\execution_leases.py:165> wait_for=<Future cancelled created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\tasks.py:420> cb=[shield.<locals>._inner_done_callback() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\tasks.py:905] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\tasks.py:420> took 0.125 seconds
+Executing <Task finished name='Task-65' coro=<Postgres.test_actual_red_regate_inherited_fix_and_revalidation() done, defined at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:227> exception=IsolationError('isolated product execution requires its bound worker and product cwd') created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.125 seconds
+EExecuting <Task pending name='Task-79' coro=<Postgres.test_actual_trial_immutable_regate_and_conditional_local_push() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:225> wait_for=<Future pending cb=[BaseProtocol._on_waiter_completed(), Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.781 seconds
+Executing <Task pending name='Task-79' coro=<Postgres.test_actual_trial_immutable_regate_and_conditional_local_push() running at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py:225> wait_for=<Future pending cb=[shield.<locals>._outer_done_callback() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\tasks.py:922, Task.task_wakeup()] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:448> cb=[_run_until_complete_cb() at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:181] created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.125 seconds
+........
+======================================================================
+ERROR: test_actual_fix_policy_change_prevents_publication (__main__.Postgres.test_actual_fix_policy_change_prevents_publication)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py", line 233, in test_actual_fix_policy_change_prevents_publication
+    await self.actual_pass(fix=True, policy_attack=True)
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py", line 317, in actual_pass
+    await maintenance.run_pass(self.conn,lease,controller)
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\maintenance_runtime.py", line 408, in run_pass
+    problems = factory.check_write_scope(lease.run_id, factory.changed_files_since(clone, trial['merge_sha']), scope=fixed_scope)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\factory.py", line 763, in changed_files_since
+    options = repository_options(root)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\readonly_git.py", line 40, in repository_options
+    result = tool_execution.run(["git", "config", "--get", "core.autocrlf"], cwd=root,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\tool_execution.py", line 75, in run
+    raise IsolationError("isolated product execution requires its bound worker and product cwd")
+isolated_tools.IsolationError: isolated product execution requires its bound worker and product cwd
+
+======================================================================
+ERROR: test_actual_red_regate_inherited_fix_and_revalidation (__main__.Postgres.test_actual_red_regate_inherited_fix_and_revalidation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py", line 229, in test_actual_red_regate_inherited_fix_and_revalidation
+    await self.actual_pass(fix=True)
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_maintenance_runtime.py", line 321, in actual_pass
+    result = await maintenance.run_pass(self.conn, lease, controller)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\maintenance_runtime.py", line 408, in run_pass
+    problems = factory.check_write_scope(lease.run_id, factory.changed_files_since(clone, trial['merge_sha']), scope=fixed_scope)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\factory.py", line 763, in changed_files_since
+    options = repository_options(root)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\readonly_git.py", line 40, in repository_options
+    result = tool_execution.run(["git", "config", "--get", "core.autocrlf"], cwd=root,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\tool_execution.py", line 75, in run
+    raise IsolationError("isolated product execution requires its bound worker and product cwd")
+isolated_tools.IsolationError: isolated product execution requires its bound worker and product cwd
+
+----------------------------------------------------------------------
+Ran 18 tests in 96.728s
+
+FAILED (errors=2)

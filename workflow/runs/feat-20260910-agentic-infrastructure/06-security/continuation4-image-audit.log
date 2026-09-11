@@ -1,0 +1,3 @@
+    ...Storing image for indexing
+    v Image stored for indexing
+level=error msg="Error response from daemon: No such image: sha256:69ec9aa598cd86bcbbc3f5719c8702551af7514b876630884aaecb06f7a72260"

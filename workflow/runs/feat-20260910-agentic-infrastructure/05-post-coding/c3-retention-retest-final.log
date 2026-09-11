@@ -1,0 +1,7 @@
+...............Executing <Task finished name='Task-77' coro=<Retirement.test_mount_lookup_does_not_enumerate_retained_history() done, defined at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_execution_retention.py:63> result=None created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 4.891 seconds
+.Executing <Task finished name='Task-82' coro=<Retirement.test_real_other_process_lock_blocks_retirement() done, defined at C:\Users\dimas\.lantern\worktrees\continuation-3\tools\azure-runner\test_execution_retention.py:248> result=None created at C:\Users\dimas\AppData\Local\Programs\Python\Python312\Lib\asyncio\runners.py:100> took 0.171 seconds
+.....
+----------------------------------------------------------------------
+Ran 21 tests in 6.981s
+
+OK

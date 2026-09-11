@@ -1,0 +1,75 @@
+{
+  "root": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts",
+  "observed_at": 1789065062.1547604,
+  "apply": false,
+  "known_bytes": 149093385,
+  "entries": [
+    {
+      "path": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts\\bug-20260908-help-crash-without-env",
+      "bytes": 27411334,
+      "age_seconds": null,
+      "eligible": false,
+      "state": "unknown",
+      "held_reason": "legacy path without an allocation descriptor"
+    },
+    {
+      "path": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts\\feat-20260825-demo-export",
+      "bytes": 24324552,
+      "age_seconds": null,
+      "eligible": false,
+      "state": "unknown",
+      "held_reason": "legacy path without an allocation descriptor"
+    },
+    {
+      "path": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts\\feat-20260831-gate-latency",
+      "bytes": 16513123,
+      "age_seconds": null,
+      "eligible": false,
+      "state": "unknown",
+      "held_reason": "legacy path without an allocation descriptor"
+    },
+    {
+      "path": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts\\feat-20260908-note-delete",
+      "bytes": 57530,
+      "age_seconds": null,
+      "eligible": false,
+      "state": "unknown",
+      "held_reason": "legacy path without an allocation descriptor"
+    },
+    {
+      "path": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts\\feat-20260908-runboard-stage-timestamps",
+      "bytes": 27074113,
+      "age_seconds": null,
+      "eligible": false,
+      "state": "unknown",
+      "held_reason": "legacy path without an allocation descriptor"
+    },
+    {
+      "path": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts\\feat-20260908-status-facts",
+      "bytes": 26019381,
+      "age_seconds": null,
+      "eligible": false,
+      "state": "unknown",
+      "held_reason": "legacy path without an allocation descriptor"
+    },
+    {
+      "path": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts\\feat-20260908-status-version",
+      "bytes": 27662374,
+      "age_seconds": null,
+      "eligible": false,
+      "state": "unknown",
+      "held_reason": "legacy path without an allocation descriptor"
+    },
+    {
+      "path": "C:\\Users\\dimas\\.lantern\\product-mirrors\\checkouts\\feat-20260909-trace-proof",
+      "bytes": 30978,
+      "age_seconds": null,
+      "eligible": false,
+      "state": "unknown",
+      "held_reason": "legacy path without an allocation descriptor"
+    }
+  ],
+  "environment": "existing configured local PostgreSQL; read-only inventory",
+  "deleted_paths": 0,
+  "scope": "configured checkout root only; maintenance TemporaryDirectory clones are not yet registered"
+}

@@ -1,0 +1,176 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.22kB done
+#1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${BASE_IMAGE} results in empty or invalid base image name (line 3)
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/lantern-qa-base:933a9c0899da
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 286B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 17.74kB done
+#4 DONE 0.0s
+
+#5 [stage-0 1/6] FROM docker.io/library/lantern-qa-base:933a9c0899da@sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756
+#5 resolve docker.io/library/lantern-qa-base:933a9c0899da@sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756 0.0s done
+#5 DONE 0.0s
+
+#6 [stage-0 2/6] RUN python3.12 -m venv /opt/gateway
+#6 CACHED
+
+#7 [stage-0 3/6] COPY infra/qa-gateway/requirements.lock infra/qa-gateway/upstream.lock infra/qa-gateway/vendor_wheel.py /opt/gateway/
+#7 DONE 0.0s
+
+#8 [stage-0 4/6] RUN --mount=type=cache,target=/root/.cache/pip     /opt/gateway/bin/pip download --timeout 120 --retries 3 --require-hashes --only-binary=:all: --no-deps       -r /opt/gateway/upstream.lock -d /opt/gateway/upstream     && /opt/gateway/bin/python /opt/gateway/vendor_wheel.py       /opt/gateway/upstream/mitmproxy-12.2.3-py3-none-any.whl       /opt/gateway/vendor/mitmproxy-12.2.3+lantern1-py3-none-any.whl > /opt/gateway/vendor-provenance.json     && /opt/gateway/bin/pip install --timeout 120 --retries 3 --require-hashes --only-binary=:all:       --find-links /opt/gateway/vendor -r /opt/gateway/requirements.lock     && /opt/gateway/bin/pip check
+#8 0.490 WARNING: The directory '/work/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+#8 13.33 Collecting mitmproxy==12.2.3 (from -r /opt/gateway/upstream.lock (line 1))
+#8 21.68   Downloading mitmproxy-12.2.3-py3-none-any.whl (1.7 MB)
+#8 39.20      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 94.9 kB/s eta 0:00:00
+#8 39.21 Saved /opt/gateway/upstream/mitmproxy-12.2.3-py3-none-any.whl
+#8 39.24 Successfully downloaded mitmproxy
+#8 39.51 WARNING: The directory '/work/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+#8 39.55 Looking in links: /opt/gateway/vendor
+#8 42.30 Collecting aioquic==1.2.0 (from -r /opt/gateway/requirements.lock (line 2))
+#8 43.95   Downloading aioquic-1.2.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.2 MB)
+#8 55.40      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 202.9 kB/s eta 0:00:00
+#8 55.80 Collecting argon2-cffi-bindings==26.1.0 (from -r /opt/gateway/requirements.lock (line 3))
+#8 55.96   Downloading argon2_cffi_bindings-26.1.0-cp310-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (26 kB)
+#8 56.38 Collecting argon2-cffi==25.1.0 (from -r /opt/gateway/requirements.lock (line 4))
+#8 56.54   Downloading argon2_cffi-25.1.0-py3-none-any.whl (14 kB)
+#8 56.83 Collecting asgiref==3.11.1 (from -r /opt/gateway/requirements.lock (line 5))
+#8 57.01   Downloading asgiref-3.11.1-py3-none-any.whl (24 kB)
+#8 57.49 Collecting attrs==26.1.0 (from -r /opt/gateway/requirements.lock (line 6))
+#8 57.67   Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+#8 58.12      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 67.5/67.5 kB 147.4 kB/s eta 0:00:00
+#8 58.82 Collecting bcrypt==5.0.0 (from -r /opt/gateway/requirements.lock (line 7))
+#8 59.17   Downloading bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl (278 kB)
+#8 64.39      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 278.2/278.2 kB 53.2 kB/s eta 0:00:00
+#8 64.77 Collecting blinker==1.9.0 (from -r /opt/gateway/requirements.lock (line 8))
+#8 65.21   Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+#8 66.20 Collecting brotli==1.2.0 (from -r /opt/gateway/requirements.lock (line 9))
+#8 66.78   Downloading brotli-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.4 MB)
+#8 78.08      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.4/1.4 MB 125.1 kB/s eta 0:00:00
+#8 78.60 Collecting certifi==2026.7.22 (from -r /opt/gateway/requirements.lock (line 10))
+#8 79.17   Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+#8 80.17      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 137.0/137.0 kB 138.8 kB/s eta 0:00:00
+#8 82.50 Collecting cffi==2.1.1 (from -r /opt/gateway/requirements.lock (line 11))
+#8 82.87   Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+#8 84.15      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 221.8/221.8 kB 178.3 kB/s eta 0:00:00
+#8 84.36 Collecting click==8.5.0 (from -r /opt/gateway/requirements.lock (line 12))
+#8 84.72   Downloading click-8.5.0-py3-none-any.whl (125 kB)
+#8 86.02      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 125.3/125.3 kB 95.4 kB/s eta 0:00:00
+#8 87.57 Collecting cryptography==50.0.1 (from -r /opt/gateway/requirements.lock (line 13))
+#8 87.86   Downloading cryptography-50.0.1-cp311-abi3-manylinux_2_28_x86_64.whl (4.7 MB)
+#8 115.3      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 173.5 kB/s eta 0:00:00
+#8 115.7 Collecting Flask==3.1.3 (from -r /opt/gateway/requirements.lock (line 14))
+#8 115.8   Downloading flask-3.1.3-py3-none-any.whl (103 kB)
+#8 116.7      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 103.4/103.4 kB 117.0 kB/s eta 0:00:00
+#8 116.9 Collecting h11==0.16.0 (from -r /opt/gateway/requirements.lock (line 15))
+#8 117.0   Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+#8 118.1 Collecting h2==4.4.1 (from -r /opt/gateway/requirements.lock (line 16))
+#8 118.6   Downloading h2-4.4.1-py3-none-any.whl (62 kB)
+#8 118.8      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.6/62.6 kB 334.1 kB/s eta 0:00:00
+#8 119.0 Collecting hpack==4.2.0 (from -r /opt/gateway/requirements.lock (line 17))
+#8 119.2   Downloading hpack-4.2.0-py3-none-any.whl (34 kB)
+#8 121.2 Collecting hyperframe==6.1.0 (from -r /opt/gateway/requirements.lock (line 18))
+#8 122.1   Downloading hyperframe-6.1.0-py3-none-any.whl (13 kB)
+#8 122.8 Collecting itsdangerous==2.2.0 (from -r /opt/gateway/requirements.lock (line 19))
+#8 123.3   Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+#8 123.8 Collecting Jinja2==3.1.6 (from -r /opt/gateway/requirements.lock (line 20))
+#8 123.9   Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+#8 124.7      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.9/134.9 kB 170.2 kB/s eta 0:00:00
+#8 125.2 Collecting kaitaistruct==0.11 (from -r /opt/gateway/requirements.lock (line 21))
+#8 125.4   Downloading kaitaistruct-0.11-py2.py3-none-any.whl (11 kB)
+#8 125.6 Collecting ldap3==2.9.1 (from -r /opt/gateway/requirements.lock (line 22))
+#8 125.8   Downloading ldap3-2.9.1-py2.py3-none-any.whl (432 kB)
+#8 127.6      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 432.2/432.2 kB 260.9 kB/s eta 0:00:00
+#8 127.9 Collecting MarkupSafe==3.0.3 (from -r /opt/gateway/requirements.lock (line 23))
+#8 128.0   Downloading markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+#8 128.8 Processing /opt/gateway/vendor/mitmproxy-12.2.3+lantern1-py3-none-any.whl (from -r /opt/gateway/requirements.lock (line 24))
+#8 129.3 Collecting mitmproxy_linux==0.12.11 (from -r /opt/gateway/requirements.lock (line 25))
+#8 129.5   Downloading mitmproxy_linux-0.12.11-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.6 MB)
+#8 138.5      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 174.1 kB/s eta 0:00:00
+#8 138.8 Collecting mitmproxy_rs==0.12.11 (from -r /opt/gateway/requirements.lock (line 26))
+#8 139.1   Downloading mitmproxy_rs-0.12.11-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.3 MB)
+#8 148.1      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.3/3.3 MB 363.5 kB/s eta 0:00:00
+#8 148.4 Collecting msgpack==1.2.2 (from -r /opt/gateway/requirements.lock (line 27))
+#8 148.6   Downloading msgpack-1.2.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (420 kB)
+#8 149.6      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 420.6/420.6 kB 405.4 kB/s eta 0:00:00
+#8 149.9 Collecting publicsuffix2==2.20191221 (from -r /opt/gateway/requirements.lock (line 28))
+#8 150.0   Downloading publicsuffix2-2.20191221-py2.py3-none-any.whl (89 kB)
+#8 150.2      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 89.0/89.0 kB 593.1 kB/s eta 0:00:00
+#8 150.5 Collecting pyasn1==0.6.4 (from -r /opt/gateway/requirements.lock (line 29))
+#8 150.6   Downloading pyasn1-0.6.4-py3-none-any.whl (84 kB)
+#8 150.8      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 84.4/84.4 kB 527.7 kB/s eta 0:00:00
+#8 151.0 Collecting pycparser==3.0 (from -r /opt/gateway/requirements.lock (line 30))
+#8 151.1   Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+#8 151.3      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.2/48.2 kB 350.2 kB/s eta 0:00:00
+#8 151.7 Collecting pylsqpack==0.3.24 (from -r /opt/gateway/requirements.lock (line 31))
+#8 151.8   Downloading pylsqpack-0.3.24-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (250 kB)
+#8 152.2      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 250.3/250.3 kB 627.5 kB/s eta 0:00:00
+#8 152.4 Collecting pyOpenSSL==26.4.0 (from -r /opt/gateway/requirements.lock (line 32))
+#8 152.6   Downloading pyopenssl-26.4.0-py3-none-any.whl (56 kB)
+#8 152.7      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 56.0/56.0 kB 595.8 kB/s eta 0:00:00
+#8 152.9 Collecting pyparsing==3.3.2 (from -r /opt/gateway/requirements.lock (line 33))
+#8 153.0   Downloading pyparsing-3.3.2-py3-none-any.whl (122 kB)
+#8 153.2      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 122.8/122.8 kB 880.4 kB/s eta 0:00:00
+#8 153.4 Collecting pyperclip==1.11.0 (from -r /opt/gateway/requirements.lock (line 34))
+#8 153.5   Downloading pyperclip-1.11.0-py3-none-any.whl (11 kB)
+#8 154.2 Collecting ruamel.yaml==0.19.1 (from -r /opt/gateway/requirements.lock (line 35))
+#8 154.3   Downloading ruamel_yaml-0.19.1-py3-none-any.whl (118 kB)
+#8 154.5      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 118.1/118.1 kB 791.2 kB/s eta 0:00:00
+#8 154.8 Collecting service-identity==26.1.0 (from -r /opt/gateway/requirements.lock (line 36))
+#8 154.9   Downloading service_identity-26.1.0-py3-none-any.whl (11 kB)
+#8 155.2 Collecting sortedcontainers==2.4.0 (from -r /opt/gateway/requirements.lock (line 37))
+#8 155.4   Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl (29 kB)
+#8 155.8 Collecting tornado==6.5.8 (from -r /opt/gateway/requirements.lock (line 38))
+#8 156.0   Downloading tornado-6.5.8-cp39-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (450 kB)
+#8 156.5      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 450.7/450.7 kB 1.0 MB/s eta 0:00:00
+#8 156.7 Collecting typing_extensions==4.14.0 (from -r /opt/gateway/requirements.lock (line 39))
+#8 156.8   Downloading typing_extensions-4.14.0-py3-none-any.whl (43 kB)
+#8 156.9      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 43.8/43.8 kB 490.7 kB/s eta 0:00:00
+#8 157.3 Collecting urwid==3.0.5 (from -r /opt/gateway/requirements.lock (line 40))
+#8 157.5   Downloading urwid-3.0.5-py3-none-any.whl (296 kB)
+#8 157.9      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 297.0/297.0 kB 678.8 kB/s eta 0:00:00
+#8 158.2 Collecting wcwidth==0.8.3 (from -r /opt/gateway/requirements.lock (line 41))
+#8 158.4   Downloading wcwidth-0.8.3-py3-none-any.whl (331 kB)
+#8 158.8      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 331.7/331.7 kB 771.2 kB/s eta 0:00:00
+#8 159.0 Collecting Werkzeug==3.1.8 (from -r /opt/gateway/requirements.lock (line 42))
+#8 159.2   Downloading werkzeug-3.1.8-py3-none-any.whl (226 kB)
+#8 159.8      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 226.5/226.5 kB 371.5 kB/s eta 0:00:00
+#8 160.0 Collecting wsproto==1.3.2 (from -r /opt/gateway/requirements.lock (line 43))
+#8 160.2   Downloading wsproto-1.3.2-py3-none-any.whl (24 kB)
+#8 160.6 Collecting zstandard==0.25.0 (from -r /opt/gateway/requirements.lock (line 44))
+#8 160.8   Downloading zstandard-0.25.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.5 MB)
+#8 166.5      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.5/5.5 MB 969.8 kB/s eta 0:00:00
+#8 166.7 Installing collected packages: sortedcontainers, pyperclip, publicsuffix2, brotli, zstandard, wcwidth, typing_extensions, tornado, ruamel.yaml, pyparsing, pylsqpack, pycparser, pyasn1, msgpack, mitmproxy_linux, MarkupSafe, kaitaistruct, itsdangerous, hyperframe, hpack, h11, click, certifi, blinker, bcrypt, attrs, asgiref, wsproto, Werkzeug, urwid, mitmproxy_rs, ldap3, Jinja2, h2, cffi, Flask, cryptography, argon2-cffi-bindings, service-identity, pyOpenSSL, argon2-cffi, aioquic, mitmproxy
+#8 168.6 Successfully installed Flask-3.1.3 Jinja2-3.1.6 MarkupSafe-3.0.3 Werkzeug-3.1.8 aioquic-1.2.0 argon2-cffi-25.1.0 argon2-cffi-bindings-26.1.0 asgiref-3.11.1 attrs-26.1.0 bcrypt-5.0.0 blinker-1.9.0 brotli-1.2.0 certifi-2026.7.22 cffi-2.1.1 click-8.5.0 cryptography-50.0.1 h11-0.16.0 h2-4.4.1 hpack-4.2.0 hyperframe-6.1.0 itsdangerous-2.2.0 kaitaistruct-0.11 ldap3-2.9.1 mitmproxy-12.2.3+lantern1 mitmproxy_linux-0.12.11 mitmproxy_rs-0.12.11 msgpack-1.2.2 publicsuffix2-2.20191221 pyOpenSSL-26.4.0 pyasn1-0.6.4 pycparser-3.0 pylsqpack-0.3.24 pyparsing-3.3.2 pyperclip-1.11.0 ruamel.yaml-0.19.1 service-identity-26.1.0 sortedcontainers-2.4.0 tornado-6.5.8 typing_extensions-4.14.0 urwid-3.0.5 wcwidth-0.8.3 wsproto-1.3.2 zstandard-0.25.0
+#8 169.0 WARNING: The directory '/work/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+#8 169.0 No broken requirements found.
+#8 DONE 169.2s
+
+#9 [stage-0 5/6] COPY infra/qa-gateway/policy.py infra/qa-gateway/entrypoint.py /opt/gateway/
+#9 DONE 0.0s
+
+#10 [stage-0 6/6] COPY tools/azure-runner/qa_transport.py /opt/gateway/qa_transport.py
+#10 DONE 0.0s
+
+#11 exporting to image
+#11 exporting layers
+#11 exporting layers 2.8s done
+#11 exporting manifest sha256:26418d7e2c6fb553d653501651c24729cf7445ea617c20d5a4f4696576518f52 done
+#11 exporting config sha256:852b648de869253234f33c79c80972e8e05b6829f2647662604fcebb8950dc06 done
+#11 exporting attestation manifest sha256:5b88beda3987af436f488fdf30590665198c3ff52fb7224dde736f07cc5e6a2e done
+#11 exporting manifest list sha256:69ec9aa598cd86bcbbc3f5719c8702551af7514b876630884aaecb06f7a72260 done
+#11 naming to docker.io/library/lantern-qa-gateway:continuation-4 done
+#11 unpacking to docker.io/library/lantern-qa-gateway:continuation-4
+#11 unpacking to docker.io/library/lantern-qa-gateway:continuation-4 0.4s done
+#11 DONE 3.3s
+
+ 1 warning found (use docker --debug to expand):
+ - InvalidDefaultArgInFrom: Default value for ARG ${BASE_IMAGE} results in empty or invalid base image name (line 3)

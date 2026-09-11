@@ -1,0 +1,249 @@
+{
+  "recorded_at": "2026-09-11T09:02:56.321507+00:00",
+  "image_id": "sha256:b5f5a8a7d6116711e797f36d532f5050036e1a8b7fe7ebd1c2930edd8dedeb8c",
+  "image_config_id": "sha256:b6e015a44b55296ed9406654224ed30511d53ee098d754f1d05496662ce83a1b",
+  "scope": "actual final image audit and packaged TLS loopback; external launch disabled; not native host acceptance",
+  "runtime_packages": 43,
+  "os_packages": 87,
+  "indexed_packages": 169,
+  "vulnerable_packages": 12,
+  "unique_advisories": 27,
+  "severity_counts": {
+    "LOW": 24,
+    "MEDIUM": 2,
+    "HIGH": 1
+  },
+  "findings": [
+    {
+      "id": "CVE-2005-2541",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/tar@1.35%2Bdfsg-3.1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2007-5686",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/shadow@1%3A4.17.4-2?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2010-0928",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/openssl@3.5.7-1~deb13u2?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2010-4756",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/glibc@2.41-12%2Bdeb13u3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2011-3374",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/apt@3.0.3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2011-4116",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/perl@5.40.1-6?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2013-4392",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/systemd@257.13-1~deb13u1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2017-18018",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/coreutils@9.7-3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2018-20796",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/glibc@2.41-12%2Bdeb13u3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2019-1010022",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/glibc@2.41-12%2Bdeb13u3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2019-1010023",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/glibc@2.41-12%2Bdeb13u3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2019-1010024",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/glibc@2.41-12%2Bdeb13u3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2019-1010025",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/glibc@2.41-12%2Bdeb13u3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2019-9192",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/glibc@2.41-12%2Bdeb13u3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2021-45346",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/sqlite3@3.46.1-7%2Bdeb13u1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2022-0563",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2023-31437",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/systemd@257.13-1~deb13u1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2023-31438",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/systemd@257.13-1~deb13u1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2023-31439",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/systemd@257.13-1~deb13u1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2025-5278",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/coreutils@9.7-3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2025-70873",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/sqlite3@3.46.1-7%2Bdeb13u1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2026-53910",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/diffutils@1%3A3.10-4?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2026-56391",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/coreutils@9.7-3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2026-56392",
+      "severity": "LOW",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/coreutils@9.7-3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2025-45582",
+      "severity": "MEDIUM",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/tar@1.35%2Bdfsg-3.1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2026-89092",
+      "severity": "MEDIUM",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/glibc@2.41-12%2Bdeb13u3?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    },
+    {
+      "id": "CVE-2026-85091",
+      "severity": "HIGH",
+      "fixed_version": "not fixed",
+      "packages": [
+        "pkg:deb/debian/zlib@1%3A1.3.dfsg%2Breally1.3.1-1?os_distro=trixie&os_name=debian&os_version=13"
+      ]
+    }
+  ],
+  "source_hashes": {
+    "infra/qa-gateway/Dockerfile": "a07d738bc90e285a8f7d887958db235fe23be74b47e84f4b46b435095b07aa58",
+    "infra/qa-gateway/policy.py": "f0a370c079fab095890535447d53047bc39f9035a2a2a03a747b4926c008b0b5",
+    "infra/qa-gateway/entrypoint.py": "aa3634e35307ae2c4cb6924364115623b2c1afa946a10e5be433e326dbd8c723",
+    "infra/qa-gateway/requirements.lock": "28f276fddc1c4da8b48609ce0c2cecaea2eb561ef755180aabc98f4360efaaff",
+    "infra/qa-gateway/build-tools.lock": "abaae88ac8bd25cf01d4ee2ca7c71699da61aca54bc778a474cc17c4d6adc201",
+    "infra/qa-gateway/upstream.lock": "615a94d32e907d6a6a3f889181a99382ee413421f782535033e685dedad285cd",
+    "infra/qa-gateway/vendor_wheel.py": "70c78eee8ceadd04f75a187cb3a10ddcc234cd535665eed29e6725455f5ececc",
+    "infra/qa-gateway/test_image.py": "3db2cd9ee252e5d78a4eeecf468079aae9d6c1a4f1a1b9229972d71b20ec71be",
+    "tools/azure-runner/qa_transport.py": "b8a81b6f3a29ce6804fdd677e5bec94cc495c5f93d46d03a2871765f96370aee"
+  },
+  "actual_tls_case_count": 20,
+  "pip_and_ensurepip_removed": true,
+  "vendor_runtime_members_identical": true,
+  "vendor_runtime_member_count": 285
+}

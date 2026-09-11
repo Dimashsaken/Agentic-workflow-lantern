@@ -1,0 +1,167 @@
+{
+  "kind": "independent_disposable_sql_qa_controller_proof",
+  "registered_fleet_execution": false,
+  "controller_entry": "qa_execution.execute_capture",
+  "actual_browser_capture": true,
+  "gateway_accepted": false,
+  "external_transport_verified": false,
+  "test_only": true,
+  "results": [
+    {
+      "scenario": "direct_fixture_requires_explicit_test_injection",
+      "passed": true,
+      "launched": false,
+      "quiesced": false
+    },
+    {
+      "scenario": "non_qa_execution_rejected",
+      "passed": true,
+      "launched": false,
+      "quiesced": false
+    },
+    {
+      "scenario": "wrong_execution_key_rejected",
+      "passed": true,
+      "launched": false,
+      "quiesced": false
+    },
+    {
+      "scenario": "unaccepted_external_gateway_has_zero_launches",
+      "passed": true,
+      "launched": false,
+      "quiesced": false
+    },
+    {
+      "scenario": "missing_requirement_mapping_has_zero_launches",
+      "passed": true,
+      "launched": false,
+      "quiesced": false
+    },
+    {
+      "scenario": "changed_start_descriptor_has_zero_launches",
+      "passed": true,
+      "launched": false,
+      "quiesced": false
+    },
+    {
+      "scenario": "wrong_recording_outcome_quiesces_before_hold",
+      "passed": true,
+      "launched": true,
+      "quiesced": true
+    },
+    {
+      "scenario": "open_writers_quiesce_before_hold",
+      "passed": true,
+      "launched": true,
+      "quiesced": true
+    },
+    {
+      "scenario": "extra_outcome_quiesces_before_hold",
+      "passed": true,
+      "launched": true,
+      "quiesced": true
+    },
+    {
+      "scenario": "non_boolean_outcome_quiesces_before_hold",
+      "passed": true,
+      "launched": true,
+      "quiesced": true
+    },
+    {
+      "scenario": "failed_requirement_has_no_receipt",
+      "passed": true,
+      "launched": true,
+      "quiesced": true
+    },
+    {
+      "scenario": "changed_end_descriptor_has_no_receipt",
+      "passed": true,
+      "launched": true,
+      "quiesced": true
+    },
+    {
+      "scenario": "stale_owner_before_launch_has_no_receipt",
+      "passed": true,
+      "launched": false,
+      "quiesced": false
+    },
+    {
+      "scenario": "lease_loss_during_capture_quiesces_and_holds",
+      "passed": true,
+      "launched": true,
+      "quiesced": true
+    },
+    {
+      "scenario": "expired_policy_has_zero_launches",
+      "passed": true,
+      "launched": false,
+      "quiesced": false
+    },
+    {
+      "scenario": "repeated_cancellation_joins_stop_before_return",
+      "passed": true,
+      "launched": true,
+      "quiesced": true
+    },
+    {
+      "scenario": "actual_direct_tls_recorder_sealed_by_fleet_controller_and_persisted",
+      "passed": true
+    }
+  ],
+  "media": {
+    "video": {
+      "name": "f56a254ea023456690fbff184cf81307.webm",
+      "sha256": "be0fcb8a178c89f7d174716edb55583996d1de46d09ed6f6e32586cc9b50e8ab",
+      "bytes": 65084,
+      "duration_seconds": 4.28,
+      "streams": [
+        {
+          "codec_name": "vp8",
+          "codec_type": "video",
+          "width": 1280,
+          "height": 720
+        }
+      ],
+      "decoded": true
+    },
+    "trace": {
+      "name": "f56a254ea023456690fbff184cf81307.trace.json",
+      "sha256": "e267534a62315dee4c5d8e17c68b92a2798fe0520394add8463f9c40ed61c585",
+      "bytes": 367
+    }
+  },
+  "media_root": "media\\c3-fleet-78f38df1026546a1861c639a1a8a1ed1",
+  "recording_id": "f56a254ea023456690fbff184cf81307",
+  "identity": {
+    "run_id": "test-qa-controller-024d13d111d2441bb71f9f549e08b0dd",
+    "execution_key": "test-qa-controller-024d13d111d2441bb71f9f549e08b0dd:04-qa-dev:17",
+    "execution_id": 17,
+    "attempt": 17,
+    "fence": 1
+  },
+  "deployment_sha256": "0cc305a7c8187bc73f129c321043262a50f6d6a75cd4b73f100a8db874c34ed1",
+  "images": {
+    "gateway": null,
+    "recorder": "sha256:a743cef23a8d1049392135d806aeab9be3ffb3e65559616ae5a66dea5c52172f"
+  },
+  "receipt_sha256": "bd5982638efcc1f32e802404fc09e2470d1a43936df7bffc87e8a1f0995365f8",
+  "secret_absent": true,
+  "writers_quiesced": true,
+  "transport_mode": "direct_fixture",
+  "durable_receipt_matches": true,
+  "approvals_unchanged": true,
+  "passed": true,
+  "fixture_cleanup": {
+    "containers_removed": true,
+    "network_removed": true,
+    "temporary_private_trust_removed": true
+  },
+  "new_test_database_removed": true,
+  "configured_database_touched": false,
+  "source_sha256": {
+    "qa_execution.py": "4f919039c7e77bf3346e484149932da89411461ec693598b04d9dcc90b77193d",
+    "qa_provenance.py": "251b6585978ea307c0c5c57b7585d20a8f0419113584c3ea1ef2ccd46b905cc1",
+    "qa_transport.py": "b8a81b6f3a29ce6804fdd677e5bec94cc495c5f93d46d03a2871765f96370aee",
+    "execution_leases.py": "b2ae440feb0355c78bd5045ff8b301cff93cd3b1af98b802502bd9a428f8dd96"
+  }
+}

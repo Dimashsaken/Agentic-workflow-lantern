@@ -1,0 +1,21 @@
+{
+  "video": {
+    "sha256": "cf2b326a9ee0c5f86f477a5aae460a379258da21c2fefec3beb133b7f78d8e60",
+    "bytes": 41853,
+    "duration_seconds": 1.0,
+    "streams": [
+      {
+        "codec_name": "vp8",
+        "codec_type": "video",
+        "width": 1280,
+        "height": 720
+      }
+    ],
+    "decoded": true
+  },
+  "trace": {
+    "sha256": "d8787911ef9d88e162f8c9bc06febd9c322e30fde13ddfe246cec406b69305ba",
+    "bytes": 305
+  },
+  "redacted_trace_schema_valid": true
+}

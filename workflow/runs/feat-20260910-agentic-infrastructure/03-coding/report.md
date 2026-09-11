@@ -511,3 +511,303 @@ Status: BLOCKED (remaining dependent architecture work; v3 increment complete)
 Do you approve local implementation of architecture contracts B–D in
 `../02-pre-coding/continuation-3-task-plan.md`, preserving every existing human
 gate and excluding configured-database migration and deployment?
+
+### Continuation 3 B–D local increment — 2026-09-11
+
+The user requested "do the continuation-3 of the work we are doing with agent
+infrastructure thing". This continues the concrete local work order above;
+architecture implementation is no longer waiting on the previous question.
+It does not authorize a registered gate decision, configured schema migration,
+external publication, deployment or evidence deletion. No such action occurred.
+
+The increment is isolated at `C:/Users/dimas/.lantern/worktrees/continuation-3`,
+branch `codex/agentic-infrastructure-continuation-3`, based on `80babd0`.
+A concurrent task changed the original checkout's Mission Control UI and branch;
+its work was preserved. This worktree contains the infrastructure changes and
+reviews. It changes neither Azure provider/SDK routing nor the fixed pipeline.
+
+**Implemented behavior.** Dedicated default-off maintenance leases bind the
+latest human code-complete decision, exact PR, repository/base/working refs and
+run position. Maintenance never rewrites a run to executing or changes a human
+approval. Claim/retry/rework/decision paths share the run lock; child conflict
+checks use a fresh statement after that lock. Real concurrency testing found
+and fixed the pre-wait PostgreSQL statement-snapshot race. Manual and scheduled
+entry points use the same pilot, including when legacy dispatcher leasing is off.
+
+Trial merges verify exact parent revisions and regate immutable committed source
+in an image pinned by digest. Working-branch publication uses expected-old-head
+conditional push, current provider observations and fenced effect receipts.
+Repeated cancellation stops known workers and joins helper threads. Conflicts
+and red regates hold; inherited maintenance fix authority is still absent.
+
+Fresh isolated checkouts have controller descriptors and shared allocation,
+worker-mount and retirement locks. Cleanup defaults to dry-run, verifies terminal
+database state/server age/all container mounts and refuses unknown ownership,
+links, path substitution and unverified Desktop mount translation. It tombstones,
+quarantines and deletes only owned temporary roots in tests, with crash/audit
+recovery. Evidence/output/error remains pinned indefinitely. Diagnostic inventory
+reports bytes, server ages and held reasons; no cleanup scheduler is connected.
+
+The external QA gateway is an unaccepted source/image candidate and its launcher
+unconditionally refuses activation. Its 43 exact wheel hashes match the reviewed
+PyPI metadata, but four selected packages have reported advisories. The build
+retry was stopped; there is no accepted gateway image or host firewall adapter.
+The narrow recorder image built successfully and passed a direct local HTTPS
+fixture with ephemeral NSS CA trust and certificate checks enabled. Its trace is
+redacted command-outcome JSON, not a Playwright replay ZIP. Controller receipts
+bind the fixture deployment, image, requirements, execution/attempt/fence and
+actual decoded media, and validate explicit transport mode at every boundary.
+Fenced database persistence also checks the durable attempt/key. This is a local
+fixture, not an external deployment or packet-denial acceptance claim.
+
+| Evidence | Final result and scope |
+|---|---|
+| `bcd-final-quality.json`, `bcd-final-test.log`, `bcd-final-lint.log` | Complete configured commands passed: **616 unittest cases, 607 passed and 9 explicit skips**, plus standalone checks; test 113.422s, lint 0.359s. Runtime source unchanged during checks; full per-file hashes in JSON. Skips are seven opt-in PostgreSQL cases, one opt-in Docker evidence case and Windows symlink privilege. The opted-in suites ran separately below. |
+| `bcd-final-maintenance.log` | **14/14 passed**, 26.364s, with real disposable PostgreSQL, a real temporary Git merge, immutable Docker regate and conditional local push. GitHub observations were simulated. Includes parent-lock race, competing ownership, expiration, renewal, stale effect, changed approval and unchanged run/approval checks. |
+| `bcd-final-frozen-source.log` | Actual Docker test **1/1 passed**, 79.006s, image `sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756`; positive quality command, source/manifest negatives, ignored dependency exclusion and mutable modify/test/restore versus read-only refusal. No Azure or database. |
+| `bcd-capture-proof.py/json`, `bcd-capture-expected.json` | Actual recorder image `sha256:a743cef23a8d1049392135d806aeab9be3ffb3e65559616ae5a66dea5c52172f`; four browser commands passed; actual 1.0s VP8 video fully decoded. Disposable SQL persisted the matching receipt and rejected wrong attempt/key/stale owner. Test-only direct TLS, no gateway; fixture database/containers/network removed. Public CA only reached recorder; temporary private key removed with fixture files. |
+| `../04-qa-dev/bcd-capture-verification.json`, `bcd-capture-supplement.md` | Independent **13/13** actual-media controls: positive full decode and 12 identity/tamper/outcome/mirror negatives. Actual frame at 0:00.5 inspected. Redacted trace and one-second fixture video do not replace full workflow diagnostics. |
+| `../04-qa-dev/bcd-report.md` and baseline result/decoder JSON | Four recorded desktop/mobile real-app and fixture contexts passed on baseline UI `80babd0`; actual videos 57.16s/42.28s decoded and inspected. Existing app database approval snapshot unchanged. These browser tests remain separate from the new recorder proof; unrelated UI edits were excluded through a frozen temporary runtime. |
+| `../05-post-coding/bcd-review.md` | Independent PASS-WITH-NOTES; explicit pilot routing defect fixed. Final supplement: 16 retention + 9 provenance tests pass. Temporary maintenance clone allocation and all-history descriptor scan cost remain local debt. |
+| `../06-security/continuation3-bcd-prereview.md`, final snapshot and media review JSON | No remaining confirmed high B/D issue; independent final 16 retention, 9 receipt and 7 adversarial probes pass. Actual media independently rehashed and decoded. Scope permits local B/D and test-only fixture; external C and staging NO-GO. |
+| `bcd-retention-inventory.json` | Existing configured root: **8 legacy checkouts, 149,093,385 bytes, zero eligible, zero deleted**. Unknown server age is null; no filesystem timestamp authorizes cleanup. Maintenance temp clones are outside this inventory and stay retained. |
+| `bcd-memory.json` | Actual bound `append_memory` calls wrote coding/security/post-coding/QA rows **60–63** to existing localhost:5432 `lantern`. Runs/executions/approvals stayed **12/23/8**, complete approval snapshot unchanged; memory 37→41. No migration or fabricated stage execution. Rendered memory includes an existing concurrent task's row and was not hand-edited. |
+
+The earlier `bcd-increment-*` failed check is retained as iteration evidence,
+not final validation. Final checks above supersede it. `bcd-isolated-*` was an
+intermediate passing checkpoint. D20 build/report regenerated: fingerprint
+`5a980d1ebb9f8215d788435a756161286e1ec8f15d16a85ed18f6d9e64798e3e`, frozen
+plan coverage 1.00 (n=2), invalid acceptance 0/14 and valid rejection 0/1.
+These frozen verifier scores do not establish live Azure quality.
+
+| Work-order item | Verdict |
+|---|---|
+| C3-1–3 | Existing configured database recovery and publication v3 increment preserved; positive live GitHub proof remains limited by the previously observed bot PR-read 403. No permission changes or provider mutations were made. |
+| C3-4–5 | Local B–D continuation authorized; independent reviews completed. Dedicated maintenance acquisition, eligibility, fencing and recovery implemented and locally tested. |
+| C3-6 | Green immutable-regate/conditional-push path implemented; red-regate inherited fix is explicitly held and incomplete. |
+| C3-7 | **Incomplete / activation blocked:** gateway dependency advisory disposition, successful accepted image, effective-hook tests and host egress-denial adapter/acceptance remain. |
+| C3-8 | Local direct-TLS sealed capture mechanics pass; external deployment and fleet-stage integration remain incomplete. |
+| C3-9 | Conservative retirement/inventory API and temporary-root race/crash tests implemented. Legacy/real evidence deletion not performed; maintenance temp allocation and lookup scalability remain debt. |
+| C3-10 | Local configured checks and independent QA/post/security reviews pass within stated scope. Full foundation acceptance is incomplete. |
+| C3-11 | Deferred until foundation acceptance; no context-budget or structured-output Azure experiment run or promoted. |
+
+Videos and binary screenshots remain local artifacts rather than git
+payloads; reports retain their exact names/hashes. No artifact upload was
+performed by this manual engineering session. Deployment and all human gates
+remain unchanged. Follow-on work is the bounded red-regate authority path,
+gateway dependency/network acceptance and complete external capture integration.
+
+Status: PARTIAL — B/D local increment and test-only recorder proof complete;
+external QA/foundation acceptance incomplete; staging NO-GO.
+
+
+### Continuation 3 foundation completion work — 2026-09-11
+
+Starting point: `09fdb11`, branch `codex/agentic-infrastructure-continuation-3`,
+worktree `C:/Users/dimas/.lantern/worktrees/continuation-3`. Existing untracked QA
+media and final-capture supplement were present before this session and retained.
+The user explicitly authorized local implementation, dependency investigation,
+isolated builds and disposable tests for the four outstanding foundation items.
+No prior B–D approval question is reopened. Configured database migration, gate
+changes, merge, external publication, deployment and existing evidence deletion
+remain outside this session. Azure context/output experiments remain deferred.
+
+Implementation in progress: bounded inherited maintenance fixes; patched gateway
+candidate and actual host controls; deployment-bound fleet capture; registered
+maintenance checkouts and bounded descriptor mount lookups. Security and QA agents
+are independently preparing evidence. Final results will be appended here.
+
+
+### Continuation 3 local foundation implementation — final 2026-09-11
+
+- **Agent/author:** coding integration owner, with qa-dev, post-coding and security role agents.
+- **Baseline:** `09fdb11`; branch `codex/agentic-infrastructure-continuation-3`;
+  isolated worktree `C:/Users/dimas/.lantern/worktrees/continuation-3`.
+- **Status:** PASS-WITH-NOTES for the authorized local implementation and tests;
+  full foundation acceptance remains incomplete and external activation/staging remain NO-GO.
+
+#### Summary
+
+Bounded inherited maintenance repairs, registered maintenance checkouts and bounded
+steady mount lookups now work locally. The real QA capture controller records and
+seals an explicitly test-only direct TLS execution; the gateway has an audited
+minimal image, tested effective TLS hooks and a separately tested candidate host
+firewall. The original gateway Python dependency findings are resolved, but an
+unfixed high OS zlib finding and missing native-host/target/lifecycle acceptance
+keep external launch unconditionally disabled.
+
+#### Work performed
+
+1. **Maintenance repair authority (C3-6).** A failed immutable maintenance regate
+   can launch a bounded coding child with explicit parent execution/fence and a
+   digest of inherited authority. Total repair turns are bounded by the configured
+   fix budget and capped at ten; zero keeps the red gate held. Children neither
+   acquire dispatcher authority nor publish. Heartbeats survive threaded quality
+   commands, cancellation joins tools/writers, and stale or changed authority
+   refuses acceptance. The child retains the exact observed base ref; reports,
+   gate files and handoffs use a child-specific immutable output location.
+   The parent checks original scope, quality policy, image and ancestry, regates
+   the exact new commit from a fresh immutable source, and alone performs the
+   fenced expected-old-head conditional publication. Artifact/memory/usage paths
+   honor the inherited lease with dispatcher leasing both enabled and disabled.
+
+2. **Gateway image and hooks (C3-7).** The official mitmproxy wheel's conflicting
+   dependency caps are changed through a deterministic, hash-pinned local metadata
+   variant. All 285 runtime members remain byte-identical. Patched cryptography,
+   h2, msgpack, tornado and compatible pyOpenSSL resolve under `pip check`.
+   The gateway now uses a pinned minimal Python slim image; unused sandbox/browser
+   packages and the complete build installer/ensurepip bootstrap are absent from
+   its runtime. Real packaged tests exposed and drove fixes for invalid startup
+   options, ClientHello abort behavior, preconnect address allocation and
+   normalized absolute-form request authority. Full audit history is retained.
+
+3. **Candidate host restrictions (C3-7).** `qa_network.py` installs default-drop
+   input/output/forward rules after conntrack and before destination NAT. Recorder
+   traffic permits only its proxy; gateway traffic permits only the recorder and
+   policy-frozen destination addresses/ports. Installation pins a namespace file
+   descriptor, checks exact installed rule content, and rechecks identity.
+   Commands bind to a root-owned local Unix Docker socket with stable inode;
+   native Linux metadata and the exact container ID in local cgroups prevent a
+   remote Docker PID from selecting an unrelated local namespace. Desktop refuses.
+   This is candidate host code, not accepted native-host integration.
+
+4. **QA recording integration (C3-8).** The optional real QA-stage path calls the
+   controller before model execution and preserves the sealed receipt when writing
+   stage output. Durable execution identity, independent initial/final deployed
+   revision, exact command/requirement outcomes, closed writers, full media decode
+   and hashes precede fenced persistence. Repeated cancellation waits for shutdown.
+   `LANTERN_QA_CAPTURE_CONFIG_ROOT` reads controller-owned configuration outside the
+   product. Fleet configuration requires gateway transport and cannot select the
+   direct-fixture test exception. The actual external launcher remains held;
+   gateway lifecycle and registered external stage execution are incomplete.
+
+5. **Retention registration and lookup (C3-9).** Trial and repair clones are
+   registered under dedicated maintenance roots. New descriptors and monotone
+   ancestor markers make steady registered mount lookup proportional to path
+   depth, tested with 10,000 retained mappings. Old-visible mappings and rejecting
+   sentinels preserve conservative legacy holds. A single permanent top-level OS
+   lock identity serves old and new readers; clone work does not hold the global
+   index lock. Interrupted rebuilds, late/concurrent legacy registration and
+   filename/path mismatch hold safely. Allocation/rebuild still scans historical
+   compatibility mappings: `LANTERN-DEBT-EXECUTION-GC` remains for optimization
+   before sustained fleet allocation. Evidence and tombstones remain indefinite;
+   no existing evidence or retained checkout was deleted.
+
+#### Findings and validation
+
+| Evidence | Result and exact scope |
+|---|---|
+| `c3-final-quality.json`, `c3-final-test.log`, `c3-final-lint.log` | Complete configured checks pass: **648 unittest cases, 636 passed and 12 explicit skips**, plus standalone checks. Test 117.7s; lint 0.4s. Source hashes unchanged across the run. Skips: ten opted-in maintenance SQL/Docker cases, one opt-in frozen-source Docker case, one Windows symlink-privilege case. The changed maintenance integration ran separately below; the unchanged prior frozen-source proof was not repeated. |
+| `c3-foundation-maintenance-r2.log` | **18/18 pass**, 116.868s. Real disposable PostgreSQL, local Git merge/repair, immutable Docker regates and conditional local ref update. Covers successful repair, a repair that changes quality policy, lease/approval/authority loss and repeated cancellation. Model decisions and GitHub observations are scripted; this is not Azure or live provider acceptance. |
+| `../05-post-coding/c3-review-probes.py/json`, `c3-lock-compat-retest.json` | **16 independent checks**, one malformed-mapping control and three permanent-lock compatibility controls pass. Real production artifact/finalize functions, local Git and actual baseline-reader code supplement the scripted maintenance child; artifact SQL/fences are injected. Reviewer retention suite passed 21/21; the final configured suite adds a permanent-lock regression and passes **22/22**. |
+| `../04-qa-dev/c3-qa-controller-sql.json` | **16/16 production controller boundary probes** against a real disposable PostgreSQL cluster, with injected recorder/deployment callbacks. No registered fleet stage is inferred. |
+| `../04-qa-dev/c3-qa-controller-capture.json`, `c3-actual-capture-denials.json`, `c3-capture-frames.json` | Four actual image-local Playwright recordings through `execute_capture`: one positive with five browser commands, fully decoded 4.28s VP8 video and independently verified matching SQL receipt; three negatives (failed assertion, deployed-revision drift, lease loss) retain decoded media and produce no accepted receipt. Exact identities, hashes and inspected frames are in QA evidence. All are **test-only direct TLS**, never external gateway acceptance. |
+| `../06-security/continuation4-final-image-summary.json`, runtime image hooks/inventory/audit | Final gateway image `sha256:b5f5a8a7d6116711e797f36d532f5050036e1a8b7fe7ebd1c2930edd8dedeb8c`: **20/20 actual packaged TLS/HTTP controls pass**. Loopback-only disposable container; valid TLS on both legs and denial counters, not external traffic. Full scan: 169 indexed packages, 12 affected packages, **27 OS advisories (1 high, 2 medium, 24 low)**. Zero remaining reported advisories in the 43-package gateway runtime lock. |
+| `c3-network-proof.py/json`, `c3-network-proof-r6.log` | Actual Linux nft kernel rules in disposable isolated namespaces: permissive TCP/DNS/QUIC calibration; positive proxy request; seven denial checks including simulated Docker DNS before DNAT, and zero additional forbidden observer bytes. No Docker socket, host networking or host PID namespace. Not a native Docker-host adapter or combined external TLS proof. Final host-binding unit controls **8/8 pass**. |
+| `../05-post-coding/c3-outstanding-review.md`, `../06-security/continuation4-security-review.md`, latest QA report | Required agents completed review. Local fix-now findings resolved; retention allocation scan debt remains. Security permits disabled local code with conditions and explicitly refuses external/full foundation/staging acceptance. |
+| `c3-foundation-memory.json` | Actual bound `append_memory` created coding/QA/post-coding/security rows **64–67** in the existing configured `lantern` PostgreSQL. Runs/executions/approvals stayed **12/23/8**, full approval snapshot unchanged; memory 41→45. No migration, new configured cluster or fabricated fleet execution. Rendered memory was produced by the actual tool. |
+
+The full configured quality policy SHA-256 is
+`948c26a2c083ce89cd3574dea7483b7c253bc4081869be9b96f06e8ff0ae9034`.
+D20 `evals build` and `evals report` regenerated with fingerprint
+`ee1875809f1481d00dcd912767071ecc37fa63b83ba32026c556d72f1c6aa967`.
+Frozen plan coverage remains 1.00 (n=2); invalid acceptance 0/14 and valid rejection
+0/1. These scores do not establish live model behavior. New controller, network,
+publication and gateway build-policy modules are covered by the fingerprint.
+
+Failed/intermediate evidence remains retained with its original names. Initial
+maintenance failure found unbound scope inspection and was fixed before r2.
+The packet harness iterations found real rule readback normalization differences;
+its final proof supersedes harness/fixture/mount mistakes without counting them as
+successful acceptance. The first configured checkpoint predates the final lock and
+image changes; `c3-final-*` is authoritative for this source cutoff. The final
+retention source differs from the reviewer's last hash only by a corrected comment;
+its permanent-lock implementation and independent proof are unchanged.
+
+#### Runtime recovery and evidence handling
+
+Docker's existing engine was recovered by preserving stale socket directories
+under uniquely named retained sibling directories and restarting the existing
+runtime. No engine reset, unregister, image prune or evidence deletion occurred.
+The original PostgreSQL16.9 data directory `C:/Users/dimas/.lantern/pgdata` was
+restarted without initialization or DDL solely to complete required memory writes.
+QA's separately owned disposable port55432 cluster served integration tests; its
+shutdown/data retention is recorded in QA readiness evidence. The configured
+port5432 cluster remains available. The original Mission Control checkout was not
+edited; its interpreter/.env were read only. Videos, screenshots and retained
+runtime data stay outside git; source, small textual evidence and audit SARIF are
+committed without uploading artifacts or changing deployment state.
+
+#### Exact remaining foundation prerequisites
+
+- **Dependency disposition:** security finding C4-S1, Debian zlib
+  `1:1.3.dfsg+really1.3.1-1`, CVE-2026-85091, is reported vulnerable and unfixed.
+  Supply a reviewed fixed package/base or substantiated package-level mitigation
+  or non-applicability disposition, then pin/re-audit/retest the affected image.
+  No false-positive waiver or clean whole-image claim is made.
+- **Native host and trusted target:** this workstation is Docker Desktop. A
+  designated native Linux controller host, exact image pair and controller-owned
+  deployed revision/origin/credentials are needed for actual Docker identity,
+  installed-rule and combined permitted/denied TCP/UDP/IPv6/DNS/host/metadata
+  counter tests. The current separate fixtures cannot establish this boundary.
+- **External lifecycle integration:** implement and verify a single owned launcher
+  and watchdog on that accepted host, including policy expiry/gateway death during
+  recording, lease loss/cancellation, cross-execution CA separation and final
+  sealed receipt through the registered QA stage. Avoid duplicate allocation
+  between the current acceptance check and launcher call. The optional stage
+  wiring is ready to hold; it is not a completed live gateway execution.
+- **Prior provider prerequisite:** the previously documented bot PR-read 403 still
+  limits positive live GitHub publication acceptance. No provider permissions or
+  external refs were changed and the unchanged blocked probe was not repeated.
+
+C3-6 is locally implemented and integration tested. C3-7/C3-8 are locally advanced
+but remain acceptance-incomplete for the explicit reasons above. C3-9 registration
+and bounded steady lookups are implemented with conservative allocation debt.
+C3-10 has complete local QA/reviews/checks/evals; it does not grant full foundation
+acceptance. C3-11 Azure context/output experiments remain deferred. No new B–D
+approval, human gate change, migration, merge, publication or deployment occurred.
+
+#### Durable learning and handoff
+
+Coding row64 records that a scripted repair child does not prove real stage
+handoff; exercise artifact ownership with both dispatcher settings and preserve the
+exact inherited base ref. QA row65 records repeated cancellation while shutdown is
+pending; post-coding row66 records conservative mixed-version indexing and permanent
+lock identity; security row67 records exact packaged preconnect/ClientHello hooks
+and the distinction between dependency resolution and image/network acceptance.
+The actual tool receipt contains every manual execution key.
+
+Status: PASS-WITH-NOTES for the completed local increment; full foundation
+acceptance remains incomplete, external gateway activation and staging NO-GO.
+
+Implementation committed as `d0186cc`; the following evidence-only increment carries
+all new textual integration proofs, independent reviews and actual memory receipts.
+`c3-evidence-index.json` records each evidence hash and confirms the implementation
+source still matches the final configured checks. Existing and new media, disposable
+database data/logs and live configured-server logs remain retained locally. QA
+verified and stopped only its disposable port55432 server; configured5432 remains
+reachable. No runtime changes followed the final checks.
+
+## External QA acceptance continuation — 2026-09-11
+
+- **Author:** Codex manual engineering, with independent QA/security/post-coding review
+- **Branch:** `codex/external-qa-acceptance`, from `1f94626`
+- **Status:** BLOCKED for full external acceptance; candidate implementation verified
+
+Implemented the locally versioned zlib terminal-write-error mitigation, continuous
+recording policy/lease/health supervision and native Docker namespace acceptance
+harness. The final native gateway/recorder pair passes 14 calibrated network
+denials and two allowed flows with zero forbidden packets/bytes and complete
+cleanup. The gateway passes 24 packaged TLS/session tests on both hosts.
+Independent review fixed early-abort cleanup; three added cleanup regressions pass.
+Final configured tests/lint pass (655 cases, 12 skips) with unchanged source;
+required evals were regenerated. Actual memory rows 68–71 were inserted through
+the bound tool without changing runs, executions or approvals.
+
+The fresh native offline audit completed but reports untriaged critical/high
+findings; automatic approval review blocked retrieval of package/version/CVE
+details and explicit user approval is pending. The approved HTTPS deployment,
+controller-owned descriptor and scoped credential references are also absent.
+Production launch remains held; combined real recording/lifecycle acceptance is
+not claimed. See [external-qa-acceptance.md](external-qa-acceptance.md) for exact
+images, checks, evidence, review findings and the remaining concrete question.

@@ -1,0 +1,50 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.29kB 0.0s done
+#1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${BASE_IMAGE} results in empty or invalid base image name (line 3)
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/lantern-qa-base:933a9c0899da
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 286B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 2.71kB done
+#4 DONE 0.0s
+
+#5 [stage-0 1/6] FROM docker.io/library/lantern-qa-base:933a9c0899da@sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756
+#5 resolve docker.io/library/lantern-qa-base:933a9c0899da@sha256:933a9c0899dae9c9d7f73d5bcf76a5298e7eaccea83b17233d4d8d56e3682756 0.0s done
+#5 DONE 0.0s
+
+#6 [stage-0 3/6] COPY infra/qa-gateway/requirements.lock infra/qa-gateway/upstream.lock infra/qa-gateway/vendor_wheel.py /opt/gateway/
+#6 CACHED
+
+#7 [stage-0 2/6] RUN python3.12 -m venv /opt/gateway
+#7 CACHED
+
+#8 [stage-0 4/6] RUN --mount=type=cache,target=/root/.cache/pip     export PIP_CACHE_DIR=/root/.cache/pip && /opt/gateway/bin/pip download --timeout 120 --retries 3 --require-hashes --only-binary=:all: --no-deps       -r /opt/gateway/upstream.lock -d /opt/gateway/upstream     && /opt/gateway/bin/python /opt/gateway/vendor_wheel.py       /opt/gateway/upstream/mitmproxy-12.2.3-py3-none-any.whl       /opt/gateway/vendor/mitmproxy-12.2.3+lantern1-py3-none-any.whl > /opt/gateway/vendor-provenance.json     && /opt/gateway/bin/pip install --timeout 120 --retries 3 --require-hashes --only-binary=:all:       --find-links /opt/gateway/vendor -r /opt/gateway/requirements.lock     && /opt/gateway/bin/pip check
+#8 CACHED
+
+#9 [stage-0 5/6] COPY infra/qa-gateway/policy.py infra/qa-gateway/entrypoint.py /opt/gateway/
+#9 DONE 0.1s
+
+#10 [stage-0 6/6] COPY tools/azure-runner/qa_transport.py /opt/gateway/qa_transport.py
+#10 DONE 0.0s
+
+#11 exporting to image
+#11 exporting layers 0.1s done
+#11 exporting manifest sha256:68b72a1ce5329a10d29236fb866eba0e83b57fc56a64e65cb51881259e331374 0.0s done
+#11 exporting config sha256:9e6103d63470ea2cb26108d8b62989308929daca7228cece12b48b8e4452873c 0.0s done
+#11 exporting attestation manifest sha256:078f53af44f200e297b7c8d6c3543fc254e62e7f6e5a151f2db3e7056393c2a1 0.0s done
+#11 exporting manifest list sha256:3938d18b29b97e895391db2c1dae995ba7df711c3a152d9fa4efde86d552bf3e 0.0s done
+#11 naming to docker.io/library/lantern-qa-gateway:continuation-4 done
+#11 unpacking to docker.io/library/lantern-qa-gateway:continuation-4
+#11 unpacking to docker.io/library/lantern-qa-gateway:continuation-4 0.7s done
+#11 DONE 0.9s
+
+ 1 warning found (use docker --debug to expand):
+ - InvalidDefaultArgInFrom: Default value for ARG ${BASE_IMAGE} results in empty or invalid base image name (line 3)

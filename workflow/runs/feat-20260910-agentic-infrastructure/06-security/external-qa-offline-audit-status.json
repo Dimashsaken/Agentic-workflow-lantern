@@ -1,0 +1,23 @@
+{
+  "command_id": "c41e7529-8ce7-4ed5-8e49-456055dfa1ea",
+  "status": "Success",
+  "scanner": "Trivy 0.74.0",
+  "scanner_archive_sha256": "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a",
+  "scan_network": "none",
+  "database_layer_sha256": "c946b11de88207455b66ac6117626cf9a3876a3052f1d538f2924a2f7e755788",
+  "database_updated_at": "2026-09-11T07:00:51.617232631Z",
+  "full_reports_retained_at": "/tmp/lantern-external-qa-audit-20260911/workflow/runs/feat-20260910-agentic-infrastructure/06-security",
+  "gateway": {
+    "image": "sha256:05b1729428c8cdcfb099758f81d916afb94550eae48fad72e4c075e151d0b378",
+    "finding_count": 176,
+    "severity": {"CRITICAL": 3, "HIGH": 51, "LOW": 57, "MEDIUM": 57, "UNKNOWN": 8}
+  },
+  "recorder": {
+    "image": "sha256:bbf5ea982390470ce5d0331ac07fc004906ac1e896df5ebe2d84e7e6ff8d59fd",
+    "finding_count": 191,
+    "severity": {"CRITICAL": 1, "HIGH": 10, "LOW": 29, "MEDIUM": 151}
+  },
+  "findings_triaged": false,
+  "details_retrieval": "Automatic approval review rejected transfer of package versions and vulnerability IDs; explicit user approval requested.",
+  "external_acceptance": false
+}

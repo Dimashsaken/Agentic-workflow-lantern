@@ -1,0 +1,23 @@
+{
+  "kind": "independent_final_lock_compatibility_retest",
+  "results": [
+    {
+      "name": "actual_old_reader_held",
+      "passed": true,
+      "first_holder_live": true
+    },
+    {
+      "name": "second_current_holder_held",
+      "passed": true,
+      "first_holder_live": true
+    },
+    {
+      "name": "available_after_original_holder_released",
+      "passed": true
+    }
+  ],
+  "retention_sha256": "2ef0943e49d521461f4a4cef3ff7a4aeb90bf846245f798b702f3f8f52f4e99f",
+  "baseline_old_reader": "09fdb11",
+  "database": false,
+  "external_provider": false
+}

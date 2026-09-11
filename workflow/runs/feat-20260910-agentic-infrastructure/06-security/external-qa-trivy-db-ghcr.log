@@ -1,0 +1,5 @@
+2026-09-11T10:39:44Z	INFO	[vulndb] Need to update DB
+2026-09-11T10:39:44Z	INFO	[vulndb] Downloading vulnerability DB...
+2026-09-11T10:39:44Z	INFO	[vulndb] Downloading artifact...	repo="ghcr.io/aquasecurity/trivy-db:2"
+2026-09-11T10:44:44Z	WARN	Provide a higher timeout value, see https://trivy.dev/docs/v0.74/guide/references/troubleshooting#timeout
+2026-09-11T10:44:44Z	FATAL	Fatal error	run error: init error: DB error: failed to download vulnerability DB: OCI artifact error: failed to download vulnerability DB: failed to download artifact from ghcr.io/aquasecurity/trivy-db:2: oci download error: copy error: context deadline exceeded

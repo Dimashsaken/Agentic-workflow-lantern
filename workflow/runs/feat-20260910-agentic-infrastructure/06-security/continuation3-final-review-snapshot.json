@@ -1,0 +1,47 @@
+{
+  "observed_at": "2026-09-10T18:18:34.407143+00:00",
+  "workspace": "C:\\Users\\dimas\\.lantern\\worktrees\\continuation-3",
+  "branch": "codex/agentic-infrastructure-continuation-3",
+  "base_head": "80babd0f3c90294f4d13f8b28e47dc1a9a2cdab3",
+  "scope": "Uncommitted B/D implementation and disabled C candidate; reviewed file bytes, not completed foundation release certification.",
+  "sha256": {
+    "tools/azure-runner/maintenance_runtime.py": "cf90f135d9be0c56f8035ef4b57cdd3414b993feca51189ee6ac7abc8b08a7d4",
+    "tools/azure-runner/execution_retention.py": "bbd1c071c2644d89a52406fa8dc40149392c91cfae2dda86ca8b1b1d42813f12",
+    "tools/azure-runner/execution_leases.py": "1bded3709f104939c096c4abac91c8e9f7f2d0e7b211abee351bdd38a3ca2daa",
+    "tools/azure-runner/isolated_tools.py": "4ee69d3689f7e8b6f1a726a55e612a1d7a39077679cdbd5c08df0ea135e90b2b",
+    "tools/azure-runner/pipeline.py": "6339ee18be5361d0c053b23e0c841a7b52228195425e60618987c041c94f4d9c",
+    "tools/azure-runner/review.py": "a5ced67b4aed1d806756c243754862f8b2016707793137fe61132881701ab763",
+    "tools/azure-runner/qa_transport.py": "b8a81b6f3a29ce6804fdd677e5bec94cc495c5f93d46d03a2871765f96370aee",
+    "tools/azure-runner/qa_provenance.py": "251b6585978ea307c0c5c57b7585d20a8f0419113584c3ea1ef2ccd46b905cc1",
+    "tools/azure-runner/qa_recorder_worker.py": "37ab3957fac008fedda4c04fcd4b44c6ba527be22f6f07c0f3634c7e7ae6251b",
+    "infra/qa-gateway/policy.py": "9a5b68718bd46986bc337ab10ce848dd0e90595262e9ffb35e3f95212a19fc44",
+    "infra/qa-gateway/entrypoint.py": "a2c7122d8a30b52cb190acac9f1f23bd10b0ee32a96fd056e79f4f818b114d4f",
+    "infra/qa-gateway/requirements.lock": "a0b35cf9b1427d9492f78fa88c4959a63c372bb563711e60692e9f74bc934b35",
+    "infra/qa-gateway/Dockerfile": "38c3733e7bde0bb83238813f1a145816692248e853ae4360aa7970d05926311b",
+    "infra/qa-recorder/Dockerfile": "feb16b5fc1c0a375bcf5e730259e9d852892ba8855905241ca7073d013029ee0",
+    "tools/evals/check_pr.py": "f2ee2f707d88b15bb40dde2c1699f534da48ebf86cade7b5feafa8deb9bcef61",
+    "lantern.toml": "e2116f934d6daa401c0a0c2078b7c952cca676d97b1f61225c2908c113ed7343"
+  },
+  "supplements": [
+    {
+      "observed_at": "2026-09-10T18:31:16.382077+00:00",
+      "scope": "Fixture-only capture mode, durable attempt identity, diagnostic retention inventory, and supplied actual recorder/TLS fixture evidence. No gateway/firewall acceptance.",
+      "changed_hashes": {
+        "tools/azure-runner/execution_retention.py": {
+          "prior_sha256": "f2769e93281105d9f02438d630fecd663595bae26a26a1fd0ac2d6bba5ec67e0",
+          "reviewed_sha256": "bbd1c071c2644d89a52406fa8dc40149392c91cfae2dda86ca8b1b1d42813f12"
+        },
+        "tools/azure-runner/review.py": {
+          "prior_sha256": "4deb6e972ec7025a8c37de7a59cdb6f66742d4e4d2a6f894957e1eac88d048e7",
+          "reviewed_sha256": "a5ced67b4aed1d806756c243754862f8b2016707793137fe61132881701ab763"
+        },
+        "tools/azure-runner/qa_provenance.py": {
+          "prior_sha256": "acafc02964f16a2010c6955b8d44b7b7dec0d0a5f8ef444e78af57d05eebd86d",
+          "reviewed_sha256": "251b6585978ea307c0c5c57b7585d20a8f0419113584c3ea1ef2ccd46b905cc1"
+        }
+      },
+      "proof_sha256": "c6b444318bb02b6f841e964c2f598b9bc27892c24a5f3823d2e64caa9426fc4a",
+      "proof_result_sha256": "7978719f15a44c24d5d0ce3832f9d1911112c560b20b41352160949a51bb6cba"
+    }
+  ]
+}

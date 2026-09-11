@@ -142,3 +142,43 @@ Azure call, execution row, receipt or approval may be manufactured for this test
 - Publication reconciliation has no changed UI surface; these sessions cannot
   prove provider reconciliation, maintenance fencing, external QA transport or
   deployment-bound recording receipts. Those acceptance items remain separate.
+
+## Continuation 3 outstanding-foundation QA charter — 2026-09-11
+
+Author: qa-dev. Baseline `09fdb11c18f8a12f8b625d4c2e7ceeebd1deb8e5`, isolated branch `codex/agentic-infrastructure-continuation-3`. This charter precedes new execution. No registered story/brief exists in this local engineering run; the approved local continuation work order and `02-pre-coding/continuation-3-task-plan.md` supply the proposed acceptance mappings. Existing UI recordings and immutable-source controls remain prior evidence; no unchanged proof is repeated.
+
+### Confidence-map probes (priority order)
+
+| Probe | Criteria | Required observation | Classification |
+|---|---|---|---|
+| M1 Red maintenance regate repairs once | AC-9b | Actual temporary Git merge fails immutable gate, bounded repair inherits exact maintenance parent/target/approval binding, fresh immutable gate passes, conditional local ref update succeeds once. Run position and human approval rows remain identical. | Disposable SQL/Git/Docker integration; provider observation simulated |
+| M2 Failed, stale and cancelled repair | AC-9b | Exhausted repair limit, lost/changed parent authority, policy/source change, stale expected ref and repeated cancellation cannot publish. Child workers quiesce; terminal evidence remains. | Bounded disposable integration and targeted injected fault controls |
+| Q1 Fleet capture entry | AC-10a/11 | Real QA execution routing invokes controller plan, start/end trusted descriptor observation, always-on recorder, full decode, seal and fenced receipt persistence. Exact command/result identity and complete requirements required. | Actual fleet code path with disposable direct-TLS fixture; explicitly test-only |
+| Q2 Capture denial boundaries | AC-10a | Direct fixture never acquires verified external status; deployment drift, missing requirement, wrong execution/attempt/fence, swapped media, stale controller, malformed outcome and open writers hold receipt acceptance. | New-path integration/fault controls; existing pure verifier proofs reused when unchanged |
+| Q3 Cancellation/expiry | AC-10a | Recorder is stopped and joined before return; no receipt or continued capture claim survives a lost lease, cancellation, expired policy or descriptor failure. Temporary trust/process resources have owned cleanup receipts. | Disposable process/container controls |
+| G1 External gateway | AC-7a | Independently audited actual image, effective TLS hooks, allowed TLS positive, transport/destination/host-network denials with observable forbidden endpoint and permissive control. Launcher stays disabled until every required real control passes. | Security-owned actual-image evidence; no fixture promoted to live acceptance |
+| R1 Maintenance descriptor lifecycle | AC-8a/11a | New maintenance checkout is registered under shared lock; indexed lookup avoids all-history scan, absent/legacy descriptors stay held; evidence remains indefinitely. | Post-coding/security review and targeted disposable lifecycle controls |
+
+### Edges and regressions
+
+Prioritize duplicate command IDs, malformed and missing outcomes, empty/max plans, stale descriptor between capture start/finish, second cancellation during join, delayed worker start, and conditionally updated refs changing after the repair gate. External browser transport is not a prerequisite for the separately marked direct-TLS controller integration. A down intended dev environment blocks live QA rather than authorizing a substitute target.
+
+No Mission Control UI source is in this increment, so double-submit/back/refresh/mobile/theme/legacy receipt UI proofs are reused from the previous recorded round. New capture recordings use the controller recorder in `tools/qa-recorder`'s always-on Playwright model; traces are redacted command outcomes, explicitly not replayable Playwright network traces. Each retained video will be decoded and linked with media-relative timestamps.
+
+### Exploratory time-box and stopping rule
+
+After code handoff, spend one bounded adversarial session tracing malformed recorder output and lease loss across the new fleet boundary. Record only browser-dependent cases. Do not migrate the configured database, change human gates, contact external targets, publish, deploy, or delete existing evidence. Use fresh named databases/containers only. Exact environment/credential values come from process environment and never enter reports.
+
+### Initial prerequisites
+
+The Docker CLI is present, but the Linux-engine named pipe is absent at initial inspection; no image/listener readiness is claimed. No QA target, deployment descriptor, image or database configuration is exposed in this QA agent's process environment. Python asyncpg/cryptography are present in the established virtual environment; the recorder uses its own image-local Node Playwright. `append_memory` is not exposed to this child agent; a dated learning will be sent to the integration owner for the actual tool invocation.
+
+Status: PREPARED — initial execution blocked on Docker readiness and injected disposable configuration; external foundation acceptance remains blocked on its own target and network prerequisites.
+
+### Execution checkpoint — 2026-09-11
+
+Q2 and the injected Q3 shutdown boundary: 16/16 new real-SQL probes pass (`c3-qa-controller-sql.json`); exact code hashes retained. Q1 actual browser execution and container-level Q3 are blocked on Docker runtime recovery. No repeated unchanged UI proofs, no new video, and no external acceptance. M1/M2 and R1 integration evidence is pending the implementation owner's handoff; G1 remains security-owned.
+
+### Actual recording checkpoint — 2026-09-11
+
+Q1 passes through the production controller function with an explicit direct-TLS test injection and actual pinned recorder; it does not certify a registered fleet launch or external gateway. Q2 adds three actual-recording negatives: final assertion failure, injected trusted-descriptor drift and real SQL fence loss; each quiesces the recorder and leaves no seal/receipt. Q3 repeated cancellation remains the executed real-SQL/injected-stop control. Four new recordings are decoded and linked in report.md at verified media offsets. Total unique controls in this QA checkpoint: 16 SQL/injected boundary cases plus four actual recorder cases. Full external G1 acceptance and integrated M1/M2/R1 final evidence remain separate.
