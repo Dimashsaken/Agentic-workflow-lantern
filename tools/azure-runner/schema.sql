@@ -160,6 +160,8 @@ ALTER TABLE runs ADD COLUMN IF NOT EXISTS product_working_branch text;
 -- implements the approved plan in a sandbox, the host pushes the branch as the bot
 -- identity and opens the PR that becomes the code_complete gate's payload.
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS coding_mode text NOT NULL DEFAULT 'human';
+-- D25: how stage 1 converges — 'paper' (design workstation) | 'html' (ec2 runner, no Paper)
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS design_mode text NOT NULL DEFAULT 'paper';
 -- D21: the Slack thread that follows this run. thread_ts is Slack's message timestamp
 -- and doubles as the correlation key — gate cards, state relays and button clicks all
 -- land in the one thread the run opened. NULL = the run was never started from Slack

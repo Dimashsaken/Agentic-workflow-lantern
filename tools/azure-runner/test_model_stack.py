@@ -68,9 +68,19 @@ class DeploymentResolution(unittest.TestCase):
             self.assertEqual(o.model_for("coding", "03-coding"), "r")
 
     def test_reasoning_deployment_is_mandatory(self):
+        # A ModelStackError, not SystemExit: the daemon must fail the STAGE, not die
+        # with a claim held (SystemExit escapes the executor slot's `except Exception`).
         with env():
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(o.ModelStackError):
                 o.model_for("pre-coding", "02-pre-coding")
+
+    def test_blank_azure_credentials_are_a_readable_error(self):
+        with env(AZURE_OPENAI_ENDPOINT="", AZURE_OPENAI_API_KEY=""):
+            with self.assertRaises(o.ModelStackError):
+                o.azure_v1_client()
+        with env():
+            with self.assertRaises(o.ModelStackError):
+                o.azure_v1_client()
 
     def test_unknown_tier_rejected(self):
         with env(LANTERN_MODEL_REASONING="r"):

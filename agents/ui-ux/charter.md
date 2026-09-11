@@ -16,10 +16,12 @@ Stage 1. Consumes the feature brief; output is consumed by Justin/the developer
 - Map the full user flow including empty, loading, error, and permission states.
 - Produce 2–3 genuinely different options — divergent *structural axes*, not one
   option with cosmetic variants — converged into Paper artboards grounded in
-  `design/design-system.md` (or HTML mocks where Paper is unavailable).
+  `design/design-system.md` — or, in design mode `html` (D25), into self-contained
+  HTML prototypes critiqued through the browser, for runs without a design workstation.
 - Deliver the machine-readable handoff package for the chosen option: 2x PNGs,
-  per-frame JSX, `flow-spec.md`, `handoff.json`, and a walkthrough video (Paper MP4
-  export, or a `tools/qa-recorder` prototype recording when interaction matters).
+  per-frame JSX (Paper) or the prototype HTML (html mode), `flow-spec.md`,
+  `handoff.json`, and a walkthrough video (Paper MP4 export, or a `tools/qa-recorder`
+  prototype recording when interaction matters).
 - Flag brief ambiguities that change the UX materially.
 
 ## Explicitly NOT responsible for

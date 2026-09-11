@@ -9,6 +9,7 @@
 - **Base branch:** main
 - **Working branch:** <existing feat/* branch to continue on, or leave blank for a fresh one derived from the run id>
 - **Coding mode:** human   <!-- human = the assigned developer codes stage 3 in their own session; auto = the coding agent implements the approved plan and the pipeline opens the pull request (D14) -->
+- **Design mode:** paper   <!-- paper = stage 1 converges in Paper on a design workstation (D9); html = HTML prototypes + browser screenshots on the ec2 runner, no Paper seat needed (D25) -->
 
 ## Problem
 

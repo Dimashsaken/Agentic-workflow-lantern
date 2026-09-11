@@ -58,7 +58,7 @@ def tripwire(today_cost: float, alltime_cost: float, env: Mapping[str, str],
              alarm_events=()) -> dict:
     """The two ceilings of pipeline.cmd_usage_check, with what has already fired.
     alarm_events: events rows (type, data, at) written by actor 'usage-check'."""
-    daily_limit = float(env.get("LANTERN_DAILY_SPEND_ALARM_USD") or "50")
+    daily_limit = float(env.get("LANTERN_DAILY_SPEND_ALARM_USD") or "500")
     pool = float(env.get("LANTERN_CREDIT_POOL_USD") or "25000")
     offset = float(env.get("LANTERN_POOL_SPENT_OFFSET_USD") or "0")
     drawn = alltime_cost + offset

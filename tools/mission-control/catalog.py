@@ -45,7 +45,7 @@ KNOBS = [
     ("LANTERN_CODING_TIMEOUT_MIN", "wall-clock cap for a coding execution (minutes)", "120"),
     ("LANTERN_CODING_MAX_TURNS", "agent turns a coding execution may take", "400"),
     ("LANTERN_CODING_BRANCH_PREFIXES", "branch namespace agents may push to (D6)", "feat,fix,proto"),
-    ("LANTERN_DAILY_SPEND_ALARM_USD", "daily spend tripwire (alarm, not a block)", "50"),
+    ("LANTERN_DAILY_SPEND_ALARM_USD", "daily spend tripwire (alarm, not a block)", "500"),
     ("LANTERN_CREDIT_POOL_USD", "the Azure credit pool the pool alarms measure against", "25000"),
 ]
 

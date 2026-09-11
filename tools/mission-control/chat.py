@@ -174,6 +174,9 @@ def card_html(ev: dict) -> str:
     if ev.get("gate"):
         links.append(f"<a href='/#{H(ev['run_id'] or '')}'>the gate inbox</a>")
     link_html = (" · ".join(links)) if links else ""
+    # Built outside the f-string: a backslash inside an f-string expression is a
+    # SyntaxError before Python 3.12, and this module must import on 3.11 laptops.
+    link_span = f'<span style="color:var(--text-dim)">{link_html}</span>' if link_html else ""
     phrase = ev.get("phrase", "")
     return (f"<div class='dcard' style='{CARD_CSS}'>"
             f"<div class='caps' style='color:var(--dawn-3)'>needs your confirmation</div>"
@@ -183,7 +186,7 @@ def card_html(ev: dict) -> str:
             f"<code class='phrase' style='user-select:all'>{H(phrase)}</code>"
             f"<button class='btn sm usephrase' type='button' data-phrase='{H(phrase)}'>"
             f"Type it for me</button>"
-            f"{('<span style=\"color:var(--text-dim)\">' + link_html + '</span>') if link_html else ''}"
+            f"{link_span}"
             f"</div>"
             f"<div style='color:var(--text-dim);margin-top:6px'>Nothing has happened yet. "
             f"Send that phrase as your own message to go ahead.</div></div>")
@@ -816,7 +819,8 @@ async def chat_hub(request: Request, agent: str = "", run: str = "", error: str 
     }})();
     </script>"""
 
-    body = f"<div class='chatwrap{" empty-chat" if not sessions else ""}'>{sidebar(sessions, directory, user, None, now)}<details class='chat-history'><summary>Conversations</summary>{sidebar(sessions, directory, user, None, now)}</details>{main}</div>"
+    empty_cls = " empty-chat" if not sessions else ""   # outside the f-string: 3.11-safe
+    body = f"<div class='chatwrap{empty_cls}'>{sidebar(sessions, directory, user, None, now)}<details class='chat-history'><summary>Conversations</summary>{sidebar(sessions, directory, user, None, now)}</details>{main}</div>"
     return HTMLResponse(deps["page"]("Chat — Lantern Mission Control", body, user,
                                      "/chat", f"{now:%H:%M}", auto_reload=False))
 

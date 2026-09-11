@@ -81,12 +81,36 @@ async def db_connect() -> asyncpg.Connection:
         sys.exit(f"cannot reach Postgres ({e}) — {DB_REQUIRED_HINT}")
 
 
+class ModelStackError(RuntimeError):
+    """The model provider or the model stack is not configured.
+
+    Raised — never `sys.exit`ed — so the daemon fails ONE stage with a readable error
+    instead of dying with a claim held (a SystemExit escapes `except Exception` in the
+    executor slot), and so database-only commands (`init-db`, `status`, `approve`, …)
+    can run on a box that has no Azure credentials at all
+    (bug-20260908-help-crash-without-env). CLI entry points turn it into a clean exit.
+    """
+
+
 def azure_v1_client() -> AsyncOpenAI:
-    """Client for Azure OpenAI's v1 API surface (endpoint ends in /openai/v1)."""
-    endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].rstrip("/")
+    """Client for Azure OpenAI's v1 API surface (endpoint ends in /openai/v1).
+
+    A blank value counts as unset: `.env` files ship the keys with empty values.
+    """
+    endpoint = (os.environ.get("AZURE_OPENAI_ENDPOINT") or "").strip().rstrip("/")
+    key = (os.environ.get("AZURE_OPENAI_API_KEY") or "").strip()
+    if not endpoint or not key:
+        raise ModelStackError(
+            "Azure OpenAI is not configured — set AZURE_OPENAI_ENDPOINT and "
+            "AZURE_OPENAI_API_KEY (tools/azure-runner/README.md 'Environment'); "
+            "database-only commands work without them")
     if not endpoint.endswith("/openai/v1"):
         endpoint += "/openai/v1"
-    return AsyncOpenAI(base_url=endpoint, api_key=os.environ["AZURE_OPENAI_API_KEY"])
+    # Per-request timeout. The SDK default is 600 s; a reasoning deployment at high
+    # effort on a long prompt can legitimately exceed it, and a relay-driven turn
+    # (tools/relay-model) certainly does. The retry policy (D23) wraps this.
+    timeout = float(os.environ.get("LANTERN_MODEL_TIMEOUT_S", "600") or "600")
+    return AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout)
 
 ROLE_FOR_STAGE = {
     "00-story": "story",            # manual whole-stage key (Mission Control consult link)
@@ -141,6 +165,17 @@ def is_qa_video_stage(stage: str) -> bool:
 
 # Stage executions that get the Paper MCP server (desktop-bound — workstation only).
 PAPER_STAGES = {"01-ui-ux", "01-ui-ux.design"}
+
+
+def design_mode() -> str:
+    """How this run's stage 1 converges (D25): 'paper' (Paper MCP on a design
+    workstation) or 'html' (HTML prototypes + browser screenshots on the ec2 runner).
+    Set per execution by the dispatcher/in-process runner from `runs.design_mode`."""
+    return "html" if os.environ.get("LANTERN_DESIGN_MODE", "paper").strip().lower() == "html" else "paper"
+
+
+def html_design_stage(stage: str) -> bool:
+    return stage == "01-ui-ux.design" and design_mode() == "html"
 
 # ── Model stack (D16) ────────────────────────────────────────────────────────
 # Three price/latency classes — the "right model at the right cost" stack of a
@@ -201,8 +236,9 @@ def deployment_for_tier(tier: str) -> str:
                            f"the {t} deployment '{deployment}'")
             return deployment
         t = TIER_FALLBACK.get(t)
-    sys.exit("Missing env var LANTERN_MODEL_REASONING (Azure deployment name, e.g. "
-             "gpt-5.6-sol) — see tools/azure-runner/README.md 'Model stack'")
+    raise ModelStackError(
+        "Missing env var LANTERN_MODEL_REASONING (Azure deployment name, e.g. "
+        "gpt-5.6-sol) — see tools/azure-runner/README.md 'Model stack'")
 
 
 def model_for(role: str, stage: str | None = None) -> str:
@@ -297,6 +333,17 @@ def playwright_mcp_server(run_id: str | None = None, stage: str | None = None) -
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(cfg, f)
         cmd += ["--config", cfg_path, "--output-dir", str(media_dir)]
+    elif run_id and stage and html_design_stage(stage):
+        # D25: screenshots ARE the option PNGs — a 2x device scale on a desktop viewport,
+        # written straight into the stage's media dir so handoff.json can cite them.
+        media_dir = REPO / "workflow" / "runs" / run_id / stage_dir(stage) / "media"
+        media_dir.mkdir(parents=True, exist_ok=True)
+        cfg = {"browser": {"contextOptions": {"viewport": {"width": 1440, "height": 900},
+                                              "deviceScaleFactor": 2}}}
+        fd, cfg_path = tempfile.mkstemp(prefix="lantern-mcp-", suffix=".json")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(cfg, f)
+        cmd += ["--config", cfg_path, "--output-dir", str(media_dir)]
     env = {k: os.environ[k] for k in _MCP_CHILD_ENV_BASE if k in os.environ}
     env.update({k: v for k, v in os.environ.items() if k.startswith("PLAYWRIGHT")})
     return MCPServerStdio(params={"command": cmd[0], "args": cmd[1:], "env": env},
@@ -342,6 +389,23 @@ PHASE_NOTES = {
         "option's JSX with the `collect_jsx` tool — the host writes get_jsx output "
         "verbatim; JSX copied through your own context is rejected. Finish by writing "
         "handoff.json (skills §3D) — the gate payload is built from it."),
+    "01-ui-ux.design:html": (
+        "\n\n# Phase note\nThis execution is the convergence phase WITHOUT Paper (design mode "
+        "`html`, D25): divergence output and scores already exist in the stage directory — "
+        "read them, do not redo them. You have the `playwright` browser (no Paper tools, no "
+        "`collect_jsx`). Converge each surviving option into ONE self-contained, high-fidelity "
+        "HTML prototype at `01-ui-ux/prototype/<axis>.html` (inline CSS grounded in "
+        "design/design-system.md tokens, realistic copy, every state the flow-spec names, "
+        "~1440px wide; no external assets). Open each with `browser_navigate` on its "
+        "file:// URL (the absolute path of the run folder is in the product section below), "
+        "run the critique loop on `browser_take_screenshot` images (skills §3C; layout pass, "
+        "then style pass, ≤3 iterations, logged in critique-log.md), then take the final "
+        "screenshot of each option with `filename` = `<axis>@2x.png` — the browser is "
+        "launched at device scale 2 and writes into `01-ui-ux/media/`, so reference "
+        "`workflow/runs/<run-id>/01-ui-ux/media/<axis>@2x.png` in handoff.json. Write "
+        "handoff.json (skills §3D) with `\"design_mode\": \"html\"`, `\"paper_url\": null` "
+        "and each option's `\"prototype\"` path; there is no jsx/ in this mode — the "
+        "prototype HTML is the structural handoff the coding agent rebuilds from."),
     "00-story.scout": (
         "\n\n# Phase note\nThis execution is the READ-ONLY research phase (D17). Deliver "
         "00-story/research.md + research.json (skills §5): every path you cite must be one "
@@ -502,9 +566,14 @@ def build_instructions(role: str, run_id: str, stage: str) -> str:
     parts.append(qa_target_note(stage))
     # D18: '03-coding.<builder>' inherits the coding phase note — the stage keys the
     # plan invents at run time cannot be listed here.
-    parts.append(PHASE_NOTES.get(stage) or PHASE_NOTES.get(stage_dir(stage), ""))
-    if stage in PAPER_STAGES:
+    note_key = f"{stage}:html" if html_design_stage(stage) else stage    # D25
+    parts.append(PHASE_NOTES.get(note_key) or PHASE_NOTES.get(stage_dir(stage), ""))
+    if stage in PAPER_STAGES and not html_design_stage(stage):
         parts.append(paper_file_note())
+    if html_design_stage(stage):
+        parts.append(f"\n\n# Run folder on disk\nAbsolute path for file:// URLs: "
+                     f"`{(REPO / 'workflow' / 'runs' / run_id).resolve()}` — e.g. "
+                     f"`file://{(REPO / 'workflow' / 'runs' / run_id / '01-ui-ux' / 'prototype').resolve()}/<axis>.html`.")
     for name in ("charter.md", "skills.md", "memory.md"):
         f = REPO / "agents" / role / name
         parts.append(f"\n\n# {role}/{name}\n" + f.read_text(encoding="utf-8"))
@@ -1624,11 +1693,29 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     elif vid and not str(vid).startswith(("http://", "https://")):
         if not (REPO / vid).is_file():
             problems.append(f"handoff.json claims video '{vid}' but no such file exists")
+    names = [o.get("name", "?") for o in data.get("options", [])]
+    if design_mode() == "html":
+        # D25: without Paper the structural handoff is the prototype HTML itself — one
+        # self-contained file per presented option, on disk, not described.
+        for opt in data.get("options", []):
+            rel = opt.get("prototype") or f"workflow/runs/{run_id}/{sdir}/prototype/{opt.get('name', '?')}.html"
+            f = REPO / rel
+            if not f.is_file() or f.stat().st_size < 500:
+                problems.append(f"option '{opt.get('name')}' has no prototype at '{rel}' — in "
+                                "design mode html every presented option is an HTML prototype "
+                                "the coding agent rebuilds from (skills §3B-html)")
+        if data.get("design_mode") != "html":
+            problems.append("handoff.json must declare \"design_mode\": \"html\" — this run "
+                            "converged without Paper and downstream stages must know it")
+        if names and not (REPO / "workflow/runs" / run_id / sdir / "critique-log.md").is_file():
+            problems.append(
+                "critique-log.md missing — per-option layout/style pass findings are the only "
+                "evidence the critique loop actually ran (metrics.critique_iterations is a claim)")
+        return problems
     # Presence AND validity. A validity-only check passes vacuously when the agent
     # simply omits the deliverable — observed 2026-08-26: no jsx/ directory at all.
     jsx_dir = REPO / "workflow/runs" / run_id / sdir / "jsx"
     jsx_files = sorted(jsx_dir.glob("*.jsx")) if jsx_dir.is_dir() else []
-    names = [o.get("name", "?") for o in data.get("options", [])]
     if names and not jsx_files:
         problems.append(
             f"no jsx/ output for {len(names)} presented options — the handoff promises "
@@ -1873,7 +1960,7 @@ async def main() -> None:
         if role in BROWSER_ROLES:
             mcp_servers.append(playwright_mcp_server(args.run_id, args.stage))
         paper = None
-        if args.stage in PAPER_STAGES:
+        if args.stage in PAPER_STAGES and not html_design_stage(args.stage):   # D25
             if not await paper_reachable():
                 sys.exit(PAPER_PREFLIGHT_HINT)
             paper = paper_mcp_server()
@@ -1963,4 +2050,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except ModelStackError as e:   # a clean one-line exit, not a traceback
+        sys.exit(str(e))
