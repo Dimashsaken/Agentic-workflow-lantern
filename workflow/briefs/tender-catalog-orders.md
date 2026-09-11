@@ -27,6 +27,8 @@ total, and confirms it on a "yes". The seller sees new orders on an orders page,
 them through statuses (new → confirmed → preparing → out for delivery → delivered /
 cancelled), and the customer can ask "where is my order?" and get the current status.
 
+Success for the demo (measurable): a first-time seller adds two products, completes one Sandbox order playing the customer, and advances it to `confirmed` — without assistance, in under five minutes — and the customer's "where is my order?" gets the right order number and status.
+
 ## Must-haves
 
 - Catalog page: create, edit, archive products with name, price, unit, in-stock flag,
