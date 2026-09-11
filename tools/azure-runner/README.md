@@ -119,6 +119,8 @@ python pipeline.py set-product | set-coding-mode   # per-run product repo + how 
 python pipeline.py set-design-mode <run-id> paper|html   # how stage 1 converges: Paper workstation or HTML on ec2 (D25)
 python pipeline.py usage [--days 7]             # token ledger: per-day + per-run est. spend
 python pipeline.py usage-check                  # spend tripwires (hourly systemd timer on EC2)
+python pipeline.py qa-target qa-dev --base-url URL --user U   # write a QA stage's target into .env (password generated, never printed)
+python pipeline.py qa-preflight [--stage qa-dev]  # can the host AND a sandbox reach that target?
 python pipeline.py bug "<text>"|<file> [--source user|posthog|slack] [--shepherd X] [--coding-mode auto]  # a bug run at 01-triage (D20)
 python pipeline.py evals build | run --suite <name> [--live] | report   # the factory's evals (tools/evals/, D20)
 ```
