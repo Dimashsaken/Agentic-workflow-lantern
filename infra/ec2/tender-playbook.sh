@@ -17,8 +17,10 @@ set -euo pipefail
 MAIN=${LANTERN_HOME:-/home/ubuntu/Agentic-workflow-lantern}
 RUNNER=$MAIN/tools/azure-runner
 PY=$RUNNER/.venv/bin/python
-BRIEF=workflow/briefs/tender-onboarding.md
-RUN_ID=feat-20260911-tender-onboarding
+# The next Tender briefs ride the same script: override both for a run, e.g.
+#   BRIEF=workflow/briefs/tender-catalog-orders.md RUN_ID=feat-20260911-tender-catalog-orders #     bash infra/ec2/tender-playbook.sh start --by dimash --product-branch feat/20260911-tender-onboarding
+BRIEF=${BRIEF:-workflow/briefs/tender-onboarding.md}
+RUN_ID=${RUN_ID:-feat-20260911-tender-onboarding}
 PRODUCT_URL=https://github.com/Dimashsaken/Agentic-workflow-lantern
 BRIDGE_IP=${LANTERN_BRIDGE_IP:-172.17.0.1}   # what a sandbox container calls the host
 
@@ -50,7 +52,7 @@ deploy() {
 
 start() {
   cd "$RUNNER"
-  say "creating $RUN_ID from $BRIEF (auto coding, html design mode, product $PRODUCT_URL@product/tender-whatsapp)"
+  say "creating $RUN_ID from $BRIEF (product $PRODUCT_URL; base from the brief unless --product-branch says otherwise)"
   "$PY" pipeline.py run "$MAIN/$BRIEF" --run-id "$RUN_ID" "$@"
   "$PY" pipeline.py status
   say "the daemon takes it from here: stage 0 (research + story) → gate story_signoff in Mission Control (:8080) or:"
