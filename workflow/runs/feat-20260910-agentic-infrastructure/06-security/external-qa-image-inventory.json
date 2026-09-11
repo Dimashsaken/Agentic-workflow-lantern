@@ -1,0 +1,321 @@
+{
+  "image": "sha256:46a63fb17ffe9a0df0fa68239315388b13b856983161a0da54f62f653ee73034",
+  "created": "2026-09-11T10:27:20.651719878Z",
+  "layers": [
+    "sha256:411a86676185cb54d695a805b238194a64e9b77e0c723f3802fbb87d333ea0b3",
+    "sha256:3070bb8623db07ca38569112f9b296043371a00bfb3ee4d9f8f63ddfd2f2efca",
+    "sha256:3d664d274420a79749a26f9e5115b2120d46037264011773ca4c52e22780b2ca",
+    "sha256:24257af4ce5bde01d3c7ebd6d366ec4a298ed27c794bbd6832ef5ce934a66170",
+    "sha256:20ca12c125d5732e6d674a321bad1cb8a920b7a96780d6f7633ae14e77627c23",
+    "sha256:74eafd270d390d0c79c59fec7ff7f4010ca3526992b1c9c7143c70b487245c7a",
+    "sha256:0ac75a064bd93e273fd7906a39b6dc948e1f971ae5776cd5f04b6a297f3d66a6",
+    "sha256:57b6a5b67ef88de2ea24a848b726e25cedecc50174c02648c90a835e6b022edb",
+    "sha256:cfb8484dd992349e9461273f7ae5c848cfcc6bc323e62b088e4f702329799cc1",
+    "sha256:f14991500c4d78d92762368a8492879b14d16ef5d7349e8db048431d59266e78",
+    "sha256:a9e8e39c0f683fed0b91fed8e53a3d09bc5390fd40db1988d32520295b3b212d"
+  ],
+  "network_during_inspection": "none",
+  "installed": {
+    "zlib_runtime": "1.3.1",
+    "provenance": {
+      "source_url": "https://deb.debian.org/debian/pool/main/z/zlib/zlib_1.3.dfsg+really1.3.1.orig.tar.gz",
+      "source_sha256": "60dd315c07f616887caa029408308a018ace66e3d142726a97db164b3b8f69fb",
+      "base_package": "1:1.3.dfsg+really1.3.1-1+b1",
+      "package": "1:1.3.dfsg+really1.3.1-1+b1+lantern1",
+      "patches": {
+        "gzlib.c": {
+          "before": "042c2be8ec67ad525a2812e508de7381c6766dde903acf5ae6ac4fa6b541946d",
+          "after": "b3044d7889d2ead8a8c17956f9416d459b754965e440815bd41b5e3758bee063"
+        },
+        "gzwrite.c": {
+          "before": "469b1e58932ea11bdda2a153f6655f7b3c13254240fae157181b49ed1bc93b47",
+          "after": "72b4e683a6950bfc9fac097eb39f76fe956fad865cbd5718421a1b732011adf5"
+        }
+      },
+      "library_sha256": "ddb09e9720925b71d2946e265c4d4b0f1c55dce3dd7f5bb2cec2fa8d1a067997",
+      "exported_abi_unchanged": true,
+      "compiler": "gcc (Debian 14.2.0-19) 14.2.0",
+      "mitigation": "gzip write I/O errors are terminal; close and reopen required"
+    },
+    "installed_library_sha256": "ddb09e9720925b71d2946e265c4d4b0f1c55dce3dd7f5bb2cec2fa8d1a067997",
+    "installed_matches_provenance": true,
+    "os_packages": [
+      "adduser\t3.152",
+      "apt\t3.0.3",
+      "base-files\t13.8+deb13u6",
+      "base-passwd\t3.6.7",
+      "bash\t5.2.37-2+b9",
+      "bsdutils\t1:2.41.5-0+deb13u1",
+      "ca-certificates\t20250419",
+      "coreutils\t9.7-3",
+      "dash\t0.5.12-12",
+      "debconf\t1.5.91",
+      "debian-archive-keyring\t2025.1",
+      "debianutils\t5.23.2",
+      "diffutils\t1:3.10-4",
+      "dpkg\t1.22.22",
+      "findutils\t4.10.0-3",
+      "gcc-14-base\t14.2.0-19",
+      "grep\t3.11-4",
+      "gzip\t1.13-1",
+      "hostname\t3.25",
+      "init-system-helpers\t1.69~deb13u1",
+      "libacl1\t2.3.2-2+b1",
+      "libapt-pkg7.0\t3.0.3",
+      "libattr1\t1:2.5.2-3",
+      "libaudit-common\t1:4.0.2-2",
+      "libaudit1\t1:4.0.2-2+b2",
+      "libblkid1\t2.41.5-0+deb13u1",
+      "libbsd0\t0.12.2-2",
+      "libbz2-1.0\t1.0.8-6",
+      "libc-bin\t2.41-12+deb13u3",
+      "libc6\t2.41-12+deb13u3",
+      "libcap-ng0\t0.8.5-4+b1",
+      "libcap2\t1:2.75-10+deb13u1+b1",
+      "libcrypt1\t1:4.4.38-1",
+      "libdb5.3t64\t5.3.28+dfsg2-9",
+      "libdebconfclient0\t0.280",
+      "libffi8\t3.4.8-2",
+      "libgcc-s1\t14.2.0-19",
+      "libgdbm6t64\t1.24-2",
+      "libgmp10\t2:6.3.0+dfsg-3",
+      "libhogweed6t64\t3.10.1-1",
+      "liblastlog2-2\t2.41.5-0+deb13u1",
+      "liblz4-1\t1.10.0-4",
+      "liblzma5\t5.8.1-1+deb13u1",
+      "libmd0\t1.1.0-2+b1",
+      "libmount1\t2.41.5-0+deb13u1",
+      "libncursesw6\t6.5+20250216-2",
+      "libnettle8t64\t3.10.1-1",
+      "libpam-modules\t1.7.0-5",
+      "libpam-modules-bin\t1.7.0-5",
+      "libpam-runtime\t1.7.0-5",
+      "libpam0g\t1.7.0-5",
+      "libpcre2-8-0\t10.46-1~deb13u1",
+      "libreadline8t64\t8.2-6",
+      "libseccomp2\t2.6.0-2",
+      "libselinux1\t3.8.1-1",
+      "libsemanage-common\t3.8.1-1",
+      "libsemanage2\t3.8.1-1",
+      "libsepol2\t3.8.1-1",
+      "libsmartcols1\t2.41.5-0+deb13u1",
+      "libsqlite3-0\t3.46.1-7+deb13u1",
+      "libssl3t64\t3.5.7-1~deb13u2",
+      "libstdc++6\t14.2.0-19",
+      "libsystemd0\t257.13-1~deb13u1",
+      "libtinfo6\t6.5+20250216-2",
+      "libudev1\t257.13-1~deb13u1",
+      "libuuid1\t2.41.5-0+deb13u1",
+      "libxxhash0\t0.8.3-2",
+      "libzstd1\t1.5.7+dfsg-1",
+      "login\t1:4.16.0-2+really2.41.5-0+deb13u1",
+      "login.defs\t1:4.17.4-2",
+      "mawk\t1.3.4.20250131-1",
+      "mount\t2.41.5-0+deb13u1",
+      "ncurses-base\t6.5+20250216-2",
+      "ncurses-bin\t6.5+20250216-2",
+      "netbase\t6.5",
+      "openssl\t3.5.7-1~deb13u2",
+      "openssl-provider-legacy\t3.5.7-1~deb13u2",
+      "passwd\t1:4.17.4-2",
+      "perl-base\t5.40.1-6",
+      "readline-common\t8.2-6",
+      "sed\t4.9-2+deb13u1",
+      "sqv\t1.3.0-3+b2",
+      "sysvinit-utils\t3.14-4",
+      "tar\t1.35+dfsg-3.1",
+      "tzdata\t2026b-0+deb13u1",
+      "util-linux\t2.41.5-0+deb13u1",
+      "zlib1g\t1:1.3.dfsg+really1.3.1-1+b1+lantern1"
+    ],
+    "python_packages": [
+      [
+        "Flask",
+        "3.1.3"
+      ],
+      [
+        "Jinja2",
+        "3.1.6"
+      ],
+      [
+        "MarkupSafe",
+        "3.0.3"
+      ],
+      [
+        "Werkzeug",
+        "3.1.8"
+      ],
+      [
+        "aioquic",
+        "1.2.0"
+      ],
+      [
+        "argon2-cffi",
+        "25.1.0"
+      ],
+      [
+        "argon2-cffi-bindings",
+        "26.1.0"
+      ],
+      [
+        "asgiref",
+        "3.11.1"
+      ],
+      [
+        "attrs",
+        "26.1.0"
+      ],
+      [
+        "bcrypt",
+        "5.0.0"
+      ],
+      [
+        "blinker",
+        "1.9.0"
+      ],
+      [
+        "brotli",
+        "1.2.0"
+      ],
+      [
+        "certifi",
+        "2026.7.22"
+      ],
+      [
+        "cffi",
+        "2.1.1"
+      ],
+      [
+        "click",
+        "8.5.0"
+      ],
+      [
+        "cryptography",
+        "50.0.1"
+      ],
+      [
+        "h11",
+        "0.16.0"
+      ],
+      [
+        "h2",
+        "4.4.1"
+      ],
+      [
+        "hpack",
+        "4.2.0"
+      ],
+      [
+        "hyperframe",
+        "6.1.0"
+      ],
+      [
+        "itsdangerous",
+        "2.2.0"
+      ],
+      [
+        "kaitaistruct",
+        "0.11"
+      ],
+      [
+        "ldap3",
+        "2.9.1"
+      ],
+      [
+        "mitmproxy",
+        "12.2.3+lantern1"
+      ],
+      [
+        "mitmproxy_linux",
+        "0.12.11"
+      ],
+      [
+        "mitmproxy_rs",
+        "0.12.11"
+      ],
+      [
+        "msgpack",
+        "1.2.2"
+      ],
+      [
+        "publicsuffix2",
+        "2.20191221"
+      ],
+      [
+        "pyOpenSSL",
+        "26.4.0"
+      ],
+      [
+        "pyasn1",
+        "0.6.4"
+      ],
+      [
+        "pycparser",
+        "3.0"
+      ],
+      [
+        "pylsqpack",
+        "0.3.24"
+      ],
+      [
+        "pyparsing",
+        "3.3.2"
+      ],
+      [
+        "pyperclip",
+        "1.11.0"
+      ],
+      [
+        "ruamel.yaml",
+        "0.19.1"
+      ],
+      [
+        "service-identity",
+        "26.1.0"
+      ],
+      [
+        "sortedcontainers",
+        "2.4.0"
+      ],
+      [
+        "tornado",
+        "6.5.8"
+      ],
+      [
+        "typing_extensions",
+        "4.14.0"
+      ],
+      [
+        "urwid",
+        "3.0.5"
+      ],
+      [
+        "wcwidth",
+        "0.8.3"
+      ],
+      [
+        "wsproto",
+        "1.3.2"
+      ],
+      [
+        "zstandard",
+        "0.25.0"
+      ]
+    ]
+  },
+  "source_sha256": {
+    "infra/qa-gateway/build_zlib.py": "46301c522465e599681215c3efc9a6c79088d4d2a222fc5627e60f0f2238cdd2",
+    "infra/qa-gateway/entrypoint.py": "aa3634e35307ae2c4cb6924364115623b2c1afa946a10e5be433e326dbd8c723",
+    "infra/qa-gateway/policy.py": "f0a370c079fab095890535447d53047bc39f9035a2a2a03a747b4926c008b0b5",
+    "infra/qa-gateway/test_image.py": "82e09952700804e20760f00f0e471d49b31f7d05cb0018a02b06e8d44374763e",
+    "infra/qa-gateway/test_policy.py": "877401bbbee83d7576c3771cbff2ee9f9bfadc3c2d4b1e3453ca33ac0a95ebcf",
+    "infra/qa-gateway/test_vendor_wheel.py": "cc9267cca77c63d6d170af87026f56b2ef3aaabd1efc283ef13626b729323941",
+    "infra/qa-gateway/test_zlib.py": "181797d477e04dea8310055f9207dadaa3b2bf90caf783b5469433bd06447186",
+    "infra/qa-gateway/vendor_wheel.py": "1ee7f7260a5ca3d7a7233c8c6077ee55043227590b3d05c294057a8366d50ccf",
+    "infra/qa-gateway/build-tools.lock": "abaae88ac8bd25cf01d4ee2ca7c71699da61aca54bc778a474cc17c4d6adc201",
+    "infra/qa-gateway/requirements.lock": "28f276fddc1c4da8b48609ce0c2cecaea2eb561ef755180aabc98f4360efaaff",
+    "infra/qa-gateway/upstream.lock": "615a94d32e907d6a6a3f889181a99382ee413421f782535033e685dedad285cd",
+    "infra/qa-gateway/Dockerfile": "b08c72d47eb3f87901b6058fa2096a14f38dcfc9065d9ac30351dea79ff29289",
+    "tools/azure-runner/qa_transport.py": "efc591c26affa5a492bdc7bae4bd02dc90f2c35adefd14d58f71babbc49b85a0"
+  }
+}

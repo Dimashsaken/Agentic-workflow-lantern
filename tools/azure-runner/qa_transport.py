@@ -99,5 +99,11 @@ class Policy:
                    for d in document['destinations']], created_at=document['created_at'], test_only=document['test_only'])
 
 
-def launch_external(*args, **kwargs):
+def check_external_acceptance(*args, **kwargs):
+    """Pure acceptance check: it must never allocate a gateway or recorder."""
     raise TransportHeld('external QA is held: no accepted host firewall adapter and actual-image denial proof; proxy variables alone are insufficient')
+
+
+def launch_external(*args, **kwargs):
+    check_external_acceptance(*args, **kwargs)
+    raise TransportHeld('external QA has no accepted lifecycle adapter')

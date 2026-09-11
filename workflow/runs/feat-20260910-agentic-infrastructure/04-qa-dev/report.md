@@ -644,3 +644,21 @@ Status: PASS-WITH-NOTES (executed local controller/recorder QA and actual memory
 After the integration owner confirmed all disposable database tests were complete, QA verified the live PostgreSQL 16.9 data directory exactly matched the retained `lantern-c3-qa-postgres-azmxldyt/data` state and found zero other client connections. QA then stopped only that owned cluster on port **55432**. [c3-disposable-db-shutdown.json](c3-disposable-db-shutdown.json) records the identity and checks: the disposable listener is stopped; its data directory, PostgreSQL log and state file are retained; the configured **5432** listener was reachable both before and after. No stop was requested for the configured cluster, and no existing evidence was deleted. No browser/media proof was rerun.
 
 Status: PASS-WITH-NOTES (local QA, durable memory and owned test-cluster shutdown complete); external foundation acceptance remains governed by the separate gateway/target prerequisites.
+
+## External QA native acceptance continuation — 2026-09-11
+
+See [external-qa-native-report.md](external-qa-native-report.md). The final native
+gateway/recorder pair passed 14 calibrated denials, two permitted socket paths,
+exact cgroup/netns binding and rule readback, with zero forbidden packets/bytes
+and complete owned-resource cleanup. The native packaged gateway separately
+passed 24 TLS/session controls and its installed zlib API check. Three cleanup
+regressions pass after independent review fixed early-abort cleanup.
+
+The evidence deliberately distinguishes native socket probes, packaged loopback
+TLS and a real product deployment-bound recording. The last remains blocked on
+the target/configuration and combined launcher/recorder acceptance. Actual memory
+row 69 completes the manual-engineering memory postcondition; it is not a fleet
+stage pass or a pipeline approval.
+
+Status: PASS-WITH-NOTES for native network and packaged gateway controls; full
+external QA and staging acceptance remain BLOCKED.

@@ -23,6 +23,17 @@ hash-checked installation and `pip check`, the complete installer and ensurepip
 bootstrap are removed from the runtime image: their vendored libraries are not
 needed by this gateway, and even the latest installer still carried advisories.
 Dependency changes require rebuilding the candidate image.
+The gateway also carries a locally versioned `zlib1g` package built from the
+hash-pinned Debian source archive by `build_zlib.py`. Its conservative mitigation
+makes a gzip writer's first error terminal: `gzclearerr` cannot revive it, and
+`gzclose` cannot retry compression using input retained after failed I/O. Close
+and reopen a failed writer. Normal compression, the gzip ABI and reader error
+reset remain available. This is a local mitigation, not an upstream fixed release;
+retain unsuppressed scanner findings and review the installed package provenance
+at `/usr/share/doc/zlib1g/lantern-mitigation.json`. The builder checks identical
+exported symbols, upstream tests, a normal gzip roundtrip and benign `/dev/full`
+error handling against both the original and modified libraries. Compiler tools
+and source archives are confined to the build stage.
 The sandbox and recorder images are unchanged. A base digest change requires a new
 image inventory, audit and actual TLS regression run.
 

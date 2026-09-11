@@ -463,3 +463,20 @@ Status: PASS-WITH-NOTES (final scoped local review); external foundation and sta
 Inspected the integrator's actual [c3-foundation-memory.json](../03-coding/c3-foundation-memory.json) receipt: post-coding row **66**, manual key `manual:feat-20260910-agentic-infrastructure:post-coding:pending-639f48d9e2ae`. It records the legacy-index, frozen-scope and permanent-lock lessons. Configured runs/executions/approvals remain **12/23/8** with unchanged approval snapshot; no migration/new cluster or rendered-memory edit is claimed. The earlier pending memory item is complete; exact inserted learning is copied into the detailed review.
 
 Status: PASS-WITH-NOTES (final scoped local review; memory complete); external foundation and staging remain unaccepted.
+
+## External QA acceptance candidate review — 2026-09-11
+
+The bounded independent source review found and verified one native cleanup defect. Full scope, findings, source hashes, compatibility limits and verification are in [external-qa-review.md](external-qa-review.md).
+
+| ID | Area | Severity | Tag | Disposition |
+|---|---|---|---|---|
+| EQA-PC-1 | Native cleanup | medium | fix-now — resolved | Each owned resource is attempted independently; bounded termination/join errors are aggregated and prevent a passing result. Verified with injected observer/container failures. |
+| EQA-PC-2 | Library error recovery | compatibility limit | waived — local candidate only | Terminal writer errors and close/reopen contract documented; exported symbols do not imply universal behavior compatibility. |
+| EQA-PC-3 | Evidence cutoff | acceptance limit | waived — source review only | Earlier socket-fixture results are not final image-pair, browser/deployment or external transport acceptance. |
+| EQA-PC-4 | Toolchain rebuild | reproducibility limit | waived — immutable candidate only | Source/base pinned; later toolchain rebuild requires fresh inventory/audit/testing. |
+
+Independent verification: 28/28 controller/transport/firewall unit tests and three additional ordinary async/cleanup probes passed. Monitor cancellation is joined before final connection reuse; failed monitoring or cleanup cannot produce accepted receipts. No unresolved fix-now remains in this bounded review. Final configured frozen-source check, image-pair/whole-image evidence and actual append_memory receipt remain parent-owned at this cutoff. The earlier configured run's source-stability failure is retained and is not treated as a pass.
+
+Memory candidate supplied to parent: cleanup must attempt every independently owned resource despite earlier failures and fail on uncertainty; join periodic database checks before final connection reuse. No direct rendered-memory edit, database mutation, gate approval or deployment was performed by this reviewer.
+
+Status: PASS-WITH-NOTES (bounded disabled external QA source review); external activation and staging remain unaccepted.

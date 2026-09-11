@@ -159,6 +159,37 @@ def reuse(ca,port,changed=False):
         return first
     return second
 
+
+def save_session_ca(process, ca, port):
+    (ROOT/'prior-session-ca.pem').write_bytes(ca.read_bytes())
+    return request(connect(ca,port),port)
+
+
+def prior_ca_refused(process, ca, port):
+    previous = ROOT/'prior-session-ca.pem'
+    assert previous.read_bytes() != ca.read_bytes(), 'CA was reused between sessions'
+    return request(connect(previous,port),port)
+
+
+def interrupted_keepalive(process, ca, port, *, expire=False):
+    sock = connect(ca,port)
+    first = request(sock,port)
+    assert b'200 OK' in first
+    if expire:
+        process.wait(timeout=5)
+        assert process.returncode == 71, 'policy expiry did not stop gateway'
+    else:
+        process.terminate()
+        process.wait(timeout=3)
+    try:
+        second = request(sock,port)
+    except OSError:
+        second = b''
+    finally:
+        sock.close()
+    assert b'200 OK' not in second, 'interrupted gateway continued forwarding'
+    return first
+
 results=[]
 def case(name, action, server=servers[0], *, positive=False, tcp_deny=True, ttl=30, expected_requests=1):
     before=(server.connections,server.requests)
@@ -196,6 +227,10 @@ try:
     case('compressed_request',lambda p,ca,port: request(connect(ca,port),port,extra='Content-Encoding: gzip\r\n'))
     case('upstream_untrusted_signature',lambda p,ca,port: request(connect(ca,port),port),server=servers[3],tcp_deny=False)
     case('upstream_expired_certificate',lambda p,ca,port: request(connect(ca,port),port),server=servers[2],tcp_deny=False)
+    case('session_ca_positive',save_session_ca,positive=True)
+    case('previous_session_ca_refused',prior_ca_refused)
+    case('gateway_death_closes_active_connection',interrupted_keepalive,positive=True)
+    case('policy_expiry_closes_active_connection',lambda p,ca,port: interrupted_keepalive(p,ca,port,expire=True),positive=True,ttl=3)
     print(json.dumps({'scope':'actual candidate image; loopback TLS, test-only upstream CA; no host egress acceptance',
                       'results':results,'passed':len(results)},indent=2))
 finally:

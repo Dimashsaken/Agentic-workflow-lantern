@@ -13,10 +13,12 @@ import time
 import execution_leases as leases
 from qa_provenance import Capture, CaptureHeld, Identity, persist, deployment, transport
 from qa_recorder_worker import validate
-from qa_transport import Policy, launch_external
+from qa_transport import Policy, check_external_acceptance, launch_external
 from tool_policy import confined
 
 QA_STAGES = {'04-qa-dev', '07-qa-staging', '05-regression'}
+WATCHDOG_INTERVAL = 0.5
+WATCHDOG_CHECK_TIMEOUT = 5
 
 
 async def quiesce(stop):
@@ -41,8 +43,52 @@ def live_policy(document):
     return policy
 
 
+async def monitored_recording(plan, *, launch, stop, check):
+    """Continuously check authority/transport and join cleanup on every exit.
+
+The stop callback owns process termination; cancellation of an asyncio task alone
+does not terminate a recorder process. Never wait for that task before stopping
+its processes. If completion races a failed check, the failure wins.
+    """
+    async def checked():
+        await asyncio.wait_for(check(), timeout=WATCHDOG_CHECK_TIMEOUT)
+
+    await checked()
+    work = asyncio.create_task(launch(plan))
+
+    async def watch():
+        while True:
+            await asyncio.sleep(WATCHDOG_INTERVAL)
+            await checked()
+
+    monitor = asyncio.create_task(watch())
+    async def finish():
+        monitor.cancel()
+        if not work.done():
+            work.cancel()
+        try:
+            await stop()
+        finally:
+            await asyncio.gather(work, monitor, return_exceptions=True)
+
+    try:
+        await asyncio.wait((work, monitor), return_when=asyncio.FIRST_COMPLETED)
+        if monitor.done():
+            monitor.result()
+        outcome = work.result()
+        # Join the periodic check before using the same database connection.
+        monitor.cancel()
+        result, = await asyncio.gather(monitor, return_exceptions=True)
+        if isinstance(result, BaseException) and not isinstance(result, asyncio.CancelledError):
+            raise result
+        await checked()
+        return outcome
+    finally:
+        await quiesce(finish)
+
+
 async def execute_capture(conn, lease, spec, *, launch, stop, observe_deployment,
-                          allow_direct_fixture=False):
+                          allow_direct_fixture=False, check_transport=None):
     spec = deepcopy(spec)
     policy = live_policy(spec['policy'])
     mode = spec['transport_mode']
@@ -53,7 +99,9 @@ async def execute_capture(conn, lease, spec, *, launch, stop, observe_deployment
     else:
         # Call the same unconditionally held activation gate as the fleet. An
         # injected callback or image-shaped string cannot bypass host acceptance.
-        launch_external(spec)
+        check_external_acceptance(spec)
+        if check_transport is None:
+            raise CaptureHeld('gateway recording requires an owned transport watchdog')
     async with leases.fenced_transaction(conn, lease):
         row = await conn.fetchrow('SELECT run_id,stage,attempt,idempotency_key FROM stage_executions WHERE id=$1', lease.execution_id)
         if not row or row['run_id'] != lease.run_id or row['stage'] not in QA_STAGES:
@@ -73,12 +121,13 @@ async def execute_capture(conn, lease, spec, *, launch, stop, observe_deployment
                      'viewport': spec['viewport'], 'actions': spec['actions']})
     if {a['requirement'] for a in plan['actions']} != set(capture.requirements):
         raise CaptureHeld('controller recording plan does not map every required criterion')
-    async with leases.fenced_transaction(conn, lease):
+    async def check():
+        async with leases.fenced_transaction(conn, lease):
+            live_policy(spec['policy'])
+        if check_transport is not None and await check_transport() is not True:
+            raise CaptureHeld('QA gateway is no longer healthy')
         live_policy(spec['policy'])
-    try:
-        outcome = await launch(plan)
-    finally:
-        await quiesce(stop)
+    outcome = await monitored_recording(plan, launch=launch, stop=stop, check=check)
     if (not isinstance(outcome, dict) or outcome.get('recording_id') != capture.recording_id
             or outcome.get('writers_closed') is not True or not isinstance(outcome.get('outcomes'), list)):
         raise CaptureHeld('recorder did not close the commanded recording')
@@ -125,5 +174,11 @@ async def capture_stage(conn, run_id, stage):
     # No adapter is handed a browser or authority directory before it has passed
     # actual host/image acceptance. Today this raises, leaving the execution held.
     adapter = launch_external(spec)
-    return await execute_capture(conn, current.lease, spec, launch=adapter.run,
-                                 stop=adapter.stop, observe_deployment=adapter.observe_deployment)
+    # One adapter allocation, including cleanup of preparation/validation errors.
+    # stop is idempotent by contract because execute_capture also owns quiescence.
+    try:
+        return await execute_capture(conn, current.lease, spec, launch=adapter.run,
+                                     stop=adapter.stop, observe_deployment=adapter.observe_deployment,
+                                     check_transport=adapter.check)
+    finally:
+        await quiesce(adapter.stop)

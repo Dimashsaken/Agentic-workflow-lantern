@@ -1,0 +1,13 @@
+{
+  "source": "https://ghcr.io/aquasecurity/trivy-db:2",
+  "manifest_sha256": "91a3f81b093b2c2996da3dcf9b2596d02a2e2eeab5e17eb43329b965f28fe7a3",
+  "layer_sha256": "c946b11de88207455b66ac6117626cf9a3876a3052f1d538f2924a2f7e755788",
+  "bytes": 117680328,
+  "metadata": {
+    "Version": 2,
+    "NextUpdate": "2026-09-12T07:00:51.617232311Z",
+    "UpdatedAt": "2026-09-11T07:00:51.617232631Z",
+    "DownloadedAt": "0001-01-01T00:00:00Z"
+  },
+  "private_image_accessed": false
+}

@@ -1,0 +1,110 @@
+{
+  "passed": true,
+  "scope": "native Docker adapter with test-only socket fixtures",
+  "external_transport_verified": false,
+  "trusted_deployment_verified": false,
+  "kernel": "7.0.0-1012-aws",
+  "images": {
+    "recorder": "sha256:7dbf7f4d1ad88d25023412a3258c9fcad806e9c2730a360bddb1498030cfa76b",
+    "gateway": "sha256:7dbf7f4d1ad88d25023412a3258c9fcad806e9c2730a360bddb1498030cfa76b"
+  },
+  "source_sha256": {
+    "qa_native_acceptance.py": "e8875a7bde981aceb60b3738287b851710e3ac2931bf6adbc531d8ff024f339d",
+    "qa_network.py": "6c4f864905ed98a0f3df84c02b81faa1705859d5b30c494f54b43e98b38e0216",
+    "qa_transport.py": "efc591c26affa5a492bdc7bae4bd02dc90f2c35adefd14d58f71babbc49b85a0"
+  },
+  "calibration": {
+    "recorder_alternate_tcp": true,
+    "recorder_direct_dns": true,
+    "recorder_quic_udp": true,
+    "recorder_ipv6": true,
+    "recorder_simulated_metadata": true,
+    "recorder_host_listener": true,
+    "gateway_forbidden_tcp": true,
+    "gateway_direct_dns": true,
+    "gateway_quic_udp": true,
+    "gateway_ipv6": true,
+    "gateway_cross_execution": true,
+    "docker_embedded_dns": true
+  },
+  "denials": {
+    "recorder_alternate_tcp": true,
+    "recorder_direct_dns": true,
+    "recorder_quic_udp": true,
+    "recorder_ipv6": true,
+    "recorder_simulated_metadata": true,
+    "recorder_host_listener": true,
+    "gateway_forbidden_tcp": true,
+    "gateway_direct_dns": true,
+    "gateway_quic_udp": true,
+    "gateway_ipv6": true,
+    "gateway_cross_execution": true,
+    "docker_embedded_dns": true
+  },
+  "permissive_observer_packets": {
+    "gateway-permissive.packets.json": 18,
+    "endpoint-permissive.packets.json": 13,
+    "peer-permissive.packets.json": 6,
+    "host-permissive.packets.json": 10
+  },
+  "adapter": {
+    "candidate_only": true,
+    "external_transport_verified": false,
+    "installed": [
+      {
+        "container": "a8b63cc702ce4b0875d5512d9bee83abe17890adaae4208d7d338902aea98bc5",
+        "namespace": 4026532228,
+        "rules_sha256": "849b3ef9d79de6b61ea9f115c8029828dd3c98fcb41d78284c2948f325499f56",
+        "role": "recorder"
+      },
+      {
+        "container": "0ecce5941877e4e947d12ffdbe8511c69a4ef8856b4a02f088e0963aaf62cd15",
+        "namespace": 4026532298,
+        "rules_sha256": "ba81bacdc87d37a1a51df5cdadd6aa463315524484a244446927d15d3dad9981",
+        "role": "gateway"
+      }
+    ]
+  },
+  "recorder_identity": {
+    "id": "a8b63cc702ce4b0875d5512d9bee83abe17890adaae4208d7d338902aea98bc5",
+    "namespace": 4026532228,
+    "cgroup": "0::/system.slice/docker-a8b63cc702ce4b0875d5512d9bee83abe17890adaae4208d7d338902aea98bc5.scope"
+  },
+  "gateway_identity": {
+    "id": "0ecce5941877e4e947d12ffdbe8511c69a4ef8856b4a02f088e0963aaf62cd15",
+    "namespace": 4026532298,
+    "cgroup": "0::/system.slice/docker-0ecce5941877e4e947d12ffdbe8511c69a4ef8856b4a02f088e0963aaf62cd15.scope"
+  },
+  "positive": {
+    "recorder_proxy": true,
+    "gateway_pinned_endpoint": true
+  },
+  "zero_forbidden_observer_bytes": true,
+  "forbidden_observer_packets": {
+    "gateway-forbidden.packets.json": 0,
+    "endpoint-forbidden.packets.json": 0,
+    "peer-forbidden.packets.json": 0,
+    "host-forbidden.packets.json": 0
+  },
+  "observer_counts": {
+    "gateway-observer.jsonl": 6,
+    "endpoint-observer.jsonl": 5,
+    "other-execution-observer.jsonl": 1,
+    "host-observer.jsonl": 1
+  },
+  "wrong_execution_refused": true,
+  "cleanup": {
+    "containers_removed": [
+      "828a85c7fa1e65293735352316ba785b840f5ef97251629612edaf63be2c53fe",
+      "699cefe3eb97f6f588d646263dfe34fd98c25173164d96c5ab51b89a8e59cae2",
+      "0ecce5941877e4e947d12ffdbe8511c69a4ef8856b4a02f088e0963aaf62cd15",
+      "a8b63cc702ce4b0875d5512d9bee83abe17890adaae4208d7d338902aea98bc5"
+    ],
+    "networks_removed": [
+      "e5f73066551bc5e730c96eecfdc065c342ce3bfeac76f27c7d58fbc74927ef83",
+      "368c09742ec71f7ea101aef8342ac905b0d0e002cfd59929c374c7a0705e3c14"
+    ],
+    "evidence_retained": "/tmp/lantern-external-qa-138a7e1f337c-1iswt9t3"
+  }
+}
+

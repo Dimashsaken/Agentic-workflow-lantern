@@ -787,3 +787,27 @@ source still matches the final configured checks. Existing and new media, dispos
 database data/logs and live configured-server logs remain retained locally. QA
 verified and stopped only its disposable port55432 server; configured5432 remains
 reachable. No runtime changes followed the final checks.
+
+## External QA acceptance continuation — 2026-09-11
+
+- **Author:** Codex manual engineering, with independent QA/security/post-coding review
+- **Branch:** `codex/external-qa-acceptance`, from `1f94626`
+- **Status:** BLOCKED for full external acceptance; candidate implementation verified
+
+Implemented the locally versioned zlib terminal-write-error mitigation, continuous
+recording policy/lease/health supervision and native Docker namespace acceptance
+harness. The final native gateway/recorder pair passes 14 calibrated network
+denials and two allowed flows with zero forbidden packets/bytes and complete
+cleanup. The gateway passes 24 packaged TLS/session tests on both hosts.
+Independent review fixed early-abort cleanup; three added cleanup regressions pass.
+Final configured tests/lint pass (655 cases, 12 skips) with unchanged source;
+required evals were regenerated. Actual memory rows 68–71 were inserted through
+the bound tool without changing runs, executions or approvals.
+
+The fresh native offline audit completed but reports untriaged critical/high
+findings; automatic approval review blocked retrieval of package/version/CVE
+details and explicit user approval is pending. The approved HTTPS deployment,
+controller-owned descriptor and scoped credential references are also absent.
+Production launch remains held; combined real recording/lifecycle acceptance is
+not claimed. See [external-qa-acceptance.md](external-qa-acceptance.md) for exact
+images, checks, evidence, review findings and the remaining concrete question.

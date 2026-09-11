@@ -1,0 +1,185 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.54kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 286B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 583B done
+#4 DONE 0.0s
+
+#5 [zlib-builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79
+#5 resolve docker.io/library/python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79 done
+#5 DONE 0.0s
+
+#6 [zlib-builder 2/4] RUN apt-get update && apt-get install -y --no-install-recommends gcc make libc6-dev binutils
+#6 CACHED
+
+#7 [zlib-builder 3/4] COPY infra/qa-gateway/build_zlib.py infra/qa-gateway/test_zlib.py /build/
+#7 CACHED
+
+#8 [zlib-builder 4/4] RUN python3.12 /build/test_zlib.py /usr/lib/x86_64-linux-gnu/libz.so.1.3.1 --baseline     && python3.12 /build/build_zlib.py
+#8 CACHED
+
+#9 [stage-1 2/8] COPY --from=zlib-builder /out/zlib1g-lantern.deb /tmp/zlib1g-lantern.deb
+#9 CACHED
+
+#10 [stage-1 3/8] RUN dpkg --path-include=/usr/share/doc/zlib1g/lantern-mitigation.json -i /tmp/zlib1g-lantern.deb     && test -s /usr/share/doc/zlib1g/lantern-mitigation.json && rm /tmp/zlib1g-lantern.deb
+#10 0.211 (Reading database ... 5652 files and directories currently installed.)
+#10 0.211 Preparing to unpack /tmp/zlib1g-lantern.deb ...
+#10 0.218 Unpacking zlib1g:amd64 (1:1.3.dfsg+really1.3.1-1+b1+lantern1) over (1:1.3.dfsg+really1.3.1-1+b1) ...
+#10 0.233 Setting up zlib1g:amd64 (1:1.3.dfsg+really1.3.1-1+b1+lantern1) ...
+#10 0.237 Processing triggers for libc-bin (2.41-12+deb13u3) ...
+#10 DONE 0.3s
+
+#11 [stage-1 4/8] RUN python3.12 -m venv /opt/gateway
+#11 DONE 2.1s
+
+#12 [stage-1 5/8] COPY infra/qa-gateway/build-tools.lock infra/qa-gateway/requirements.lock infra/qa-gateway/upstream.lock infra/qa-gateway/vendor_wheel.py /opt/gateway/
+#12 DONE 0.0s
+
+#13 [stage-1 6/8] RUN --mount=type=cache,target=/root/.cache/pip     export PIP_CACHE_DIR=/root/.cache/pip && python3.12 -m pip install --require-hashes --only-binary=:all: -r /opt/gateway/build-tools.lock     && /opt/gateway/bin/pip install --require-hashes --only-binary=:all: -r /opt/gateway/build-tools.lock     && /opt/gateway/bin/pip download --timeout 120 --retries 3 --require-hashes --only-binary=:all: --no-deps       -r /opt/gateway/upstream.lock -d /opt/gateway/upstream     && /opt/gateway/bin/python /opt/gateway/vendor_wheel.py       /opt/gateway/upstream/mitmproxy-12.2.3-py3-none-any.whl       /opt/gateway/vendor/mitmproxy-12.2.3+lantern1-py3-none-any.whl > /opt/gateway/vendor-provenance.json     && /opt/gateway/bin/pip install --timeout 120 --retries 3 --require-hashes --only-binary=:all:       --find-links /opt/gateway/vendor -r /opt/gateway/requirements.lock     && /opt/gateway/bin/pip check     && /opt/gateway/bin/pip uninstall --yes pip     && python3.12 -m pip uninstall --yes pip     && python3.12 -c "import shutil; shutil.rmtree('/usr/local/lib/python3.12/ensurepip')"
+#13 1.444 Collecting pip==26.2.1 (from -r /opt/gateway/build-tools.lock (line 2))
+#13 1.445   Using cached pip-26.2.1-py3-none-any.whl (1.8 MB)
+#13 1.460 Installing collected packages: pip
+#13 1.460   Attempting uninstall: pip
+#13 1.462     Found existing installation: pip 25.0.1
+#13 1.485     Uninstalling pip-25.0.1:
+#13 1.591       Successfully uninstalled pip-25.0.1
+#13 2.102 Successfully installed pip-26.2.1
+#13 2.102 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#13 2.967 Collecting pip==26.2.1 (from -r /opt/gateway/build-tools.lock (line 2))
+#13 2.969   Using cached pip-26.2.1-py3-none-any.whl (1.8 MB)
+#13 2.979 Installing collected packages: pip
+#13 2.979   Attempting uninstall: pip
+#13 2.980     Found existing installation: pip 25.0.1
+#13 2.998     Uninstalling pip-25.0.1:
+#13 3.077       Successfully uninstalled pip-25.0.1
+#13 3.593 Successfully installed pip-26.2.1
+#13 3.807 Collecting mitmproxy==12.2.3 (from -r /opt/gateway/upstream.lock (line 1))
+#13 3.808   Using cached mitmproxy-12.2.3-py3-none-any.whl (1.7 MB)
+#13 3.815 Saved ./opt/gateway/upstream/mitmproxy-12.2.3-py3-none-any.whl
+#13 3.815 Successfully downloaded mitmproxy
+#13 4.072 Looking in links: /opt/gateway/vendor
+#13 4.096 Collecting aioquic==1.2.0 (from -r /opt/gateway/requirements.lock (line 2))
+#13 4.098   Using cached aioquic-1.2.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.2 MB)
+#13 4.110 Collecting argon2-cffi-bindings==26.1.0 (from -r /opt/gateway/requirements.lock (line 3))
+#13 4.112   Using cached argon2_cffi_bindings-26.1.0-cp310-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (26 kB)
+#13 4.120 Collecting argon2-cffi==25.1.0 (from -r /opt/gateway/requirements.lock (line 4))
+#13 4.121   Using cached argon2_cffi-25.1.0-py3-none-any.whl (14 kB)
+#13 4.127 Collecting asgiref==3.11.1 (from -r /opt/gateway/requirements.lock (line 5))
+#13 4.128   Using cached asgiref-3.11.1-py3-none-any.whl (24 kB)
+#13 4.132 Collecting attrs==26.1.0 (from -r /opt/gateway/requirements.lock (line 6))
+#13 4.133   Using cached attrs-26.1.0-py3-none-any.whl (67 kB)
+#13 4.146 Collecting bcrypt==5.0.0 (from -r /opt/gateway/requirements.lock (line 7))
+#13 4.148   Using cached bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl (278 kB)
+#13 4.152 Collecting blinker==1.9.0 (from -r /opt/gateway/requirements.lock (line 8))
+#13 4.153   Using cached blinker-1.9.0-py3-none-any.whl (8.5 kB)
+#13 4.165 Collecting brotli==1.2.0 (from -r /opt/gateway/requirements.lock (line 9))
+#13 4.167   Using cached brotli-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.4 MB)
+#13 4.175 Collecting certifi==2026.7.22 (from -r /opt/gateway/requirements.lock (line 10))
+#13 4.176   Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+#13 4.232 Collecting cffi==2.1.1 (from -r /opt/gateway/requirements.lock (line 11))
+#13 4.233   Using cached cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+#13 4.240 Collecting click==8.5.0 (from -r /opt/gateway/requirements.lock (line 12))
+#13 4.241   Using cached click-8.5.0-py3-none-any.whl (125 kB)
+#13 4.322 Collecting cryptography==50.0.1 (from -r /opt/gateway/requirements.lock (line 13))
+#13 4.324   Using cached cryptography-50.0.1-cp311-abi3-manylinux_2_28_x86_64.whl (4.7 MB)
+#13 4.338 Collecting Flask==3.1.3 (from -r /opt/gateway/requirements.lock (line 14))
+#13 4.340   Using cached flask-3.1.3-py3-none-any.whl (103 kB)
+#13 4.344 Collecting h11==0.16.0 (from -r /opt/gateway/requirements.lock (line 15))
+#13 4.344   Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+#13 4.350 Collecting h2==4.4.1 (from -r /opt/gateway/requirements.lock (line 16))
+#13 4.352   Using cached h2-4.4.1-py3-none-any.whl (62 kB)
+#13 4.356 Collecting hpack==4.2.0 (from -r /opt/gateway/requirements.lock (line 17))
+#13 4.357   Using cached hpack-4.2.0-py3-none-any.whl (34 kB)
+#13 4.360 Collecting hyperframe==6.1.0 (from -r /opt/gateway/requirements.lock (line 18))
+#13 4.361   Using cached hyperframe-6.1.0-py3-none-any.whl (13 kB)
+#13 4.364 Collecting itsdangerous==2.2.0 (from -r /opt/gateway/requirements.lock (line 19))
+#13 4.365   Using cached itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+#13 4.370 Collecting Jinja2==3.1.6 (from -r /opt/gateway/requirements.lock (line 20))
+#13 4.372   Using cached jinja2-3.1.6-py3-none-any.whl (134 kB)
+#13 4.376 Collecting kaitaistruct==0.11 (from -r /opt/gateway/requirements.lock (line 21))
+#13 4.378   Using cached kaitaistruct-0.11-py2.py3-none-any.whl (11 kB)
+#13 4.383 Collecting ldap3==2.9.1 (from -r /opt/gateway/requirements.lock (line 22))
+#13 4.384   Using cached ldap3-2.9.1-py2.py3-none-any.whl (432 kB)
+#13 4.403 Collecting MarkupSafe==3.0.3 (from -r /opt/gateway/requirements.lock (line 23))
+#13 4.404   Using cached markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+#13 4.410 Processing ./opt/gateway/vendor/mitmproxy-12.2.3+lantern1-py3-none-any.whl (from -r /opt/gateway/requirements.lock (line 24))
+#13 4.419 Collecting mitmproxy_linux==0.12.11 (from -r /opt/gateway/requirements.lock (line 25))
+#13 4.421   Using cached mitmproxy_linux-0.12.11-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.6 MB)
+#13 4.434 Collecting mitmproxy_rs==0.12.11 (from -r /opt/gateway/requirements.lock (line 26))
+#13 4.435   Using cached mitmproxy_rs-0.12.11-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.3 MB)
+#13 4.471 Collecting msgpack==1.2.2 (from -r /opt/gateway/requirements.lock (line 27))
+#13 4.473   Using cached msgpack-1.2.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (420 kB)
+#13 4.479 Collecting publicsuffix2==2.20191221 (from -r /opt/gateway/requirements.lock (line 28))
+#13 4.480   Using cached publicsuffix2-2.20191221-py2.py3-none-any.whl (89 kB)
+#13 4.489 Collecting pyasn1==0.6.4 (from -r /opt/gateway/requirements.lock (line 29))
+#13 4.490   Using cached pyasn1-0.6.4-py3-none-any.whl (84 kB)
+#13 4.494 Collecting pycparser==3.0 (from -r /opt/gateway/requirements.lock (line 30))
+#13 4.495   Using cached pycparser-3.0-py3-none-any.whl (48 kB)
+#13 4.507 Collecting pylsqpack==0.3.24 (from -r /opt/gateway/requirements.lock (line 31))
+#13 4.510   Using cached pylsqpack-0.3.24-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (250 kB)
+#13 4.515 Collecting pyOpenSSL==26.4.0 (from -r /opt/gateway/requirements.lock (line 32))
+#13 4.516   Using cached pyopenssl-26.4.0-py3-none-any.whl (56 kB)
+#13 4.526 Collecting pyparsing==3.3.2 (from -r /opt/gateway/requirements.lock (line 33))
+#13 4.527   Using cached pyparsing-3.3.2-py3-none-any.whl (122 kB)
+#13 4.531 Collecting pyperclip==1.11.0 (from -r /opt/gateway/requirements.lock (line 34))
+#13 4.532   Using cached pyperclip-1.11.0-py3-none-any.whl (11 kB)
+#13 4.578 Collecting ruamel.yaml==0.19.1 (from -r /opt/gateway/requirements.lock (line 35))
+#13 4.580   Using cached ruamel_yaml-0.19.1-py3-none-any.whl (118 kB)
+#13 4.585 Collecting service-identity==26.1.0 (from -r /opt/gateway/requirements.lock (line 36))
+#13 4.586   Using cached service_identity-26.1.0-py3-none-any.whl (11 kB)
+#13 4.591 Collecting sortedcontainers==2.4.0 (from -r /opt/gateway/requirements.lock (line 37))
+#13 4.593   Using cached sortedcontainers-2.4.0-py2.py3-none-any.whl (29 kB)
+#13 4.605 Collecting tornado==6.5.8 (from -r /opt/gateway/requirements.lock (line 38))
+#13 4.607   Using cached tornado-6.5.8-cp39-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (450 kB)
+#13 4.614 Collecting typing_extensions==4.14.0 (from -r /opt/gateway/requirements.lock (line 39))
+#13 4.615   Using cached typing_extensions-4.14.0-py3-none-any.whl (43 kB)
+#13 4.634 Collecting urwid==3.0.5 (from -r /opt/gateway/requirements.lock (line 40))
+#13 4.636   Using cached urwid-3.0.5-py3-none-any.whl (296 kB)
+#13 4.642 Collecting wcwidth==0.8.3 (from -r /opt/gateway/requirements.lock (line 41))
+#13 4.643   Using cached wcwidth-0.8.3-py3-none-any.whl (331 kB)
+#13 4.661 Collecting Werkzeug==3.1.8 (from -r /opt/gateway/requirements.lock (line 42))
+#13 4.662   Using cached werkzeug-3.1.8-py3-none-any.whl (226 kB)
+#13 4.666 Collecting wsproto==1.3.2 (from -r /opt/gateway/requirements.lock (line 43))
+#13 4.668   Using cached wsproto-1.3.2-py3-none-any.whl (24 kB)
+#13 4.696 Collecting zstandard==0.25.0 (from -r /opt/gateway/requirements.lock (line 44))
+#13 4.698   Using cached zstandard-0.25.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.5 MB)
+#13 4.773 Installing collected packages: sortedcontainers, pyperclip, publicsuffix2, brotli, zstandard, wcwidth, typing_extensions, tornado, ruamel.yaml, pyparsing, pylsqpack, pycparser, pyasn1, msgpack, mitmproxy_linux, MarkupSafe, kaitaistruct, itsdangerous, hyperframe, hpack, h11, click, certifi, blinker, bcrypt, attrs, asgiref, wsproto, Werkzeug, urwid, mitmproxy_rs, ldap3, Jinja2, h2, cffi, Flask, cryptography, argon2-cffi-bindings, service-identity, pyOpenSSL, argon2-cffi, aioquic, mitmproxy
+#13 6.563 
+#13 6.566 Successfully installed Flask-3.1.3 Jinja2-3.1.6 MarkupSafe-3.0.3 Werkzeug-3.1.8 aioquic-1.2.0 argon2-cffi-25.1.0 argon2-cffi-bindings-26.1.0 asgiref-3.11.1 attrs-26.1.0 bcrypt-5.0.0 blinker-1.9.0 brotli-1.2.0 certifi-2026.7.22 cffi-2.1.1 click-8.5.0 cryptography-50.0.1 h11-0.16.0 h2-4.4.1 hpack-4.2.0 hyperframe-6.1.0 itsdangerous-2.2.0 kaitaistruct-0.11 ldap3-2.9.1 mitmproxy-12.2.3+lantern1 mitmproxy_linux-0.12.11 mitmproxy_rs-0.12.11 msgpack-1.2.2 publicsuffix2-2.20191221 pyOpenSSL-26.4.0 pyasn1-0.6.4 pycparser-3.0 pylsqpack-0.3.24 pyparsing-3.3.2 pyperclip-1.11.0 ruamel.yaml-0.19.1 service-identity-26.1.0 sortedcontainers-2.4.0 tornado-6.5.8 typing_extensions-4.14.0 urwid-3.0.5 wcwidth-0.8.3 wsproto-1.3.2 zstandard-0.25.0
+#13 6.760 No broken requirements found.
+#13 6.948 Found existing installation: pip 26.2.1
+#13 6.969 Uninstalling pip-26.2.1:
+#13 6.974   Successfully uninstalled pip-26.2.1
+#13 7.167 Found existing installation: pip 26.2.1
+#13 7.186 Uninstalling pip-26.2.1:
+#13 7.190   Successfully uninstalled pip-26.2.1
+#13 7.199 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#13 DONE 7.3s
+
+#14 [stage-1 7/8] COPY infra/qa-gateway/policy.py infra/qa-gateway/entrypoint.py /opt/gateway/
+#14 DONE 0.0s
+
+#15 [stage-1 8/8] COPY tools/azure-runner/qa_transport.py /opt/gateway/qa_transport.py
+#15 DONE 0.0s
+
+#16 exporting to image
+#16 exporting layers
+#16 exporting layers 2.3s done
+#16 exporting manifest sha256:476bad148831f86d70708159e343e411c9546b82dd76f800afcd47dc37592300 done
+#16 exporting config sha256:4e664d435b27f6ae1a9ef757df4b92d06744b0deb2866d454ad31651363c2afa done
+#16 exporting attestation manifest sha256:f6742bcad3738338c5f2db09fe0d9c8a551aab62ac31dbcbf858dc70066917df done
+#16 exporting manifest list sha256:46a63fb17ffe9a0df0fa68239315388b13b856983161a0da54f62f653ee73034 done
+#16 naming to docker.io/library/lantern-qa-gateway:external-qa-acceptance done
+#16 unpacking to docker.io/library/lantern-qa-gateway:external-qa-acceptance
+#16 unpacking to docker.io/library/lantern-qa-gateway:external-qa-acceptance 0.5s done
+#16 DONE 2.8s

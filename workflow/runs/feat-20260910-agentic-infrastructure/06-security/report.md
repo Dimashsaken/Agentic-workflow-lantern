@@ -403,3 +403,37 @@ Status: PASS-WITH-NOTES for bounded local implementation; external foundation an
 Final host-adapter supplement: reviewed and independently passed **8/8** controls for local Unix-socket pinning, exact process cgroup/container binding, rule normalization and refusal of remote-PID collisions. The supplied actual nftables namespace proof passes calibrated positive controls, seven denial checks and zero forbidden observer bytes; it remains separate from native Docker-host/external TLS acceptance. Final reviewed runtime hashes are in [continuation4-runtime-review-snapshot.json](continuation4-runtime-review-snapshot.json). No additional unmitigated high code defect was found in the local maintenance/retention/controller scope. The zlib and external acceptance blockers remain unchanged.
 
 Status: PASS-WITH-NOTES for bounded local implementation; external foundation and staging NO-GO.
+
+## External QA dependency mitigation and watchdog supplement — 2026-09-11
+
+**GO with conditions for the disabled local candidate; NO-GO for external activation or staging.** Independent scoped review of the uncommitted zlib builder/test/Dockerfile and QA execution/transport/test changes found no new high-severity code defect. Details, severity-ranked conditions, exact source hashes and deploy-day checklist are in [external-qa-mitigation-review.md](external-qa-mitigation-review.md).
+
+Independent execution/transport tests passed 20/20; an additional ordinary API probe confirmed repeated whole-controller cancellation finishes owned cleanup once without live child tasks. Supplied final image evidence passes the ordinary installed zlib roundtrip/terminal-error check and 24/24 packaged TLS controls. The local zlib change is an explicitly reviewed terminal-writer mitigation with retained exported-symbol parity, not an upstream fix or advisory waiver. Installed-file digest binding and a fresh complete image scan remain acceptance conditions at this cutoff; the first offline scanner database download failed and its log is retained. Native-host, actual fleet lifecycle and human deployment acceptance remain separate requirements. The unconditional external launcher hold is intact.
+
+The bound append_memory tool is unavailable in this reviewer session. A dated learning is recorded in the detailed report for the integrator's actual insertion; no rendered memory edit or fabricated receipt is claimed. No implementation edit, live deployment, gate decision, schema modification or exploit test was performed by this reviewer.
+
+Status: PASS-WITH-NOTES for the disabled local candidate; complete dependency acceptance, external activation and staging remain unaccepted.
+
+### Integrator evidence after review cutoff — 2026-09-11
+
+The installed-library binding is now verified on both the local and native image:
+`ddb09e9720925b71d2946e265c4d4b0f1c55dce3dd7f5bb2cec2fa8d1a067997` matches the
+mitigation provenance. The final native pair passes 14 calibrated network denials,
+two allowed paths, complete cleanup and the native gateway's 24 packaged tests.
+These results are linked in `../04-qa-dev/external-qa-native-report.md`.
+
+The native offline Trivy 0.74.0 audit completed with networking disabled and a
+registry-digest-verified public database. It reports 176 gateway findings (3
+critical, 51 high) and 191 recorder findings (1 critical, 10 high), recorded in
+[external-qa-offline-audit-status.json](external-qa-offline-audit-status.json).
+These are untriaged raw counts, not a demonstrated exploitability verdict or a
+clean image claim. Automatic approval review rejected transfer of package versions
+and vulnerability IDs; explicit approval has been requested. Full reports remain
+on the owned native host, and no details transfer was attempted after rejection.
+The zlib source mitigation does not close the additional unreviewed findings.
+
+Actual append_memory row 71 is recorded in `../03-coding/external-qa-memory.json`;
+existing run/execution/approval counts and approval snapshot remained unchanged.
+
+Status: BLOCKED for complete dependency and external QA acceptance, pending audit
+detail review and the trusted target/combined recorder lifecycle prerequisites.

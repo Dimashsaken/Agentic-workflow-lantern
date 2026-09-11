@@ -1,6 +1,15 @@
 # Disabled gateway candidate; pinned official Python 3.12.14 slim-trixie, Linux amd64.
 # No browser, Node/npm, product checkout or controller SDK is included.
+FROM python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79 AS zlib-builder
+RUN apt-get update && apt-get install -y --no-install-recommends gcc make libc6-dev binutils
+COPY infra/qa-gateway/build_zlib.py infra/qa-gateway/test_zlib.py /build/
+RUN python3.12 /build/test_zlib.py /usr/lib/x86_64-linux-gnu/libz.so.1.3.1 --baseline \
+    && python3.12 /build/build_zlib.py
+
 FROM python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79
+COPY --from=zlib-builder /out/zlib1g-lantern.deb /tmp/zlib1g-lantern.deb
+RUN dpkg --path-include=/usr/share/doc/zlib1g/lantern-mitigation.json -i /tmp/zlib1g-lantern.deb \
+    && test -s /usr/share/doc/zlib1g/lantern-mitigation.json && rm /tmp/zlib1g-lantern.deb
 ENV HOME=/tmp
 USER root
 RUN python3.12 -m venv /opt/gateway
