@@ -74,7 +74,7 @@ serve() {
   say "checking out $branch into $dir"
   if [ ! -d "$dir/.git" ]; then git clone -q "$PRODUCT_URL" "$dir"; fi
   cd "$dir"
-  git fetch -q origin main "$branch"   # main too: the lint gate's eval rule diffs against origin/main
+  git fetch -q origin "$branch"
   git checkout -q -B serve "origin/$branch"
   python3 -m venv .venv >/dev/null && .venv/bin/pip install -q -e '.[dev]'
   say "installing systemd unit $unit on 0.0.0.0:$port"
