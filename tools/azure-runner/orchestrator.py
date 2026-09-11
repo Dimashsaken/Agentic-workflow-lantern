@@ -1304,8 +1304,17 @@ def _section(text: str, heading: str, limit: int) -> str:
     return body[:limit] + ("…" if len(body) > limit else "")
 
 
+# The stage dir each human gate belongs to: a REJECTED gate sends the run back to the
+# stage that opened it (`reject` marks the run failed there; `retry` re-runs it), which
+# is the same "act on the human's note" situation as a rework.
+GATE_STAGE_DIR = {"story_signoff": "00-story", "ux_signoff": "01-ui-ux",
+                  "plan_signoff": "02-pre-coding", "code_complete": "03-coding",
+                  "staging_deploy": "06-security", "prod_signoff": "07-qa-staging"}
+
+
 def rework_context(run_id: str, stage: str) -> str:
-    """Why this stage is running AGAIN, when the run was sent back to it (D17 rework).
+    """Why this stage is running AGAIN, when the run was sent back to it (D17 rework,
+    or a REJECTED gate of this stage followed by `retry`).
 
     `pipeline.py rework` records the human's decision in `gate-decisions.md` and the run
     folder is the only handoff channel (D4) — but a stage's task block used to be the
@@ -1326,7 +1335,14 @@ def rework_context(run_id: str, stage: str) -> str:
         return ""
     last = sections[-1]
     m = re.match(r"rework\s*->\s*(\S+)\s+—\s+REWORKED", last)
-    if not m or stage_dir(m.group(1)) != stage_dir(stage):
+    if m:
+        target, how = stage_dir(m.group(1)), "rework"
+    else:
+        m = re.match(r"(\w+)\s+—\s+REJECTED", last)
+        if not m:
+            return ""
+        target, how = GATE_STAGE_DIR.get(m.group(1), ""), f"gate `{m.group(1)}` rejected"
+    if target != stage_dir(stage):
         return ""
     by = re.search(r"^- \*\*Decided by:\*\*\s*(.*)$", last, re.M)
     when = re.search(r"^- \*\*When:\*\*\s*(.*)$", last, re.M)
@@ -1342,7 +1358,7 @@ def rework_context(run_id: str, stage: str) -> str:
             for name in ("report.md", "bugs.md", "debt-tickets.md", "validation.md", "validation.json"):
                 if (d / name).is_file():
                     later.append(f"workflow/runs/{run_id}/{d.name}/{name}")
-    out = [f"\n\n## Why this stage is running AGAIN — rework decided by "
+    out = [f"\n\n## Why this stage is running AGAIN — {how}, decided by "
            f"{by.group(1).strip() if by else '?'} ({when.group(1).strip() if when else '?'})\n",
            f"\n{note_text}\n"]
     if later:

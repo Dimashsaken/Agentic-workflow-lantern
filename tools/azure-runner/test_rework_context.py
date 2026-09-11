@@ -54,7 +54,7 @@ class ReworkContext(unittest.TestCase):
     def test_the_targeted_stage_gets_the_note_and_the_later_stages_files(self):
         block = o.rework_context(RUN, "03-coding")
         self.assertIn("running AGAIN", block)
-        self.assertIn("rework decided by dimash (2026-09-11 18:53 UTC)", block)
+        self.assertIn("rework, decided by dimash (2026-09-11 18:53 UTC)", block)
         self.assertIn("remove the tracked tender_whatsapp.egg-info/", block)
         for p in (f"workflow/runs/{RUN}/04-qa-dev/report.md", f"workflow/runs/{RUN}/04-qa-dev/bugs.md",
                   f"workflow/runs/{RUN}/05-post-coding/report.md", f"workflow/runs/{RUN}/05-post-coding/debt-tickets.md"):
@@ -66,6 +66,22 @@ class ReworkContext(unittest.TestCase):
         # It is part of the task block, after the plan and before the deliverable line.
         task = o.product_task_block(RUN, "03-coding")
         self.assertLess(task.index("running AGAIN"), task.index("This stage's deliverable"))
+
+    def test_a_rejected_gate_of_this_stage_counts_as_being_sent_back(self):
+        # From an open code_complete the operator cannot `rework --to 03-coding` (not an
+        # earlier stage); the path is `reject` + `retry`, and the note must reach coding.
+        with (self.rd / "gate-decisions.md").open("a", encoding="utf-8") as fh:
+            fh.write("\n## code_complete — REJECTED\n\n- **Decided by:** dimash\n"
+                     "- **When:** 2026-09-11 20:50 UTC\n- **Note:** attempt 4 changed nothing; do the egg-info cleanup.\n")
+        block = o.rework_context(RUN, "03-coding")
+        self.assertIn("gate `code_complete` rejected, decided by dimash (2026-09-11 20:50 UTC)", block)
+        self.assertIn("attempt 4 changed nothing", block)
+        self.assertIn(f"workflow/runs/{RUN}/05-post-coding/debt-tickets.md", block)
+        self.assertEqual(o.rework_context(RUN, "02-pre-coding"), "")
+        with (self.rd / "gate-decisions.md").open("a", encoding="utf-8") as fh:
+            fh.write("\n## plan_signoff — REJECTED\n\n- **Decided by:** dimash\n- **When:** later\n- **Note:** replan\n")
+        self.assertIn("replan", o.rework_context(RUN, "02-pre-coding"))
+        self.assertEqual(o.rework_context(RUN, "03-coding"), "")
 
     def test_other_stages_and_other_decisions_get_nothing(self):
         self.assertEqual(o.rework_context(RUN, "04-qa-dev"), "")
