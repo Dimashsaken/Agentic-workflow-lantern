@@ -2212,27 +2212,38 @@ async def cmd_qa_preflight(role: str) -> None:
         ok = code2.startswith(("2", "3", "401", "403"))
         # Reachability is not readiness: the first daemon-driven stage 4 (2026-09-07)
         # reached the login page and still could not get in. Try the provisioned
-        # login from inside a sandbox, credentials passed as env (never on argv).
-        # Mission-Control-shaped form: POST /login with username/password answers
-        # 303 on success and re-renders (200) on a rejected login.
+        # login from inside a sandbox, credentials passed as env (never on argv), the
+        # way a browser would: qa_login_probe.py fetches the form, carries its hidden
+        # inputs (CSRF), takes the field names from the page and treats a redirect as
+        # accepted (Tender's form is csrf + `email`; Mission Control's is `username`).
+        login_ok = True
         if ok and user and pw:
             probe = ["docker", "run", "--rm", "--add-host=host.docker.internal:host-gateway",
+                     "-v", f"{REPO}:/repo-src:ro",
                      "-e", f"QA_BASE_URL={base}", "-e", f"QA_USER={user}", "-e", f"QA_PASS={pw}",
-                     "--entrypoint", "sh", SANDBOX_IMAGE, "-c",
-                     'curl -sS -o /dev/null -w "%{http_code}" --max-time 30 -X POST '
-                     '--data-urlencode "username=$QA_USER" --data-urlencode "password=$QA_PASS" '
-                     '"$QA_BASE_URL/login"']
-            code3, err3 = curl(probe)
-            accepted = code3.startswith("3")
-            print(f"  login     HTTP {code3 or 'FAILED'}  "
-                  f"({'accepted' if accepted else 'REJECTED — the QA user/password do not log in (or the form is not Mission-Control-shaped)'})"
-                  f"{'  ' + err3 if err3 else ''}")
-            ok = ok and accepted
-        print("\n" + ("READY — a QA stage can reach this target." if ok else
-                      "NOT REACHABLE FROM A SANDBOX. The host result above does not matter: "
-                      "stage 4 runs in a container. A localhost-only, Tailscale-only, or "
-                      "VPC-internal dev environment needs a route into the container network "
-                      "(host.docker.internal, a published port, or a reachable hostname)."))
+                     "--entrypoint", "/opt/lantern/venv/bin/python", SANDBOX_IMAGE,
+                     "/repo-src/tools/azure-runner/qa_login_probe.py"]
+            out3, err3 = curl(probe)
+            try:
+                r3 = json.loads(out3.splitlines()[-1]) if out3 else {}
+            except ValueError:
+                r3 = {}
+            login_ok = bool(r3.get("accepted"))
+            detail = (f"accepted (field `{r3.get('user_field')}`)" if login_ok else
+                      f"REJECTED — {r3.get('error') or 'the QA user/password do not log in with this form'}")
+            print(f"  login     HTTP {r3.get('post') or r3.get('get') or 'FAILED'}  ({detail})"
+                  f"{'  ' + err3 if err3 and not r3 else ''}")
+        if ok and login_ok:
+            print("\nREADY — a QA stage can reach this target and its login opens.")
+        elif ok:
+            print("\nNOT READY — the sandbox reaches the target but the provisioned login is "
+                  f"rejected. Fix the account or the values ({prefix}_USER/_PASS), e.g. "
+                  "`pipeline.py qa-target …` then seed the account on the app, and re-run this.")
+        else:
+            print("\nNOT REACHABLE FROM A SANDBOX. The host result above does not matter: "
+                  "stage 4 runs in a container. A localhost-only, Tailscale-only, or "
+                  "VPC-internal dev environment needs a route into the container network "
+                  "(host.docker.internal, a published port, or a reachable hostname).")
     else:
         print("  sandbox   (skipped — LANTERN_EXECUTOR is not 'docker' here)")
 
