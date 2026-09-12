@@ -112,7 +112,21 @@ UNIT
   # applied before the app serves; the unit only starts uvicorn. Same env as the unit.
   if [ -f "$dir/alembic.ini" ] && [ -x "$dir/.venv/bin/alembic" ]; then
     say "applying migrations (alembic upgrade head) with the unit's env"
-    (set -a; . "$envfile"; set +a; cd "$dir" && .venv/bin/alembic upgrade head 2>&1 | tail -3)
+    alembic_env() { (set -a; . "$envfile"; set +a; cd "$dir" && .venv/bin/alembic "$@"); }
+    if ! alembic_env upgrade head >"/tmp/$unit.alembic.log" 2>&1; then
+      # A fixture database that predates Alembic (built by create_all on the onboarding
+      # build) already has the baseline's tables but no version row: adopt it by stamping
+      # the first revision, then upgrade. Found 2026-09-12 serving the catalog-orders build.
+      if [ -z "$(alembic_env current 2>/dev/null)" ]; then
+        first=$(alembic_env history 2>/dev/null | tail -1 | awk '{print $3}' | tr -d ,)
+        say "schema predates Alembic — stamping $first, then upgrading"
+        alembic_env stamp "$first" 2>&1 | tail -1
+        alembic_env upgrade head 2>&1 | tail -2
+      else
+        echo "!! alembic upgrade head failed — see /tmp/$unit.alembic.log"; tail -3 "/tmp/$unit.alembic.log"
+      fi
+    fi
+    echo "   alembic: $(alembic_env current 2>/dev/null | tail -1)"
   fi
   sudo systemctl daemon-reload && sudo systemctl enable -q "$unit" && sudo systemctl restart "$unit"
   for i in $(seq 1 20); do curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1 && break; sleep 1; done
