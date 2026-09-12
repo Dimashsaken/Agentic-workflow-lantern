@@ -93,6 +93,10 @@ serve() {
   grep -q '^TENDER_SECRET_KEY=' "$envfile" || echo "TENDER_SECRET_KEY=$(head -c 24 /dev/urandom | base64 | tr -d '/+=')" >> "$envfile"
   grep -q '^TENDER_CREDENTIAL_KEY=' "$envfile" || echo "TENDER_CREDENTIAL_KEY=$(python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')" >> "$envfile"
   grep -q '^TENDER_DATABASE_URL=' "$envfile" || echo "TENDER_DATABASE_URL=sqlite:///$dir/tender.db" >> "$envfile"
+  # The origin the QA browser (a sandbox container) reaches this target at — owner
+  # notification links are built from it (QA-1 on the escalations run, 2026-09-12:
+  # the default was http://localhost:8000 and the link was unreachable).
+  grep -q '^TENDER_PUBLIC_BASE_URL=' "$envfile" || echo "TENDER_PUBLIC_BASE_URL=http://$BRIDGE_IP:$port" >> "$envfile"
   chmod 600 "$envfile"
   say "installing systemd unit $unit on 0.0.0.0:$port (secrets from $envfile)"
   sudo tee "/etc/systemd/system/$unit.service" >/dev/null <<UNIT
@@ -134,7 +138,11 @@ UNIT
   # Every variable the served build documents as required must be present, or QA blocks
   # on an environment finding three stages later (ENV-1, 2026-09-11).
   for var in $(grep -oE '^TENDER_[A-Z_]+=' "$dir/.env.example" | tr -d '='); do
-    case "$var" in TENDER_SECRET_KEY|TENDER_CREDENTIAL_KEY|TENDER_DATABASE_URL) grep -q "^$var=." "$envfile" && echo "   $var: set" || echo "!! $var missing in $envfile" ;; esac
+    case "$var" in
+      TENDER_SECRET_KEY|TENDER_CREDENTIAL_KEY|TENDER_DATABASE_URL|TENDER_PUBLIC_BASE_URL)
+        grep -q "^$var=." "$envfile" && echo "   $var: set" || echo "!! $var missing in $envfile" ;;
+      *) grep -q "^$var=" "$envfile" || echo "   $var: not set (build default applies — see $dir/.env.example)" ;;
+    esac
   done
   say "telling the daemon where QA finds it (containers reach the host at $BRIDGE_IP)"
   # qa-target replaces the URL, sets the Tender QA login and regenerates the password when
