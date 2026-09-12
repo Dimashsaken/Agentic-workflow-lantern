@@ -1333,22 +1333,45 @@ def rework_context(run_id: str, stage: str) -> str:
     sections = re.split(r"^##\s+", text, flags=re.M)[1:]
     if not sections:
         return ""
-    last = sections[-1]
+    # The latest ROUTING decision wins; approvals after it mean the run is on its way
+    # back through the stages with an amended input (a re-planned scope, a re-approved
+    # story) — every stage from the rework's target up to and including this one still
+    # owes that decision an answer. Found 2026-09-12: after `rework -> 02-pre-coding` +
+    # plan_signoff the coding agent saw no context and treated the amended plan as an
+    # unapproved scope change.
+    this_dir = stage_dir(stage)
+    last, approvals_since = None, 0
+    for sec in reversed(sections):
+        ap = re.match(r"(\w+)\s+—\s+APPROVED", sec)
+        if ap:
+            if GATE_STAGE_DIR.get(ap.group(1)) == this_dir:
+                return ""      # this stage passed its own gate after the last routing decision
+            approvals_since += 1
+            continue
+        last = sec
+        break
+    if last is None:
+        return ""
     m = re.match(r"rework\s*->\s*(\S+)\s+—\s+REWORKED", last)
     if m:
-        target, how = stage_dir(m.group(1)), "rework"
+        target, how = stage_dir(m.group(1)), f"rework to `{stage_dir(m.group(1))}`"
     else:
         m = re.match(r"(\w+)\s+—\s+REJECTED", last)
         if not m:
             return ""
         target, how = GATE_STAGE_DIR.get(m.group(1), ""), f"gate `{m.group(1)}` rejected"
-    if target != stage_dir(stage):
+    t_ord, s_ord = target.split("-", 1)[0], this_dir.split("-", 1)[0]
+    if not (t_ord.isdigit() and s_ord.isdigit()) or int(t_ord) > int(s_ord):
         return ""
+    if target != this_dir and approvals_since == 0:
+        return ""          # an earlier stage is still working the decision; not this one's turn
+    if target != this_dir:
+        how += f" — its gate was re-approved since; the amended {target} output is now your input"
     by = re.search(r"^- \*\*Decided by:\*\*\s*(.*)$", last, re.M)
     when = re.search(r"^- \*\*When:\*\*\s*(.*)$", last, re.M)
     note = re.search(r"^- \*\*Note:\*\*\s*(.*)$", last, re.M | re.S)
     note_text = (note.group(1).strip() if note else "(no note)")[:1500]
-    this_ordinal = stage_dir(stage).split("-", 1)[0]
+    this_ordinal = this_dir.split("-", 1)[0]
     later: list[str] = []
     if this_ordinal.isdigit():
         for d in sorted(p for p in rd.iterdir() if p.is_dir()):
@@ -1365,11 +1388,16 @@ def rework_context(run_id: str, stage: str) -> str:
         out.append("\nThe stages after this one already ran on the current branch and sent the "
                    "work back; their findings ARE the task now — read each before you start:\n"
                    + "\n".join(f"- `read_file('{p}')`" for p in later) + "\n")
-    out.append("\nAct on what the rework note names and commit the change (one item, one "
-               "commit). An execution that changes nothing is a failed execution: the stage "
-               "that sent this back will only re-run on new commits. Do NOT re-decide the "
-               "plan or re-open approved findings; do NOT treat an earlier approval as a reason "
-               "to skip the rework.\n")
+    if this_dir == "03-coding":
+        out.append("\nAct on what the decision names and commit the change (one item, one "
+                   "commit). An execution that changes nothing is a failed execution: the stage "
+                   "that sent this back will only re-run on new commits. Do NOT re-decide the "
+                   "plan or re-open approved findings; do NOT treat an earlier approval, or an "
+                   "earlier scope, as a reason to skip it — the plan in the run folder is the "
+                   "approved one.\n")
+    else:
+        out.append("\nAddress what the decision names in this stage's deliverables; do NOT "
+                   "re-open findings the decision already settled.\n")
     return "".join(out)
 
 
@@ -1423,14 +1451,25 @@ def product_task_block(run_id: str, stage: str) -> str:
         except OSError:
             ptext = ""
         items = [ln.strip() for ln in ptext.splitlines()
-                 if re.match(r"^(#{1,3}\s+\S|\s*(?:[-*]|\d+\.)\s+\S)", ln)]
-        shape, used = [], 0
+                 if re.match(r"^(#{1,4}\s+\S|\s*(?:[-*]|\d+\.)\s+\S)", ln)]
+        # The numbered task headings ARE the work list: they are always shown in full,
+        # before the cap applies to the rest. Found 2026-09-12 on the catalog-orders run:
+        # the plan's contract section alone filled the old 1500-character cap, so the
+        # coding agent's task block ended in "…" before task 1, and a task added by a
+        # re-plan (task 12) never reached it.
+        task_re = re.compile(r"^#{1,4}\s*(?:task\s+)?\d+[.)]?\s", re.I)
+        tasks = [ln for ln in items if task_re.match(ln)]
+        shape, used = list(tasks), 0
         for ln in items:
+            if ln in tasks:
+                continue
             if used + len(ln) > 1500:
                 shape.append("…")
                 break
             shape.append(ln)
             used += len(ln)
+        if tasks:
+            shape = tasks + ["— other headings —"] + [ln for ln in shape if ln not in tasks]
         if shape:
             out.append("\n**The approved plan** (headings and tasks only — the body is in "
                        f"the file):\n" + "\n".join(shape) + "\n"

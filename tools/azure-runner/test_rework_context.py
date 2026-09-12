@@ -54,7 +54,7 @@ class ReworkContext(unittest.TestCase):
     def test_the_targeted_stage_gets_the_note_and_the_later_stages_files(self):
         block = o.rework_context(RUN, "03-coding")
         self.assertIn("running AGAIN", block)
-        self.assertIn("rework, decided by dimash (2026-09-11 18:53 UTC)", block)
+        self.assertIn("rework to `03-coding`, decided by dimash (2026-09-11 18:53 UTC)", block)
         self.assertIn("remove the tracked tender_whatsapp.egg-info/", block)
         for p in (f"workflow/runs/{RUN}/04-qa-dev/report.md", f"workflow/runs/{RUN}/04-qa-dev/bugs.md",
                   f"workflow/runs/{RUN}/05-post-coding/report.md", f"workflow/runs/{RUN}/05-post-coding/debt-tickets.md"):
@@ -82,6 +82,39 @@ class ReworkContext(unittest.TestCase):
             fh.write("\n## plan_signoff — REJECTED\n\n- **Decided by:** dimash\n- **When:** later\n- **Note:** replan\n")
         self.assertIn("replan", o.rework_context(RUN, "02-pre-coding"))
         self.assertEqual(o.rework_context(RUN, "03-coding"), "")
+
+    def test_a_rework_to_an_earlier_stage_reaches_later_stages_once_re_approved(self):
+        # 2026-09-12: rework -> 02-pre-coding + plan_signoff approved, then coding attempt 5
+        # saw no context and called the amended plan an unapproved scope change.
+        with (self.rd / "gate-decisions.md").open("a", encoding="utf-8") as fh:
+            fh.write("\n## rework -> 02-pre-coding — REWORKED\n\n- **Decided by:** dimash\n"
+                     "- **When:** 2026-09-12 02:14 UTC\n- **Note:** Amend the plan: add README.md and AGENTS.md, one task for the run contract.\n")
+        # While pre-coding is still working the rework, coding is not told anything.
+        self.assertIn("rework to `02-pre-coding`", o.rework_context(RUN, "02-pre-coding"))
+        self.assertEqual(o.rework_context(RUN, "03-coding"), "")
+        with (self.rd / "gate-decisions.md").open("a", encoding="utf-8") as fh:
+            fh.write("\n## plan_signoff — APPROVED\n\n- **Decided by:** dimash\n- **When:** 2026-09-12 02:16 UTC\n- **Note:** re-plan ok\n")
+        block = o.rework_context(RUN, "03-coding")
+        self.assertIn("rework to `02-pre-coding` — its gate was re-approved since", block)
+        self.assertIn("add README.md and AGENTS.md", block)
+        self.assertIn("the plan in the run folder is the approved one", block)
+        self.assertIn(f"workflow/runs/{RUN}/05-post-coding/debt-tickets.md", block)
+        # Later stages see it too (their deliverables answer it), earlier stages do not.
+        self.assertIn("Address what the decision names", o.rework_context(RUN, "04-qa-dev"))
+        self.assertEqual(o.rework_context(RUN, "01-ui-ux.design"), "")
+
+    def test_plan_shape_always_lists_every_numbered_task(self):
+        # 2026-09-12: the catalog plan's contract section filled the summary cap before task 1.
+        plan = self.rd / "02-pre-coding" / "task-plan.md"
+        plan.parent.mkdir(parents=True, exist_ok=True)
+        contracts = "\n".join(f"- contract line {i} " + "x" * 90 for i in range(30))
+        tasks = "\n".join(f"### {n}. Task number {n} — M — **HITL: no**\nbody\n" for n in range(1, 13))
+        plan.write_text("# Task plan\n## Fixed implementation contracts\n" + contracts + "\n## Tasks\n" + tasks, encoding="utf-8")
+        block = o.product_task_block(RUN, "03-coding")
+        for n in range(1, 13):
+            self.assertIn(f"### {n}. Task number {n}", block)
+        self.assertIn("…", block)                       # the contract lines are still capped
+        self.assertLess(block.index("### 12. Task number 12"), block.index("— other headings —"))
 
     def test_other_stages_and_other_decisions_get_nothing(self):
         self.assertEqual(o.rework_context(RUN, "04-qa-dev"), "")
