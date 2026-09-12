@@ -94,9 +94,20 @@ serve() {
   grep -q '^TENDER_CREDENTIAL_KEY=' "$envfile" || echo "TENDER_CREDENTIAL_KEY=$(python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')" >> "$envfile"
   grep -q '^TENDER_DATABASE_URL=' "$envfile" || echo "TENDER_DATABASE_URL=sqlite:///$dir/tender.db" >> "$envfile"
   # The origin the QA browser (a sandbox container) reaches this target at — owner
-  # notification links are built from it (QA-1 on the escalations run, 2026-09-12:
-  # the default was http://localhost:8000 and the link was unreachable).
-  grep -q '^TENDER_PUBLIC_BASE_URL=' "$envfile" || echo "TENDER_PUBLIC_BASE_URL=http://$BRIDGE_IP:$port" >> "$envfile"
+  # notification links are built from it (QA-1 on the escalations run, 2026-09-12: the
+  # default was http://localhost:8000 and the link was unreachable). The build refuses a
+  # plain-http origin for any host but localhost unless it documents an explicit opt-in
+  # (the demo box has no TLS); without that opt-in the target keeps the localhost origin.
+  # Deployment-derived, so these two lines are rewritten on every serve.
+  sed -i '/^TENDER_PUBLIC_BASE_URL=/d; /^TENDER_ALLOW_INSECURE_PUBLIC_BASE_URL=/d' "$envfile"
+  if grep -q '^TENDER_ALLOW_INSECURE_PUBLIC_BASE_URL=' "$dir/.env.example"; then
+    printf 'TENDER_PUBLIC_BASE_URL=http://%s:%s
+TENDER_ALLOW_INSECURE_PUBLIC_BASE_URL=true
+' "$BRIDGE_IP" "$port" >> "$envfile"
+  else
+    echo "TENDER_PUBLIC_BASE_URL=http://localhost:$port" >> "$envfile"
+    echo "   TENDER_PUBLIC_BASE_URL: localhost — the build allows no plain-http origin for other hosts (owner links will not reach the QA sandbox)"
+  fi
   chmod 600 "$envfile"
   say "installing systemd unit $unit on 0.0.0.0:$port (secrets from $envfile)"
   sudo tee "/etc/systemd/system/$unit.service" >/dev/null <<UNIT
