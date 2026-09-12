@@ -29,6 +29,8 @@ owner replies from the web (the message goes out on WhatsApp through the channel
 adapter) and hands the conversation back to the assistant with one click. Response
 time is measured and shown.
 
+Success for the demo (measurable): a customer who writes "I want to talk to a person" gets no assistant reply, the owner's phone thread shows the notification (customer number, last three messages, link) within ten seconds, and the owner answers from the inbox and hands the conversation back — all within three minutes, unassisted — with the inbox showing the measured time-to-first-owner-reply.
+
 ## Must-haves
 
 - Per-business escalation settings: owner WhatsApp number, high-value threshold, the
