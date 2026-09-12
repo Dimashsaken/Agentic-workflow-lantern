@@ -108,6 +108,12 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 UNIT
+  # A build that ships Alembic (the catalog-orders plan adds it) must have its migrations
+  # applied before the app serves; the unit only starts uvicorn. Same env as the unit.
+  if [ -f "$dir/alembic.ini" ] && [ -x "$dir/.venv/bin/alembic" ]; then
+    say "applying migrations (alembic upgrade head) with the unit's env"
+    (set -a; . "$envfile"; set +a; cd "$dir" && .venv/bin/alembic upgrade head 2>&1 | tail -3)
+  fi
   sudo systemctl daemon-reload && sudo systemctl enable -q "$unit" && sudo systemctl restart "$unit"
   for i in $(seq 1 20); do curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1 && break; sleep 1; done
   curl -fsS "http://127.0.0.1:$port/healthz" && echo
