@@ -2324,6 +2324,90 @@ async def cmd_retry(run_id: str) -> None:
     await conn.close()
 
 
+REVIEW_SUB_STAGES = ("03-coding.review", "03-coding.fix")
+
+
+def _live_sandboxes(run_id: str) -> list[str]:
+    """Names of this run's sandbox containers that are still up (docker executor only)."""
+    if EXECUTOR != "docker":
+        return []
+    try:
+        r = subprocess.run(["docker", "ps", "--filter", f"name=lantern-{run_id}-", "--format", "{{.Names}}"],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [ln for ln in r.stdout.splitlines() if ln.strip()]
+
+
+async def cmd_review(run_id: str, runner: str) -> None:
+    """Re-run ONLY the review loop (D19) on the run's current published coding handoff,
+    then open or refresh the code_complete gate.
+
+    For a review round the harness lost — an Azure 429 past the retry budget
+    (feat-20260911-tender-catalog-orders, 2026-09-12), a daemon restart mid-round when
+    unattended-upgrades restarted docker (feat-20260911-tender-escalations, same day) —
+    while the coding work is already on the branch: `retry` would re-run coding, which
+    rightly fails as a no-op, and `publish` only re-pushes. Never re-runs coding, never
+    decides the gate; refuses while a sandbox of this run is still alive; records the
+    orphaned execution, the re-run and its verdict like the daemon would.
+    """
+    conn = await connect()
+    row = await conn.fetchrow(
+        "SELECT status, current_stage, coding_mode FROM runs WHERE id = $1", run_id)
+    if not row:
+        sys.exit(f"unknown run {run_id}")
+    if row["current_stage"] != "03-coding" or (row["coding_mode"] or "human") != "auto":
+        sys.exit(f"{run_id} is at {row['current_stage']} in {row['coding_mode'] or 'human'} mode — "
+                 "a review re-run applies only to an auto-coding run at 03-coding")
+    if row["status"] not in ("waiting_gate", "failed", "executing"):
+        sys.exit(f"{run_id} is {row['status']} — a review re-run needs waiting_gate, failed, or "
+                 "an executing run whose sandbox is gone")
+    live = _live_sandboxes(run_id)
+    if live:
+        sys.exit(f"{run_id} still has a live sandbox ({', '.join(live)}) — not orphaned; wait for it")
+    if _read_handoff(run_id, "03-coding") is None:
+        sys.exit(f"{run_id} has no 03-coding/handoff.json — nothing is published to review")
+    orphaned = await conn.fetch(
+        """UPDATE stage_executions SET status = 'failed', finished_at = now(), error = $2
+           WHERE run_id = $1 AND status = 'running' AND stage = ANY($3::text[])
+           RETURNING id, stage""",
+        run_id, "orphaned: no live sandbox — superseded by `pipeline.py review`", list(REVIEW_SUB_STAGES))
+    await conn.execute(
+        "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1", run_id)
+    await log_event(conn, run_id, "human:cli", "review_rerun",
+                    {"orphaned": [dict(r) for r in orphaned], "from_status": row["status"]})
+    try:
+        payload = await publish_coding_branch(conn, run_id)        # idempotent push, base payload
+        payload = await review.after_publish(conn, run_id, payload, runner, review.default_deps())
+    except Exception as e:
+        await conn.execute(
+            "UPDATE runs SET status = 'failed', updated_at = now() WHERE id = $1", run_id)
+        await log_event(conn, run_id, "orchestrator", "review_rerun_failed",
+                        {"error": factory.redact(str(e))[:600]})
+        await render_runboard(conn)
+        await conn.close()
+        raise
+    verdict = (payload.get("review") or {}).get("verdict")
+    pending = await conn.fetchrow(
+        "SELECT id, payload FROM approvals WHERE run_id = $1 AND gate = 'code_complete' "
+        "AND status = 'pending'", run_id)
+    if pending:
+        merged = _payload_dict(pending["payload"])
+        merged.update(payload)
+        await conn.execute("UPDATE approvals SET payload = $1, external_ref = $2 WHERE id = $3",
+                           json.dumps(merged), payload.get("pr_url"), pending["id"])
+        await conn.execute(
+            "UPDATE runs SET status = 'waiting_gate', updated_at = now() WHERE id = $1", run_id)
+        await log_event(conn, run_id, "human:cli", "gate_payload_refreshed",
+                        {"gate": "code_complete", "review": verdict})
+        print(f"[{run_id}] review re-run: {verdict} — the pending code_complete payload now carries it")
+    else:
+        await open_gate(conn, run_id, "03-coding", "code_complete", payload, payload.get("pr_url"))
+        print(f"[{run_id}] review re-run: {verdict}")
+    await render_runboard(conn)
+    await conn.close()
+
+
 async def cmd_agents() -> None:
     print("Consultable agents (python pipeline.py ask <role> \"<prompt>\"):\n")
     for name, desc in consult_roles().items():
@@ -2613,7 +2697,7 @@ def cmd_evals(argv: list[str]) -> None:
 
 # Commands that cannot do anything without a model: they execute agent turns.
 # Everything else is database / run-folder / git work and must not need Azure.
-MODEL_CMDS = frozenset({"daemon", "step", "ask", "babysit"})
+MODEL_CMDS = frozenset({"daemon", "step", "ask", "babysit", "review"})
 
 
 def configure_model_client(required: bool) -> bool:
@@ -2696,6 +2780,12 @@ def main() -> None:
     p.add_argument("--runner", choices=["ec2", "workstation"],
                    default=os.environ.get("LANTERN_RUNNER", "ec2"))
     p = sub.add_parser("retry"); p.add_argument("run_id")
+    p = sub.add_parser("review", help="re-run ONLY the review loop on an auto-coding run's published "
+                                      "handoff (a round lost to a 429 or a daemon restart) and "
+                                      "open/refresh code_complete — never re-runs coding")
+    p.add_argument("run_id")
+    p.add_argument("--runner", choices=["ec2", "workstation"],
+                   default=os.environ.get("LANTERN_RUNNER", "ec2"))
     p = sub.add_parser("rework", help="send a failed/waiting run back to an earlier stage "
                                       "(D17 loop: validation or QA findings → the builder)")
     p.add_argument("run_id"); p.add_argument("--to", required=True, choices=REWORK_TARGETS)
@@ -2776,6 +2866,7 @@ def main() -> None:
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))
         case "step":    asyncio.run(cmd_step(a.run_id, a.runner))
         case "retry":   asyncio.run(cmd_retry(a.run_id))
+        case "review":  asyncio.run(cmd_review(a.run_id, a.runner))
         case "rework":  asyncio.run(cmd_rework(a.run_id, a.to, a.by, a.note))
         case "status":  asyncio.run(cmd_status(a.json))
         case "qa-preflight":  asyncio.run(cmd_qa_preflight(a.stage))
