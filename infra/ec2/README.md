@@ -136,6 +136,16 @@ LANTERN_PUBLIC_URL=                # Mission Control URL, linked from agent-open
 cd ~/Agentic-workflow-lantern/tools/azure-runner && .venv/bin/python pipeline.py qa-preflight
 ```
 
+To point a QA stage at an app you just started (say Tender on the docker bridge), write the
+target with the command instead of editing `.env` by hand — it replaces the URL in place,
+sets the QA login, regenerates the password when the user changes, and never prints a value.
+`.env` wins over SSM for these names (the daemon fills only unset ones from SSM), so what the
+file says IS the target; restart the daemon afterwards, when no stage is executing:
+
+```bash
+.venv/bin/python pipeline.py qa-target qa-dev --base-url http://172.17.0.1:8000 --user qa@tender.test
+```
+
 It fills `LANTERN_QA_DEV_*` from SSM (`/lantern/qa/dev/{base_url,user,pass}` — the
 daemon does the same at startup, so the documented SSM path no longer needs a
 hand-copied `.env`), then checks reachability **from a sandbox container**, not just
@@ -171,6 +181,14 @@ instance size.
 **Deferred, deliberately:** per-container egress allowlisting (needs a container
 network + nftables or a proxy; must land before any stage touches untrusted
 third-party input) — see D12.
+
+## The first product run — `infra/ec2/tender-playbook.sh`
+
+One command per human step for carrying `feat-20260911-tender-onboarding` (the Tender
+WhatsApp assistant, product branch `product/tender-whatsapp`) through the pipeline:
+`deploy` (fetch the branch, migrate, lint, restart the services), `start` (create the
+run), `status`, `serve dev|staging <branch>` (run Tender for stages 4 and 7 on the
+docker bridge and register it with the daemon), `approve <gate>`. Gates stay human.
 
 ## Postgres + the pipeline daemon (docs/ORCHESTRATION.md)
 
@@ -238,7 +256,7 @@ aws ec2 revoke-security-group-ingress --group-id sg-0b3dd42bc8b77c474 \
 
 The token ledger lives on `stage_executions`; `pipeline.py usage` reports it. The
 hourly timer runs the two alarms from the plan (§5): daily-rate
-(`LANTERN_DAILY_SPEND_ALARM_USD`, default 50) and credit-pool drawdown
+(`LANTERN_DAILY_SPEND_ALARM_USD`, default 500) and credit-pool drawdown
 (25/50/75% of `LANTERN_CREDIT_POOL_USD`), deduped through the `events` table and
 delivered to `LANTERN_ALARM_WEBHOOK` (Slack-compatible) or the journal:
 

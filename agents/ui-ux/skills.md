@@ -72,6 +72,34 @@ Stage 1 runs as two executions with different runners (plan:
   conversation column with Lantern/You and the pinned input, and the caps status
   footer. Dropping any of them is not a design choice — it is a different product.
 
+### 3B-html. Convergence without Paper (`01-ui-ux.design`, design mode `html` — D25)
+
+When the run's design mode is `html` (the brief's `- **Design mode:** html`, or
+`pipeline.py set-design-mode <run> html`), this execution runs on the **ec2 runner
+with the `playwright` browser and no Paper tools** — for teams and runs without a
+design workstation. Same inputs (the divergence survivors and their scores), same
+critique loop, same gate; only the medium changes:
+
+- Converge each surviving option into **one self-contained HTML prototype** at
+  `01-ui-ux/prototype/<axis>.html`: inline CSS only, every value traceable to
+  `design/design-system.md` tokens, realistic copy, every state the flow needs
+  (empty / loading / error / permission) on the same page or in clearly labelled
+  panels, ~1440px wide. No external fonts, scripts or images.
+- Open it with `browser_navigate` on its `file://` URL (the run folder's absolute
+  path is in your prompt) and critique from `browser_take_screenshot` exactly as §3C
+  describes — layout pass, style pass, ≤3 iterations, every pass logged in
+  `critique-log.md`. Fix by rewriting the HTML with `write_file`, then reload.
+- The final screenshot of each option IS its handoff PNG: call
+  `browser_take_screenshot` with `filename: "<axis>@2x.png"` and `fullPage: true`.
+  The browser runs at device scale 2 and writes into `01-ui-ux/media/`, so
+  `handoff.json` cites `workflow/runs/<run-id>/01-ui-ux/media/<axis>@2x.png`.
+- `handoff.json` (§3D) carries `"design_mode": "html"`, `"paper_url": null`, and per
+  option `"prototype": "workflow/runs/<run-id>/01-ui-ux/prototype/<axis>.html"`.
+  There is **no `jsx/`** in this mode — the prototype file is the structural handoff
+  the coding agent rebuilds from, and the orchestrator checks it exists and is real.
+- Everything else in §3D and §4 still applies: `options.md`, `flow-spec.md` for the
+  recommended option, the critique log, the design-system version.
+
 ### 3C. Critique loop (≤3 iterations per option) — and prove it ran
 
 `get_screenshot` renders only the app's **active page**: before your first
@@ -120,6 +148,7 @@ of every column and apply the empty-bottom test in the checklist.
 
 ```json
 {
+  "design_mode": "paper",
   "paper_url": "https://…",
   "recommended": "<axis-name>",
   "options": [{"name": "<axis>", "pngs": ["workflow/runs/<run-id>/01-ui-ux/<axis>@2x.png"],
@@ -129,6 +158,10 @@ of every column and apply the empty-bottom test in the checklist.
               "paper_calls_estimate": 0}
 }
 ```
+
+In design mode `html` (§3B-html): `"design_mode": "html"`, `"paper_url": null`, each
+option adds `"prototype": "workflow/runs/<run-id>/01-ui-ux/prototype/<axis>.html"` and
+its PNGs live under `01-ui-ux/media/`.
 
 ### 3E. After the gate
 

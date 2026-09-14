@@ -81,12 +81,36 @@ async def db_connect() -> asyncpg.Connection:
         sys.exit(f"cannot reach Postgres ({e}) — {DB_REQUIRED_HINT}")
 
 
+class ModelStackError(RuntimeError):
+    """The model provider or the model stack is not configured.
+
+    Raised — never `sys.exit`ed — so the daemon fails ONE stage with a readable error
+    instead of dying with a claim held (a SystemExit escapes `except Exception` in the
+    executor slot), and so database-only commands (`init-db`, `status`, `approve`, …)
+    can run on a box that has no Azure credentials at all
+    (bug-20260908-help-crash-without-env). CLI entry points turn it into a clean exit.
+    """
+
+
 def azure_v1_client() -> AsyncOpenAI:
-    """Client for Azure OpenAI's v1 API surface (endpoint ends in /openai/v1)."""
-    endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].rstrip("/")
+    """Client for Azure OpenAI's v1 API surface (endpoint ends in /openai/v1).
+
+    A blank value counts as unset: `.env` files ship the keys with empty values.
+    """
+    endpoint = (os.environ.get("AZURE_OPENAI_ENDPOINT") or "").strip().rstrip("/")
+    key = (os.environ.get("AZURE_OPENAI_API_KEY") or "").strip()
+    if not endpoint or not key:
+        raise ModelStackError(
+            "Azure OpenAI is not configured — set AZURE_OPENAI_ENDPOINT and "
+            "AZURE_OPENAI_API_KEY (tools/azure-runner/README.md 'Environment'); "
+            "database-only commands work without them")
     if not endpoint.endswith("/openai/v1"):
         endpoint += "/openai/v1"
-    return AsyncOpenAI(base_url=endpoint, api_key=os.environ["AZURE_OPENAI_API_KEY"])
+    # Per-request timeout. The SDK default is 600 s; a reasoning deployment at high
+    # effort on a long prompt can legitimately exceed it, and a relay-driven turn
+    # (tools/relay-model) certainly does. The retry policy (D23) wraps this.
+    timeout = float(os.environ.get("LANTERN_MODEL_TIMEOUT_S", "600") or "600")
+    return AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout)
 
 ROLE_FOR_STAGE = {
     "00-story": "story",            # manual whole-stage key (Mission Control consult link)
@@ -141,6 +165,17 @@ def is_qa_video_stage(stage: str) -> bool:
 
 # Stage executions that get the Paper MCP server (desktop-bound — workstation only).
 PAPER_STAGES = {"01-ui-ux", "01-ui-ux.design"}
+
+
+def design_mode() -> str:
+    """How this run's stage 1 converges (D25): 'paper' (Paper MCP on a design
+    workstation) or 'html' (HTML prototypes + browser screenshots on the ec2 runner).
+    Set per execution by the dispatcher/in-process runner from `runs.design_mode`."""
+    return "html" if os.environ.get("LANTERN_DESIGN_MODE", "paper").strip().lower() == "html" else "paper"
+
+
+def html_design_stage(stage: str) -> bool:
+    return stage == "01-ui-ux.design" and design_mode() == "html"
 
 # ── Model stack (D16) ────────────────────────────────────────────────────────
 # Three price/latency classes — the "right model at the right cost" stack of a
@@ -201,8 +236,9 @@ def deployment_for_tier(tier: str) -> str:
                            f"the {t} deployment '{deployment}'")
             return deployment
         t = TIER_FALLBACK.get(t)
-    sys.exit("Missing env var LANTERN_MODEL_REASONING (Azure deployment name, e.g. "
-             "gpt-5.6-sol) — see tools/azure-runner/README.md 'Model stack'")
+    raise ModelStackError(
+        "Missing env var LANTERN_MODEL_REASONING (Azure deployment name, e.g. "
+        "gpt-5.6-sol) — see tools/azure-runner/README.md 'Model stack'")
 
 
 def model_for(role: str, stage: str | None = None) -> str:
@@ -297,6 +333,17 @@ def playwright_mcp_server(run_id: str | None = None, stage: str | None = None) -
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(cfg, f)
         cmd += ["--config", cfg_path, "--output-dir", str(media_dir)]
+    elif run_id and stage and html_design_stage(stage):
+        # D25: screenshots ARE the option PNGs — a 2x device scale on a desktop viewport,
+        # written straight into the stage's media dir so handoff.json can cite them.
+        media_dir = REPO / "workflow" / "runs" / run_id / stage_dir(stage) / "media"
+        media_dir.mkdir(parents=True, exist_ok=True)
+        cfg = {"browser": {"contextOptions": {"viewport": {"width": 1440, "height": 900},
+                                              "deviceScaleFactor": 2}}}
+        fd, cfg_path = tempfile.mkstemp(prefix="lantern-mcp-", suffix=".json")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(cfg, f)
+        cmd += ["--config", cfg_path, "--output-dir", str(media_dir)]
     env = {k: os.environ[k] for k in _MCP_CHILD_ENV_BASE if k in os.environ}
     env.update({k: v for k, v in os.environ.items() if k.startswith("PLAYWRIGHT")})
     return MCPServerStdio(params={"command": cmd[0], "args": cmd[1:], "env": env},
@@ -342,6 +389,23 @@ PHASE_NOTES = {
         "option's JSX with the `collect_jsx` tool — the host writes get_jsx output "
         "verbatim; JSX copied through your own context is rejected. Finish by writing "
         "handoff.json (skills §3D) — the gate payload is built from it."),
+    "01-ui-ux.design:html": (
+        "\n\n# Phase note\nThis execution is the convergence phase WITHOUT Paper (design mode "
+        "`html`, D25): divergence output and scores already exist in the stage directory — "
+        "read them, do not redo them. You have the `playwright` browser (no Paper tools, no "
+        "`collect_jsx`). Converge each surviving option into ONE self-contained, high-fidelity "
+        "HTML prototype at `01-ui-ux/prototype/<axis>.html` (inline CSS grounded in "
+        "design/design-system.md tokens, realistic copy, every state the flow-spec names, "
+        "~1440px wide; no external assets). Open each with `browser_navigate` on its "
+        "file:// URL (the absolute path of the run folder is in the product section below), "
+        "run the critique loop on `browser_take_screenshot` images (skills §3C; layout pass, "
+        "then style pass, ≤3 iterations, logged in critique-log.md), then take the final "
+        "screenshot of each option with `filename` = `<axis>@2x.png` — the browser is "
+        "launched at device scale 2 and writes into `01-ui-ux/media/`, so reference "
+        "`workflow/runs/<run-id>/01-ui-ux/media/<axis>@2x.png` in handoff.json. Write "
+        "handoff.json (skills §3D) with `\"design_mode\": \"html\"`, `\"paper_url\": null` "
+        "and each option's `\"prototype\"` path; there is no jsx/ in this mode — the "
+        "prototype HTML is the structural handoff the coding agent rebuilds from."),
     "00-story.scout": (
         "\n\n# Phase note\nThis execution is the READ-ONLY research phase (D17). Deliver "
         "00-story/research.md + research.json (skills §5): every path you cite must be one "
@@ -502,9 +566,14 @@ def build_instructions(role: str, run_id: str, stage: str) -> str:
     parts.append(qa_target_note(stage))
     # D18: '03-coding.<builder>' inherits the coding phase note — the stage keys the
     # plan invents at run time cannot be listed here.
-    parts.append(PHASE_NOTES.get(stage) or PHASE_NOTES.get(stage_dir(stage), ""))
-    if stage in PAPER_STAGES:
+    note_key = f"{stage}:html" if html_design_stage(stage) else stage    # D25
+    parts.append(PHASE_NOTES.get(note_key) or PHASE_NOTES.get(stage_dir(stage), ""))
+    if stage in PAPER_STAGES and not html_design_stage(stage):
         parts.append(paper_file_note())
+    if html_design_stage(stage):
+        parts.append(f"\n\n# Run folder on disk\nAbsolute path for file:// URLs: "
+                     f"`{(REPO / 'workflow' / 'runs' / run_id).resolve()}` — e.g. "
+                     f"`file://{(REPO / 'workflow' / 'runs' / run_id / '01-ui-ux' / 'prototype').resolve()}/<axis>.html`.")
     for name in ("charter.md", "skills.md", "memory.md"):
         f = REPO / "agents" / role / name
         parts.append(f"\n\n# {role}/{name}\n" + f.read_text(encoding="utf-8"))
@@ -889,9 +958,17 @@ CODING_BRANCH_PREFIXES = tuple(
 CODING_BUNDLE = "branch.bundle"
 
 
-def finalize_coding(run_id: str, stage: str) -> list[str]:
+def finalize_coding(run_id: str, stage: str, execution_key: str | None = None) -> list[str]:
     """Turn the agent's committed branch into the stage's handoff: a git bundle plus
     handoff.json in the stage dir. Returns problems (empty = the handoff is valid).
+
+    An execution EARNS its handoff or leaves none: the stage dir is cleared of the
+    previous execution's handoff.json and bundle before anything is decided. Found
+    2026-09-11 (feat-20260911-tender-onboarding): a rework attempt that added no
+    commits returned early here, the postcondition then validated the attempt-before's
+    handoff — internally consistent, still on disk — and the host republished that
+    bundle. The handoff also records `execution_key`, so check_coding_handoff can tell
+    whose it is.
 
     Runs INSIDE the execution (container or in-process) right after the agent's turn,
     because the checkout is gone the moment the container exits — the bundle is the
@@ -906,6 +983,16 @@ def finalize_coding(run_id: str, stage: str) -> list[str]:
     base = os.environ.get("LANTERN_PRODUCT_BRANCH", "main")
     if not branch:
         return ["LANTERN_CODING_BRANCH is not set — the dispatcher must name the run's branch"]
+    builder = factory.builder_of(stage) or factory.current_builder()
+    # D18: a named builder's handoff lives in its own subdirectory — the integrator (and
+    # a single-builder run) writes the stage dir itself, so 03-coding/ always carries
+    # exactly ONE handoff, the one _publish_branch pushes.
+    rel = f"workflow/runs/{run_id}/{factory.exec_dir(stage_dir(stage), builder)}"
+    sdir = REPO / rel
+    sdir.mkdir(parents=True, exist_ok=True)
+    for stale in ("handoff.json", CODING_BUNDLE):
+        (sdir / stale).unlink(missing_ok=True)      # this execution's or nobody's
+    execution_key = execution_key or os.environ.get("LANTERN_EXECUTION_KEY") or None
     head_name = _git_out(["rev-parse", "--abbrev-ref", "HEAD"], root).stdout.strip()
     if head_name != branch:
         co = _git_out(["checkout", branch], root)
@@ -945,7 +1032,6 @@ def finalize_coding(run_id: str, stage: str) -> list[str]:
     # add commits" would fail an integrator that found nothing to fix — a legitimate
     # outcome. The honest question for it is whether stage 3 produced anything at all,
     # so it is measured from the pre-merge start point the merge recorded.
-    builder = factory.builder_of(stage) or factory.current_builder()
     if builder == factory.INTEGRATOR:
         record = factory.merge_record(run_id)
         if record and str(record.get("start_sha") or ""):
@@ -968,15 +1054,7 @@ def finalize_coding(run_id: str, stage: str) -> list[str]:
             "the coding branch has no commits beyond the base — nothing to hand off. "
             "Implement the task plan and commit (one task, one commit).")
         return problems
-    # D18: a named builder's handoff lives in its own subdirectory — the integrator (and
-    # a single-builder run) writes the stage dir itself, so 03-coding/ always carries
-    # exactly ONE handoff, the one _publish_branch pushes.
-    rel = f"workflow/runs/{run_id}/{factory.exec_dir(stage_dir(stage), builder)}"
-    sdir = REPO / rel
-    sdir.mkdir(parents=True, exist_ok=True)
     bundle = sdir / CODING_BUNDLE
-    if bundle.exists():
-        bundle.unlink()
     b = _git_out(["bundle", "create", str(bundle), f"refs/heads/{branch}", f"^{base_sha}"], root)
     if b.returncode != 0 or not bundle.is_file() or bundle.stat().st_size == 0:
         problems.append(f"git bundle create failed: {b.stderr.strip()[-400:]}")
@@ -988,6 +1066,7 @@ def finalize_coding(run_id: str, stage: str) -> list[str]:
     handoff = {
         "kind": "coding_branch",
         "run_id": run_id,
+        "execution_key": execution_key,   # whose handoff this is (check_coding_handoff)
         "branch": branch,
         "base": base,
         "base_sha": base_sha,
@@ -1010,7 +1089,7 @@ def _has_commit(repo: Path, sha: str) -> bool:
 
 
 def check_coding_handoff(run_id: str, sdir: str, verify_in: Path | None = None,
-                         builder: str | None = None) -> list[str]:
+                         builder: str | None = None, execution_key: str | None = None) -> list[str]:
     """Presence AND validity of the coding handoff (the fabrication lesson, applied to
     code): handoff.json must name a feat/* or fix/* branch with ≥1 commit, the bundle
     must exist, be non-empty, verify against a repo that has the base (when one is
@@ -1035,6 +1114,14 @@ def check_coding_handoff(run_id: str, sdir: str, verify_in: Path | None = None,
     except ValueError as e:
         return [f"{sdir}/handoff.json is not valid JSON: {e}"]
     problems = []
+    if execution_key and str(h.get("execution_key") or "") != execution_key:
+        # In-execution and host re-check know which execution is being judged; a
+        # handoff another execution wrote (or an older harness wrote without a key) is
+        # not evidence that THIS one produced anything (found 2026-09-11, see
+        # finalize_coding). The host's later publish/babysit calls pass no key.
+        return [f"{sdir}/handoff.json was written by execution "
+                f"'{h.get('execution_key') or 'unknown'}', not by {execution_key} — this "
+                "execution handed off nothing (finalize_coding found no new commits or failed)"]
     branch = str(h.get("branch") or "")
     if not branch.startswith(CODING_BRANCH_PREFIXES):
         problems.append(f"handoff branch '{branch}' is outside the pushable "
@@ -1217,6 +1304,103 @@ def _section(text: str, heading: str, limit: int) -> str:
     return body[:limit] + ("…" if len(body) > limit else "")
 
 
+# The stage dir each human gate belongs to: a REJECTED gate sends the run back to the
+# stage that opened it (`reject` marks the run failed there; `retry` re-runs it), which
+# is the same "act on the human's note" situation as a rework.
+GATE_STAGE_DIR = {"story_signoff": "00-story", "ux_signoff": "01-ui-ux",
+                  "plan_signoff": "02-pre-coding", "code_complete": "03-coding",
+                  "staging_deploy": "06-security", "prod_signoff": "07-qa-staging"}
+
+
+def rework_context(run_id: str, stage: str) -> str:
+    """Why this stage is running AGAIN, when the run was sent back to it (D17 rework,
+    or a REJECTED gate of this stage followed by `retry`).
+
+    `pipeline.py rework` records the human's decision in `gate-decisions.md` and the run
+    folder is the only handoff channel (D4) — but a stage's task block used to be the
+    same on a rework as on day one, so the coding agent of the first Tender run re-read
+    the approved review, found "no code change warranted" and handed the unchanged
+    head straight back to the stage that had sent it (2026-09-11). The latest rework
+    decision whose target is THIS stage dir is therefore quoted here, with every later
+    stage's findings files named, and the rule that an execution must actually act.
+    """
+    rd = REPO / "workflow" / "runs" / run_id
+    try:
+        text = (rd / "gate-decisions.md").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    # Sections are `## <gate> — <STATUS>` followed by bullet lines; the last one wins.
+    sections = re.split(r"^##\s+", text, flags=re.M)[1:]
+    if not sections:
+        return ""
+    # The latest ROUTING decision wins; approvals after it mean the run is on its way
+    # back through the stages with an amended input (a re-planned scope, a re-approved
+    # story) — every stage from the rework's target up to and including this one still
+    # owes that decision an answer. Found 2026-09-12: after `rework -> 02-pre-coding` +
+    # plan_signoff the coding agent saw no context and treated the amended plan as an
+    # unapproved scope change.
+    this_dir = stage_dir(stage)
+    last, approvals_since = None, 0
+    for sec in reversed(sections):
+        ap = re.match(r"(\w+)\s+—\s+APPROVED", sec)
+        if ap:
+            if GATE_STAGE_DIR.get(ap.group(1)) == this_dir:
+                return ""      # this stage passed its own gate after the last routing decision
+            approvals_since += 1
+            continue
+        last = sec
+        break
+    if last is None:
+        return ""
+    m = re.match(r"rework\s*->\s*(\S+)\s+—\s+REWORKED", last)
+    if m:
+        target, how = stage_dir(m.group(1)), f"rework to `{stage_dir(m.group(1))}`"
+    else:
+        m = re.match(r"(\w+)\s+—\s+REJECTED", last)
+        if not m:
+            return ""
+        target, how = GATE_STAGE_DIR.get(m.group(1), ""), f"gate `{m.group(1)}` rejected"
+    t_ord, s_ord = target.split("-", 1)[0], this_dir.split("-", 1)[0]
+    if not (t_ord.isdigit() and s_ord.isdigit()) or int(t_ord) > int(s_ord):
+        return ""
+    if target != this_dir and approvals_since == 0:
+        return ""          # an earlier stage is still working the decision; not this one's turn
+    if target != this_dir:
+        how += f" — its gate was re-approved since; the amended {target} output is now your input"
+    by = re.search(r"^- \*\*Decided by:\*\*\s*(.*)$", last, re.M)
+    when = re.search(r"^- \*\*When:\*\*\s*(.*)$", last, re.M)
+    note = re.search(r"^- \*\*Note:\*\*\s*(.*)$", last, re.M | re.S)
+    note_text = (note.group(1).strip() if note else "(no note)")[:1500]
+    this_ordinal = this_dir.split("-", 1)[0]
+    later: list[str] = []
+    if this_ordinal.isdigit():
+        for d in sorted(p for p in rd.iterdir() if p.is_dir()):
+            ordinal = d.name.split("-", 1)[0]
+            if not ordinal.isdigit() or int(ordinal) <= int(this_ordinal):
+                continue
+            for name in ("report.md", "bugs.md", "debt-tickets.md", "validation.md", "validation.json"):
+                if (d / name).is_file():
+                    later.append(f"workflow/runs/{run_id}/{d.name}/{name}")
+    out = [f"\n\n## Why this stage is running AGAIN — {how}, decided by "
+           f"{by.group(1).strip() if by else '?'} ({when.group(1).strip() if when else '?'})\n",
+           f"\n{note_text}\n"]
+    if later:
+        out.append("\nThe stages after this one already ran on the current branch and sent the "
+                   "work back; their findings ARE the task now — read each before you start:\n"
+                   + "\n".join(f"- `read_file('{p}')`" for p in later) + "\n")
+    if this_dir == "03-coding":
+        out.append("\nAct on what the decision names and commit the change (one item, one "
+                   "commit). An execution that changes nothing is a failed execution: the stage "
+                   "that sent this back will only re-run on new commits. Do NOT re-decide the "
+                   "plan or re-open approved findings; do NOT treat an earlier approval, or an "
+                   "earlier scope, as a reason to skip it — the plan in the run folder is the "
+                   "approved one.\n")
+    else:
+        out.append("\nAddress what the decision names in this stage's deliverables; do NOT "
+                   "re-open findings the decision already settled.\n")
+    return "".join(out)
+
+
 def product_task_block(run_id: str, stage: str) -> str:
     """What you are here to do — the brief's intent plus the approved plan's shape.
 
@@ -1267,14 +1451,25 @@ def product_task_block(run_id: str, stage: str) -> str:
         except OSError:
             ptext = ""
         items = [ln.strip() for ln in ptext.splitlines()
-                 if re.match(r"^(#{1,3}\s+\S|\s*(?:[-*]|\d+\.)\s+\S)", ln)]
-        shape, used = [], 0
+                 if re.match(r"^(#{1,4}\s+\S|\s*(?:[-*]|\d+\.)\s+\S)", ln)]
+        # The numbered task headings ARE the work list: they are always shown in full,
+        # before the cap applies to the rest. Found 2026-09-12 on the catalog-orders run:
+        # the plan's contract section alone filled the old 1500-character cap, so the
+        # coding agent's task block ended in "…" before task 1, and a task added by a
+        # re-plan (task 12) never reached it.
+        task_re = re.compile(r"^#{1,4}\s*(?:task\s+)?\d+[.)]?\s", re.I)
+        tasks = [ln for ln in items if task_re.match(ln)]
+        shape, used = list(tasks), 0
         for ln in items:
+            if ln in tasks:
+                continue
             if used + len(ln) > 1500:
                 shape.append("…")
                 break
             shape.append(ln)
             used += len(ln)
+        if tasks:
+            shape = tasks + ["— other headings —"] + [ln for ln in shape if ln not in tasks]
         if shape:
             out.append("\n**The approved plan** (headings and tasks only — the body is in "
                        f"the file):\n" + "\n".join(shape) + "\n"
@@ -1283,6 +1478,7 @@ def product_task_block(run_id: str, stage: str) -> str:
                        "architecture or schema.\n")
     if stage in review.TASK_BLOCK_STAGES:   # D19: a review round or a fix execution
         out.append(review.task_block(run_id, stage))
+    out.append(rework_context(run_id, stage))   # D17: why the run is back at this stage, if it is
     out.append(f"\nThis stage's deliverable is "
                f"`workflow/runs/{run_id}/{factory.exec_dir(stage_dir(stage))}/report.md` "
                "plus at least one `append_memory` call. Both are verified mechanically.\n")
@@ -1624,11 +1820,36 @@ def check_claimed_artifacts(run_id: str, sdir: str) -> list[str]:
     elif vid and not str(vid).startswith(("http://", "https://")):
         if not (REPO / vid).is_file():
             problems.append(f"handoff.json claims video '{vid}' but no such file exists")
+    names = [o.get("name", "?") for o in data.get("options", [])]
+    if sdir != "01-ui-ux":
+        # Everything below judges a DESIGN handoff (options → prototypes or jsx). Any
+        # other stage's handoff.json — the coding stage's `coding_branch` (D14) — stops
+        # at the generic claims above. Found 2026-09-11 on the first html-mode run: the
+        # D25 block ran against 03-coding/handoff.json and failed a green coding stage
+        # for not declaring "design_mode": "html" (test_design_mode.py).
+        return problems
+    if design_mode() == "html":
+        # D25: without Paper the structural handoff is the prototype HTML itself — one
+        # self-contained file per presented option, on disk, not described.
+        for opt in data.get("options", []):
+            rel = opt.get("prototype") or f"workflow/runs/{run_id}/{sdir}/prototype/{opt.get('name', '?')}.html"
+            f = REPO / rel
+            if not f.is_file() or f.stat().st_size < 500:
+                problems.append(f"option '{opt.get('name')}' has no prototype at '{rel}' — in "
+                                "design mode html every presented option is an HTML prototype "
+                                "the coding agent rebuilds from (skills §3B-html)")
+        if data.get("design_mode") != "html":
+            problems.append("handoff.json must declare \"design_mode\": \"html\" — this run "
+                            "converged without Paper and downstream stages must know it")
+        if names and not (REPO / "workflow/runs" / run_id / sdir / "critique-log.md").is_file():
+            problems.append(
+                "critique-log.md missing — per-option layout/style pass findings are the only "
+                "evidence the critique loop actually ran (metrics.critique_iterations is a claim)")
+        return problems
     # Presence AND validity. A validity-only check passes vacuously when the agent
     # simply omits the deliverable — observed 2026-08-26: no jsx/ directory at all.
     jsx_dir = REPO / "workflow/runs" / run_id / sdir / "jsx"
     jsx_files = sorted(jsx_dir.glob("*.jsx")) if jsx_dir.is_dir() else []
-    names = [o.get("name", "?") for o in data.get("options", [])]
     if names and not jsx_files:
         problems.append(
             f"no jsx/ output for {len(names)} presented options — the handoff promises "
@@ -1808,7 +2029,8 @@ async def check_postconditions(conn: asyncpg.Connection, role: str, run_id: str,
         # in-process); the host re-check verifies again against its mirror before
         # anything is pushed (pipeline.publish_coding_branch).
         verify_in = product_root() if (product_root() / ".git").exists() else None
-        missing.extend(check_coding_handoff(run_id, sdir, verify_in, builder))
+        missing.extend(check_coding_handoff(run_id, sdir, verify_in, builder,
+                                            execution_key=execution_key))
     if is_qa_video_stage(stage):
         # Presence AND validity AND recency (the fabrication lesson, applied to video):
         # a real, non-empty .webm recorded by THIS attempt — a stale file from a failed
@@ -1873,7 +2095,7 @@ async def main() -> None:
         if role in BROWSER_ROLES:
             mcp_servers.append(playwright_mcp_server(args.run_id, args.stage))
         paper = None
-        if args.stage in PAPER_STAGES:
+        if args.stage in PAPER_STAGES and not html_design_stage(args.stage):   # D25
             if not await paper_reachable():
                 sys.exit(PAPER_PREFLIGHT_HINT)
             paper = paper_mcp_server()
@@ -1925,17 +2147,23 @@ async def main() -> None:
             results = [await run_turn(kickoff)]
         result = results[-1]
         print(result.final_output)
+        finalize_problems: list[str] = []
         if role == "coding":
             # The checkout dies with this process; bundle the committed branch into
             # the run folder NOW so the host can verify, push and open the PR (D14).
-            for p in finalize_coding(args.run_id, args.stage):
+            # A finalize problem IS a failed stage (an idle execution, a branch with
+            # nothing on it) — printing it alone let the postcondition pass on a
+            # previous execution's handoff (2026-09-11).
+            finalize_problems = finalize_coding(args.run_id, args.stage, execution_key)
+            for p in finalize_problems:
                 print(f"FINALIZE: {p}", file=sys.stderr)
         calls = sum(1 for r in results for i in r.new_items if type(i).__name__ == "ToolCallItem")
         if calls == 0:
             print("\nDIAGNOSIS: the agent ended its turn without calling a single tool — the "
                   "stage stopped before doing any work. Re-run it (see 'How to run your turn' "
                   "in the system prompt).", file=sys.stderr)
-        missing = await check_postconditions(conn, role, args.run_id, args.stage, execution_key)
+        missing = finalize_problems + await check_postconditions(
+            conn, role, args.run_id, args.stage, execution_key)
         if missing:
             raise RuntimeError("postconditions failed: " + "; ".join(missing))
     except BaseException as exc:
@@ -1963,4 +2191,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except ModelStackError as e:   # a clean one-line exit, not a traceback
+        sys.exit(str(e))

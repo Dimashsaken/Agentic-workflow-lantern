@@ -168,7 +168,7 @@ async def main(reset: bool) -> None:
         "background-job). Deciding the gate costs nothing but a look at the walkthrough.\n"
         "2. **feat-20260825-demo-billing** — queued for the design workstation, which is "
         "offline. Starting `pipeline.py daemon --runner workstation` on the design machine "
-        "unblocks it.\n\nToday's spend so far is ~$0.94 of the $50 tripwire.",
+        "unblocks it.\n\nToday's spend so far is ~$0.94 of the $500 tripwire.",
         json.dumps(trace1))
 
     cs2 = "consult:dev-anna:ui-ux:web-demo02"

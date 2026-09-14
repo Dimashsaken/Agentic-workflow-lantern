@@ -53,6 +53,8 @@ LANTERN_SANDBOX_MEMORY=2500m
 LANTERN_SANDBOX_IMAGE=lantern-sandbox
 LANTERN_SANDBOX_DATABASE_URL=       # DB URL as containers see it (default: host.docker.internal)
 LANTERN_PLAYWRIGHT_MCP=             # MCP launch cmd; the sandbox image pins its own
+LANTERN_DESIGN_MODE_DEFAULT=paper   # D25: stage-1 convergence when a brief says nothing — 'html' on a box without Paper
+LANTERN_MODEL_TIMEOUT_S=600         # per-request model timeout (raise for long reasoning turns)
 
 # QA stages (P0.1 — dispatcher host env; containers see uniform QA_BASE_URL/QA_USER/QA_PASS):
 LANTERN_QA_DEV_BASE_URL=            # + LANTERN_QA_DEV_USER / LANTERN_QA_DEV_PASS   (SSM /lantern/qa/dev/*)
@@ -74,7 +76,7 @@ GITHUB_LANTERN_BOT_TOKEN=           # HOST-ONLY: authenticates the mirror fetch.
 LANTERN_PRICE_IN_PER_M=4            # $/1M input tokens — PROVISIONAL until Azure
 LANTERN_PRICE_CACHED_IN_PER_M=1     #   invoice lines confirm the deployment rates
 LANTERN_PRICE_OUT_PER_M=20
-LANTERN_DAILY_SPEND_ALARM_USD=50    # rate tripwire (plan §5 v3; ~10x a normal day)
+LANTERN_DAILY_SPEND_ALARM_USD=500   # rate tripwire (raised from 50 on 2026-09-11: full auto-mode runs on real products)
 LANTERN_CREDIT_POOL_USD=25000       # pool tripwire: alarms at 25/50/75% drawn
 LANTERN_POOL_SPENT_OFFSET_USD=0     # est. credits burned before the ledger existed
 LANTERN_ALARM_WEBHOOK=              # Slack-compatible webhook; unset = journal only
@@ -107,14 +109,18 @@ Postgres (`LANTERN_DATABASE_URL`).
 python pipeline.py init-db                      # once
 python pipeline.py run workflow/briefs/x.md     # the one call
 python pipeline.py daemon                       # service loop (systemd on EC2)
+python pipeline.py step <run-id>                # one stage of one run in the foreground (laptops, debugging)
 python pipeline.py status | approve | reject | retry
 python pipeline.py rework <run-id> --to 03-coding --by <you> --note "…"   # the loop as code (D17)
 python pipeline.py babysit [<run-id>] [--force]   # keep an approved branch mergeable until a human merges (D19)
 python pipeline.py runboard | render-memory     # re-render the Postgres-backed views
 python pipeline.py import-run <run-id>          # backfill a file-era run into the DB
 python pipeline.py set-product | set-coding-mode   # per-run product repo + how stage 3 runs (D14)
+python pipeline.py set-design-mode <run-id> paper|html   # how stage 1 converges: Paper workstation or HTML on ec2 (D25)
 python pipeline.py usage [--days 7]             # token ledger: per-day + per-run est. spend
 python pipeline.py usage-check                  # spend tripwires (hourly systemd timer on EC2)
+python pipeline.py qa-target qa-dev --base-url URL --user U   # write a QA stage's target into .env (password generated, never printed)
+python pipeline.py qa-preflight [--stage qa-dev]  # can the host AND a sandbox reach that target?
 python pipeline.py bug "<text>"|<file> [--source user|posthog|slack] [--shepherd X] [--coding-mode auto]  # a bug run at 01-triage (D20)
 python pipeline.py evals build | run --suite <name> [--live] | report   # the factory's evals (tools/evals/, D20)
 ```

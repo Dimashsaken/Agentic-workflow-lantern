@@ -3,6 +3,7 @@
     python pipeline.py init-db
     python pipeline.py run workflow/briefs/<slug>.md [--run-id feat-YYYYMMDD-<slug>] [--by justin] [--follow]
     python pipeline.py daemon [--runner ec2|workstation]   # claim-execute-advance loop
+    python pipeline.py step <run-id> [--runner …]          # one stage of one run, foreground, then exit
     python pipeline.py status
     python pipeline.py approve <run-id> <gate> --by <name> [--note "..."]
     python pipeline.py reject  <run-id> <gate> --by <name> [--note "..."]
@@ -25,6 +26,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 import subprocess
@@ -40,7 +42,7 @@ from agents import Agent, Runner, set_default_openai_api, set_default_openai_cli
 from agents.extensions.memory import SQLAlchemySession
 
 from orchestrator import (
-    BROWSER_ROLES, CODING_BRANCH_PREFIXES, check_coding_handoff, finalize_coding, max_turns_for, stage_tools, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
+    BROWSER_ROLES, CODING_BRANCH_PREFIXES, ModelStackError, check_coding_handoff, finalize_coding, max_turns_for, stage_tools, PAPER_PREFLIGHT_HINT, PAPER_STAGES, REPO, ROLE_FOR_STAGE,
     USAGE_MARKER, append_file, azure_v1_client, build_consult_instructions,
     build_instructions, check_postconditions, check_stage_inputs, collect_export,
     consult_roles, db_urls,
@@ -144,6 +146,10 @@ GIT_TOKEN = os.environ.get("GITHUB_LANTERN_BOT_TOKEN", "")
 # Auto-coding (D14): identity for the commits the coding agent makes in its sandbox
 # and for the PR the host opens. Defaults are the bot identity D6 specifies.
 CODING_MODES = ("human", "auto")
+# Stage-1 convergence (D25): 'paper' = Paper artboards on a design workstation (D9);
+# 'html' = HTML prototypes + browser screenshots on the ec2 runner — no Paper seat needed.
+DESIGN_MODES = ("paper", "html")
+DESIGN_MODE_DEFAULT = os.environ.get("LANTERN_DESIGN_MODE_DEFAULT", "paper")
 CODING_TIMEOUT_MIN = int(os.environ.get("LANTERN_CODING_TIMEOUT_MIN", "120"))
 GIT_AUTHOR_NAME = os.environ.get("LANTERN_GIT_AUTHOR_NAME", "lantern-bot")
 GIT_AUTHOR_EMAIL = os.environ.get("LANTERN_GIT_AUTHOR_EMAIL", "lantern-bot@users.noreply.github.com")
@@ -171,14 +177,44 @@ def work_branch(run_id: str, working_branch: str = "") -> str:
     return (working_branch or "").strip() or coding_branch(run_id)
 
 
-def parse_brief_coding_mode(text: str) -> str:
-    """`- **Coding mode:** auto|human` in a brief; anything else reads as unset ('')."""
+_BRIEF_HTML_COMMENT = re.compile(r"<!--.*?(?:-->|$)")
+
+
+def brief_field(text: str, label: str) -> str:
+    """The value of `- **<label>:** …` in a brief, or '' when the line is absent or blank.
+
+    An inline `<!-- … -->` annotation is documentation, not value: the brief template
+    ships `- **Coding mode:** human   <!-- human = … -->` on the same line, and the
+    Tender briefs annotate `Product repo:` the same way (found 2026-09-12: the comment
+    rode along into the repo URL and `auto`/`html` read as unset). Backticks and the
+    surrounding whitespace are dropped too.
+    """
     # [ \t]* not \s*: an empty field must not swallow the next line (found 2026-09-08).
-    m = re.search(r"^\s*-\s*\*\*Coding mode:\*\*[ \t]*(.*?)[ \t]*$", text, re.M | re.I)
+    m = re.search(rf"^\s*-\s*\*\*{re.escape(label)}:\*\*[ \t]*(.*?)[ \t]*$",
+                  text, re.M | re.I)
     if not m:
         return ""
-    v = m.group(1).strip().strip("`").lower()
+    return _BRIEF_HTML_COMMENT.sub("", m.group(1)).strip().strip("`").strip()
+
+
+def parse_brief_coding_mode(text: str) -> str:
+    """`- **Coding mode:** auto|human` in a brief; anything else reads as unset ('')."""
+    v = brief_field(text, "Coding mode").lower()
     return v if v in CODING_MODES else ""
+
+
+def parse_brief_design_mode(text: str) -> str:
+    """`- **Design mode:** paper|html` in a brief (D25); anything else reads as unset ('')."""
+    v = brief_field(text, "Design mode").lower()
+    return v if v in DESIGN_MODES else ""
+
+
+def stage_runner_for(stage: str, design_mode: str | None = None) -> str:
+    """Which daemon may claim a stage — the static table, except that stage 1's
+    convergence runs on the ec2 runner when the run's design mode is 'html' (D25)."""
+    if stage == "01-ui-ux.design" and (design_mode or "paper") == "html":
+        return "ec2"
+    return STAGE_RUNNER.get(stage, "ec2")
 
 
 def parse_brief_product(text: str) -> tuple[str, str, str]:
@@ -190,12 +226,10 @@ def parse_brief_product(text: str) -> tuple[str, str, str]:
     read as 'not set' — an unfilled template must not look like a configured target.
     """
     def field(label: str) -> str:
-        # [ \t]* not \s*: `- **Working branch:**` left blank (the template says "leave
-        # blank for a fresh one") must read as '', not as the following line.
-        m = re.search(rf"^\s*-\s*\*\*{label}:\*\*[ \t]*(.*?)[ \t]*$", text, re.M | re.I)
-        if not m:
-            return ""
-        v = m.group(1).strip().strip("`")
+        # brief_field: `- **Working branch:**` left blank (the template says "leave
+        # blank for a fresh one") reads as '', not as the following line, and an
+        # inline <!-- annotation --> is not part of the value.
+        v = brief_field(text, label)
         if v in ("—", "-", "") or v.upper() in ("TBD", "N/A", "NONE"):
             return ""
         if v.startswith("<") and v.endswith(">"):
@@ -264,6 +298,17 @@ async def product_target(conn, run_id: str) -> tuple[str, str]:
     repo = (row and row["product_repo"]) or PRODUCT_REPO_DEFAULT
     branch = (row and row["product_branch"]) or PRODUCT_BRANCH_DEFAULT
     return repo, (branch if repo else "")
+
+
+async def product_design_mode(conn, run_id: str) -> str:
+    """The run's stage-1 convergence mode (D25): 'html' or 'paper' (also the answer for
+    a run created before the column existed, or a database not yet migrated)."""
+    try:
+        row = await conn.fetchrow("SELECT design_mode FROM runs WHERE id = $1", run_id)
+    except asyncpg.PostgresError:      # pre-D25 schema: init-db has not added the column yet
+        return "paper"
+    mode = row.get("design_mode") if row is not None else None
+    return mode if mode in DESIGN_MODES else "paper"
 
 
 async def product_work_branch(conn, run_id: str) -> str:
@@ -605,6 +650,10 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
         for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_WRITABLE", "LANTERN_CODING_BRANCH",
                     "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
             os.environ.pop(var, None)
+        # D25: the orchestrator's prompt builder and artifact checks read the run's
+        # design mode from the environment, like the product facts below.
+        os.environ["LANTERN_DESIGN_MODE"] = await product_design_mode(conn, run_id)
+        paper_needed = stage in PAPER_STAGES and os.environ["LANTERN_DESIGN_MODE"] == "paper"
         if role == "coding" and not repo:
             raise RuntimeError("auto-coding needs a product repo — set one with "
                                f"`pipeline.py set-product {run_id} --repo … --branch …"
@@ -634,7 +683,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
         if problem:
             raise RuntimeError(problem)
         if tool_execution.enabled():
-            if stage in PAPER_STAGES:
+            if paper_needed:
                 raise RuntimeError("isolated tools cannot connect to the desktop Paper service")
             if not repo:
                 raise RuntimeError("isolated tools require a disposable product checkout")
@@ -649,7 +698,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
         if role in BROWSER_ROLES:
             mcp_servers.append(playwright_mcp_server(run_id, stage))
         paper = None
-        if stage in PAPER_STAGES:
+        if paper_needed:
             if not await paper_reachable():
                 raise RuntimeError(PAPER_PREFLIGHT_HINT)
             paper = paper_mcp_server()
@@ -717,7 +766,7 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
             worker = inspection
             worker_token = tool_execution.CURRENT.set(worker)
         # D14: bundle the committed branch into the run folder while the checkout exists.
-        finalize_problems = finalize_coding(run_id, stage) if role == "coding" else []
+        finalize_problems = finalize_coding(run_id, stage, execution_key) if role == "coding" else []
 
         if finalize_problems:
             raise RuntimeError("coding handoff failed: " + "; ".join(finalize_problems))
@@ -764,7 +813,8 @@ async def _run_agent_stage(conn, run_id: str, stage: str, runner: str, execution
                         tool_execution.CURRENT.reset(worker_token)
                     for var in ("LANTERN_PRODUCT_DIR", "LANTERN_PRODUCT_ORIGIN", "LANTERN_PRODUCT_BRANCH",
                                 "LANTERN_PRODUCT_WORK_BRANCH", "LANTERN_PRODUCT_WRITABLE",
-                                "LANTERN_CODING_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER"):
+                                "LANTERN_CODING_BRANCH", "LANTERN_CODING_START_SHA", "LANTERN_BUILDER",
+                                "LANTERN_DESIGN_MODE"):
                         os.environ.pop(var, None)   # cleanup even if ledger or MCP fails
 
     if not maintenance_fix and qa_capture is None:
@@ -841,13 +891,16 @@ async def _run_agent_stage_docker(conn, run_id: str, stage: str, runner: str, ex
     # root-owned mountpoint parents, then drops itself to uid 1000 (the host app
     # user) — so artifacts on the mounted run dir come out host-owned. Root-owned
     # files in the git tree broke cleanup on 2026-08-26.
+    design_mode = await product_design_mode(conn, run_id)   # D25
+    os.environ["LANTERN_DESIGN_MODE"] = design_mode      # the host re-check reads it too
     cmd = ["docker", "run", "--rm", "--name", name,
            "--cpus", SANDBOX_CPUS, "--memory", SANDBOX_MEMORY,
            "--add-host=host.docker.internal:host-gateway",
            "-v", f"{REPO}:/repo-src:ro",
            "-v", f"{run_dir}:/work/lantern/workflow/runs/{run_id}:rw",
            "-e", f"LANTERN_EXECUTION_KEY={execution_key}",
-           "-e", f"LANTERN_DATABASE_URL={sandbox_db_url()}"]
+           "-e", f"LANTERN_DATABASE_URL={sandbox_db_url()}",
+           "-e", f"LANTERN_DESIGN_MODE={design_mode}"]
     for var in SANDBOX_ENV_ALLOWLIST:
         if os.environ.get(var):
             cmd += ["-e", f"{var}={os.environ[var]}"]
@@ -1280,6 +1333,8 @@ async def register_design_artifacts(conn, run_id: str, sdir: str) -> None:
     for opt in data.get("options", []):
         for png in opt.get("pngs", []):
             rows.append((png, "design_png", {"option": opt.get("name"), "status": opt.get("status")}))
+        if opt.get("prototype"):    # D25: html design mode
+            rows.append((opt["prototype"], "design_prototype", {"option": opt.get("name")}))
     for uri, kind, meta in rows:
         await insert_artifact(conn, run_id, sdir, kind, uri, meta)
 
@@ -1338,7 +1393,7 @@ async def render_runboard(conn) -> None:
         elif r["status"] == "executing":
             waiting = "stage in progress"
         elif r["status"] == "running":
-            waiting = f"runner `{STAGE_RUNNER.get(r['current_stage'], '?')}`"
+            waiting = f"runner `{stage_runner_for(r['current_stage'], r.get('design_mode') if hasattr(r, 'get') else None)}`"
         lines.append(
             f"| {r['id']} | {_run_title(r['id'])} | {r['current_stage']} | {r['status']} "
             f"| {waiting} | {r['updated_at']:%Y-%m-%d} |")
@@ -1468,11 +1523,17 @@ async def claim_run(conn, runner: str) -> str | None:
     another process's executing work.
     """
     stages = [s for s, r in STAGE_RUNNER.items() if r == runner]
+    # D25: stage 1's convergence is claimed by the workstation for Paper runs and by
+    # the ec2 runner for html runs — the run's design_mode decides, not the table.
+    if runner == "ec2":
+        stages.append("01-ui-ux.design")
+    design_mode = "html" if runner == "ec2" else "paper"
     async with conn.transaction():
         row = await conn.fetchrow(
             """SELECT id FROM runs r WHERE status = 'running' AND current_stage = ANY($1::text[])
+               AND (current_stage <> '01-ui-ux.design' OR coalesce(design_mode, 'paper') = $2)
                AND NOT EXISTS (SELECT 1 FROM stage_executions e WHERE e.run_id=r.id AND e.stage='03-coding.babysit' AND e.status='running')
-               ORDER BY updated_at FOR UPDATE SKIP LOCKED LIMIT 1""", stages)
+               ORDER BY updated_at FOR UPDATE SKIP LOCKED LIMIT 1""", stages, design_mode)
         if not row:
             return None
         if ownership.enabled():
@@ -1493,7 +1554,8 @@ async def cmd_init_db() -> None:
 
 async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
                   product_repo: str = "", product_branch: str = "",
-                  coding_mode: str = "", working_branch: str = "") -> None:
+                  coding_mode: str = "", working_branch: str = "",
+                  design_mode: str = "") -> None:
     brief = Path(brief_path)
     if not brief.exists():
         sys.exit(f"brief not found: {brief_path}")
@@ -1514,6 +1576,11 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
     if coding_mode == "auto" and not product_repo:
         sys.exit("auto coding mode needs a product repo: add `- **Product repo:**` to the "
                  "brief or pass --product-repo")
+    # Design mode (D25): same precedence; 'paper' unless the brief, the flag or the box
+    # default asks for the Paper-free convergence.
+    design_mode = (design_mode or parse_brief_design_mode(brief_text) or DESIGN_MODE_DEFAULT).lower()
+    if design_mode not in DESIGN_MODES:
+        sys.exit(f"design mode must be one of {', '.join(DESIGN_MODES)} — got '{design_mode}'")
     if product_repo:
         # Fail here, not inside a container three stages later.
         try:
@@ -1536,30 +1603,34 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
     await conn.execute(
         """INSERT INTO runs (id, brief, pipeline_version, current_stage, created_by,
                              product_repo, product_branch, product_working_branch,
-                             coding_mode)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
+                             coding_mode, design_mode)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
         run_id, str(brief), PIPELINE_VERSION, FEATURE_STAGES[0][0], by,
-        product_repo or None, product_branch or None, working_branch or None, coding_mode)
+        product_repo or None, product_branch or None, working_branch or None, coding_mode,
+        design_mode)
     await log_event(conn, run_id, f"human:{by}", "run_created",
                     {"brief": str(brief), "product_repo": product_repo,
                      "product_branch": product_branch,
-                     "product_working_branch": working_branch, "coding_mode": coding_mode})
+                     "product_working_branch": working_branch, "coding_mode": coding_mode,
+                     "design_mode": design_mode})
     await render_runboard(conn)
-    print(f"run {run_id} created (coding mode: {coding_mode}) — the pipeline takes it from here.")
+    print(f"run {run_id} created (coding mode: {coding_mode}, design mode: {design_mode}) — "
+          "the pipeline takes it from here.")
     if product_repo:
         print(f"  work lands on: {work_branch(run_id, working_branch)}")
     if follow:
         local = os.environ.get("LANTERN_RUNNER", "ec2")
         waiting_on = None
         while True:
-            row = await conn.fetchrow("SELECT status, current_stage FROM runs WHERE id = $1", run_id)
+            row = await conn.fetchrow(
+                "SELECT status, current_stage, design_mode FROM runs WHERE id = $1", run_id)
             if row["status"] not in ("running", "executing"):
                 print(f"[{run_id}] status: {row['status']}")
                 break
             if row["status"] == "executing":   # a daemon slot has it — just watch
                 await asyncio.sleep(POLL_SECONDS)
                 continue
-            needed = STAGE_RUNNER[row["current_stage"]]
+            needed = stage_runner_for(row["current_stage"], row["design_mode"])
             if needed != local:
                 if waiting_on != row["current_stage"]:
                     print(f"[{run_id}] {row['current_stage']} needs the '{needed}' runner — waiting for its daemon.")
@@ -1958,6 +2029,26 @@ def _payload_dict(raw) -> dict:
     return dict(raw or {})
 
 
+async def cmd_set_design_mode(run_id: str, mode: str) -> None:
+    """Switch how stage 1 converges (D25) — before the design execution has run. The
+    typical use: a run parked at `01-ui-ux.design` waiting for a workstation nobody has."""
+    if mode not in DESIGN_MODES:
+        sys.exit(f"design mode must be one of {', '.join(DESIGN_MODES)}")
+    conn = await connect()
+    row = await conn.fetchrow("SELECT current_stage, status FROM runs WHERE id = $1", run_id)
+    if not row:
+        sys.exit(f"unknown run {run_id}")
+    if STAGE_INDEX.get(row["current_stage"], 0) > STAGE_INDEX["01-ui-ux.design"]:
+        sys.exit(f"{run_id} is past stage 1 ({row['current_stage']}) — the design mode no longer applies")
+    await conn.execute("UPDATE runs SET design_mode = $1, updated_at = now() WHERE id = $2", mode, run_id)
+    await log_event(conn, run_id, "human:cli", "design_mode_set", {"mode": mode})
+    await render_runboard(conn)
+    await conn.close()
+    print(f"[{run_id}] design mode: {mode}"
+          + (" — the ec2 daemon converges with HTML prototypes; no Paper workstation needed"
+             if mode == "html" else " — the design workstation daemon converges in Paper"))
+
+
 async def cmd_set_coding_mode(run_id: str, mode: str) -> None:
     """Switch stage 3 of an existing run between the developer's own session and the
     fleet's coding agent (D14). Allowed until the run has passed stage 3."""
@@ -2021,6 +2112,83 @@ def load_ssm_qa_env() -> tuple[list[str], list[str]]:
     return loaded, missing
 
 
+def set_qa_target(env_file: Path, role: str, base_url: str, user: str = "",
+                  password: str = "", rotate: bool = False) -> dict:
+    """Write one QA target (`LANTERN_QA_<DEV|STAGING>_{BASE_URL,USER,PASS}`) into an
+    env file, in place, without printing a value.
+
+    Why a command and not three `sed`s in a playbook: the daemon reads `.env` at start
+    and SSM only fills names that are still unset (`load_ssm_qa_env`), so whatever this
+    file says IS the stage-4/7 target. The first Tender run found the box's `.env` still
+    carrying the dogfood-era `qa-dev` user for the Mission Control target; a playbook
+    that only appended missing names would have pointed QA at Tender with a login that
+    cannot exist there. Rules: the URL is always replaced; a new `user` replaces the old
+    one and, because the credential pair belongs to one account on one app, regenerates
+    the password unless one is given; an unchanged user keeps its password unless
+    `rotate`; a missing password is always generated. Other lines, their order and
+    comments are preserved; duplicate definitions collapse to one.
+    Returns {"prefix", "base_url", "user", "password_changed", "created"}.
+    """
+    prefix = QA_TARGET_PREFIX.get(role)
+    if not prefix:
+        raise ValueError(f"role must be one of {', '.join(sorted(QA_TARGET_PREFIX))} — got '{role}'")
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError(f"base url must start with http:// or https:// — got '{base_url}'")
+    names = {"url": prefix + "_BASE_URL", "user": prefix + "_USER", "pass": prefix + "_PASS"}
+    env_file = Path(env_file)
+    created = not env_file.exists()
+    lines = env_file.read_text(encoding="utf-8").splitlines() if not created else []
+
+    def current(name: str) -> str:
+        vals = [ln.split("=", 1)[1] for ln in lines if ln.startswith(name + "=")]
+        return vals[-1].strip() if vals else ""     # dotenv semantics: the last one wins
+
+    old_user, old_pass = current(names["user"]), current(names["pass"])
+    new_user = user.strip() or old_user
+    if password:
+        new_pass, changed = password, password != old_pass
+    elif rotate or not old_pass or (user.strip() and new_user != old_user):
+        new_pass, changed = secrets.token_urlsafe(12), True
+    else:
+        new_pass, changed = old_pass, False
+    wanted = {names["url"]: base_url.strip(), names["user"]: new_user, names["pass"]: new_pass}
+
+    out, done = [], set()
+    for ln in lines:
+        key = ln.split("=", 1)[0] if "=" in ln and not ln.lstrip().startswith("#") else None
+        if key in wanted:
+            if key not in done:                       # first definition wins the slot…
+                out.append(f"{key}={wanted[key]}")
+                done.add(key)
+            continue                                  # …later duplicates are dropped
+        out.append(ln)
+    for key in (names["url"], names["user"], names["pass"]):
+        if key not in done:
+            out.append(f"{key}={wanted[key]}")
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+    env_file.write_text("\n".join(out) + "\n", encoding="utf-8")
+    if created and os.name != "nt":
+        os.chmod(env_file, 0o600)
+    return {"prefix": prefix, "base_url": wanted[names["url"]], "user": new_user,
+            "password_changed": changed, "created": created}
+
+
+def cmd_qa_target(role: str, base_url: str, user: str, password: str, rotate: bool,
+                  env_file: str) -> None:
+    path = Path(env_file) if env_file else Path(__file__).parent / ".env"
+    try:
+        r = set_qa_target(path, role, base_url, user, password, rotate)
+    except ValueError as e:
+        sys.exit(str(e))
+    pw = "regenerated — sign the account up (again) on the target" if r["password_changed"] else "kept"
+    print(f"{role} target → {path}{' (created)' if r['created'] else ''}\n"
+          f"  {r['prefix']}_BASE_URL  {r['base_url']}\n"
+          f"  {r['prefix']}_USER      {r['user'] or '(unset — pass --user)'}\n"
+          f"  {r['prefix']}_PASS      {pw}\n"
+          "The daemon reads this file at start: restart lantern-orchestrator when no stage "
+          "is executing, then `pipeline.py qa-preflight --stage " + role + "` must print READY.")
+
+
 async def cmd_qa_preflight(role: str) -> None:
     """Can a QA stage actually reach its target? Answer before burning a stage run.
 
@@ -2078,27 +2246,38 @@ async def cmd_qa_preflight(role: str) -> None:
         ok = code2.startswith(("2", "3", "401", "403"))
         # Reachability is not readiness: the first daemon-driven stage 4 (2026-09-07)
         # reached the login page and still could not get in. Try the provisioned
-        # login from inside a sandbox, credentials passed as env (never on argv).
-        # Mission-Control-shaped form: POST /login with username/password answers
-        # 303 on success and re-renders (200) on a rejected login.
+        # login from inside a sandbox, credentials passed as env (never on argv), the
+        # way a browser would: qa_login_probe.py fetches the form, carries its hidden
+        # inputs (CSRF), takes the field names from the page and treats a redirect as
+        # accepted (Tender's form is csrf + `email`; Mission Control's is `username`).
+        login_ok = True
         if ok and user and pw:
             probe = ["docker", "run", "--rm", "--add-host=host.docker.internal:host-gateway",
+                     "-v", f"{REPO}:/repo-src:ro",
                      "-e", f"QA_BASE_URL={base}", "-e", f"QA_USER={user}", "-e", f"QA_PASS={pw}",
-                     "--entrypoint", "sh", SANDBOX_IMAGE, "-c",
-                     'curl -sS -o /dev/null -w "%{http_code}" --max-time 30 -X POST '
-                     '--data-urlencode "username=$QA_USER" --data-urlencode "password=$QA_PASS" '
-                     '"$QA_BASE_URL/login"']
-            code3, err3 = curl(probe)
-            accepted = code3.startswith("3")
-            print(f"  login     HTTP {code3 or 'FAILED'}  "
-                  f"({'accepted' if accepted else 'REJECTED — the QA user/password do not log in (or the form is not Mission-Control-shaped)'})"
-                  f"{'  ' + err3 if err3 else ''}")
-            ok = ok and accepted
-        print("\n" + ("READY — a QA stage can reach this target." if ok else
-                      "NOT REACHABLE FROM A SANDBOX. The host result above does not matter: "
-                      "stage 4 runs in a container. A localhost-only, Tailscale-only, or "
-                      "VPC-internal dev environment needs a route into the container network "
-                      "(host.docker.internal, a published port, or a reachable hostname)."))
+                     "--entrypoint", "/opt/lantern/venv/bin/python", SANDBOX_IMAGE,
+                     "/repo-src/tools/azure-runner/qa_login_probe.py"]
+            out3, err3 = curl(probe)
+            try:
+                r3 = json.loads(out3.splitlines()[-1]) if out3 else {}
+            except ValueError:
+                r3 = {}
+            login_ok = bool(r3.get("accepted"))
+            detail = (f"accepted (field `{r3.get('user_field')}`)" if login_ok else
+                      f"REJECTED — {r3.get('error') or 'the QA user/password do not log in with this form'}")
+            print(f"  login     HTTP {r3.get('post') or r3.get('get') or 'FAILED'}  ({detail})"
+                  f"{'  ' + err3 if err3 and not r3 else ''}")
+        if ok and login_ok:
+            print("\nREADY — a QA stage can reach this target and its login opens.")
+        elif ok:
+            print("\nNOT READY — the sandbox reaches the target but the provisioned login is "
+                  f"rejected. Fix the account or the values ({prefix}_USER/_PASS), e.g. "
+                  "`pipeline.py qa-target …` then seed the account on the app, and re-run this.")
+        else:
+            print("\nNOT REACHABLE FROM A SANDBOX. The host result above does not matter: "
+                  "stage 4 runs in a container. A localhost-only, Tailscale-only, or "
+                  "VPC-internal dev environment needs a route into the container network "
+                  "(host.docker.internal, a published port, or a reachable hostname).")
     else:
         print("  sandbox   (skipped — LANTERN_EXECUTOR is not 'docker' here)")
 
@@ -2140,6 +2319,37 @@ async def cmd_rework(run_id: str, to_stage: str, by: str, note: str) -> None:
     await conn.close()
 
 
+async def cmd_step(run_id: str, runner: str) -> None:
+    """Execute a run's CURRENT stage once, in this process, in the foreground — one
+    daemon tick for exactly one run, then exit.
+
+    For a laptop without a daemon, and for watching one stage's output while debugging
+    a prompt or a gate. Same claim, same executor, same gate/advance path as the
+    daemon; the run's runner affinity is respected (a Paper stage still needs the
+    workstation). Nothing loops: run it again for the next stage."""
+    conn = await connect()
+    row = await conn.fetchrow(
+        "SELECT status, current_stage, design_mode FROM runs WHERE id = $1", run_id)
+    if not row:
+        sys.exit(f"unknown run {run_id}")
+    if row["status"] != "running":
+        sys.exit(f"{run_id} is '{row['status']}' at {row['current_stage']} — nothing to execute "
+                 "(waiting_gate → approve/reject; failed → retry; executing → another process has it)")
+    needed = stage_runner_for(row["current_stage"], row["design_mode"])
+    if needed != runner:
+        sys.exit(f"{row['current_stage']} needs the '{needed}' runner, this is '{runner}' "
+                 "(pass --runner, or run the stage where its tools are)")
+    claimed = await conn.execute(
+        "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1 AND status = 'running'", run_id)
+    if claimed.endswith(" 0"):
+        sys.exit(f"{run_id} was claimed by another process")
+    print(f"[{run_id}] executing {row['current_stage']} in the foreground ({runner}, executor={EXECUTOR})")
+    await step_run(conn, run_id, runner)
+    after = await conn.fetchrow("SELECT status, current_stage FROM runs WHERE id = $1", run_id)
+    print(f"[{run_id}] now '{after['status']}' at {after['current_stage']}")
+    await conn.close()
+
+
 async def cmd_retry(run_id: str) -> None:
     conn = await connect()
     async with conn.transaction():
@@ -2148,6 +2358,90 @@ async def cmd_retry(run_id: str) -> None:
         await log_event(conn, run_id, "human:cli", "run_retried", {})
     await render_runboard(conn)
     print(f"[{run_id}] re-queued at its current stage (fresh attempt, same session memory).")
+    await conn.close()
+
+
+REVIEW_SUB_STAGES = ("03-coding.review", "03-coding.fix")
+
+
+def _live_sandboxes(run_id: str) -> list[str]:
+    """Names of this run's sandbox containers that are still up (docker executor only)."""
+    if EXECUTOR != "docker":
+        return []
+    try:
+        r = subprocess.run(["docker", "ps", "--filter", f"name=lantern-{run_id}-", "--format", "{{.Names}}"],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [ln for ln in r.stdout.splitlines() if ln.strip()]
+
+
+async def cmd_review(run_id: str, runner: str) -> None:
+    """Re-run ONLY the review loop (D19) on the run's current published coding handoff,
+    then open or refresh the code_complete gate.
+
+    For a review round the harness lost — an Azure 429 past the retry budget
+    (feat-20260911-tender-catalog-orders, 2026-09-12), a daemon restart mid-round when
+    unattended-upgrades restarted docker (feat-20260911-tender-escalations, same day) —
+    while the coding work is already on the branch: `retry` would re-run coding, which
+    rightly fails as a no-op, and `publish` only re-pushes. Never re-runs coding, never
+    decides the gate; refuses while a sandbox of this run is still alive; records the
+    orphaned execution, the re-run and its verdict like the daemon would.
+    """
+    conn = await connect()
+    row = await conn.fetchrow(
+        "SELECT status, current_stage, coding_mode FROM runs WHERE id = $1", run_id)
+    if not row:
+        sys.exit(f"unknown run {run_id}")
+    if row["current_stage"] != "03-coding" or (row["coding_mode"] or "human") != "auto":
+        sys.exit(f"{run_id} is at {row['current_stage']} in {row['coding_mode'] or 'human'} mode — "
+                 "a review re-run applies only to an auto-coding run at 03-coding")
+    if row["status"] not in ("waiting_gate", "failed", "executing"):
+        sys.exit(f"{run_id} is {row['status']} — a review re-run needs waiting_gate, failed, or "
+                 "an executing run whose sandbox is gone")
+    live = _live_sandboxes(run_id)
+    if live:
+        sys.exit(f"{run_id} still has a live sandbox ({', '.join(live)}) — not orphaned; wait for it")
+    if _read_handoff(run_id, "03-coding") is None:
+        sys.exit(f"{run_id} has no 03-coding/handoff.json — nothing is published to review")
+    orphaned = await conn.fetch(
+        """UPDATE stage_executions SET status = 'failed', finished_at = now(), error = $2
+           WHERE run_id = $1 AND status = 'running' AND stage = ANY($3::text[])
+           RETURNING id, stage""",
+        run_id, "orphaned: no live sandbox — superseded by `pipeline.py review`", list(REVIEW_SUB_STAGES))
+    await conn.execute(
+        "UPDATE runs SET status = 'executing', updated_at = now() WHERE id = $1", run_id)
+    await log_event(conn, run_id, "human:cli", "review_rerun",
+                    {"orphaned": [dict(r) for r in orphaned], "from_status": row["status"]})
+    try:
+        payload = await publish_coding_branch(conn, run_id)        # idempotent push, base payload
+        payload = await review.after_publish(conn, run_id, payload, runner, review.default_deps())
+    except Exception as e:
+        await conn.execute(
+            "UPDATE runs SET status = 'failed', updated_at = now() WHERE id = $1", run_id)
+        await log_event(conn, run_id, "orchestrator", "review_rerun_failed",
+                        {"error": factory.redact(str(e))[:600]})
+        await render_runboard(conn)
+        await conn.close()
+        raise
+    verdict = (payload.get("review") or {}).get("verdict")
+    pending = await conn.fetchrow(
+        "SELECT id, payload FROM approvals WHERE run_id = $1 AND gate = 'code_complete' "
+        "AND status = 'pending'", run_id)
+    if pending:
+        merged = _payload_dict(pending["payload"])
+        merged.update(payload)
+        await conn.execute("UPDATE approvals SET payload = $1, external_ref = $2 WHERE id = $3",
+                           json.dumps(merged), payload.get("pr_url"), pending["id"])
+        await conn.execute(
+            "UPDATE runs SET status = 'waiting_gate', updated_at = now() WHERE id = $1", run_id)
+        await log_event(conn, run_id, "human:cli", "gate_payload_refreshed",
+                        {"gate": "code_complete", "review": verdict})
+        print(f"[{run_id}] review re-run: {verdict} — the pending code_complete payload now carries it")
+    else:
+        await open_gate(conn, run_id, "03-coding", "code_complete", payload, payload.get("pr_url"))
+        print(f"[{run_id}] review re-run: {verdict}")
+    await render_runboard(conn)
     await conn.close()
 
 
@@ -2370,7 +2664,7 @@ async def cmd_usage_check() -> None:
 
     Two ceilings, two alarms — both dedupe through the events table so a crossed
     threshold alerts once (daily for the rate alarm, once ever per pool threshold):
-      1. rate:  today's est spend > LANTERN_DAILY_SPEND_ALARM_USD (default 50 — the
+      1. rate:  today's est spend > LANTERN_DAILY_SPEND_ALARM_USD (default 500 — the
                 plan §5 v3 recalibration: at ~$0.50/stage-execution, the old $1,200
                 was ~2,400 executions of headroom, i.e. decoration, not an alarm)
       2. pool:  cumulative est spend (+ LANTERN_POOL_SPENT_OFFSET_USD for pre-ledger
@@ -2385,7 +2679,7 @@ async def cmd_usage_check() -> None:
         f"""SELECT {USAGE_COLS} FROM stage_executions
             WHERE started_at >= date_trunc('day', now()) GROUP BY model""")
     today_cost = est_cost_rows(today_rows)
-    daily_limit = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "50"))
+    daily_limit = float(os.environ.get("LANTERN_DAILY_SPEND_ALARM_USD", "500"))
     if today_cost > daily_limit:
         already = await conn.fetchval(
             """SELECT 1 FROM events WHERE actor = 'usage-check' AND type = 'spend_alarm'
@@ -2438,6 +2732,30 @@ def cmd_evals(argv: list[str]) -> None:
     evals_cli.main(argv)
 
 
+# Commands that cannot do anything without a model: they execute agent turns.
+# Everything else is database / run-folder / git work and must not need Azure.
+MODEL_CMDS = frozenset({"daemon", "step", "ask", "babysit", "review"})
+
+
+def configure_model_client(required: bool) -> bool:
+    """Point the Agents SDK at Azure OpenAI (Responses API — chat_completions drops
+    image tool outputs, blinding vision critique loops; see orchestrator.py).
+
+    Returns whether a client was configured. With `required` a missing configuration
+    is a one-line exit; without it the command proceeds — a stage that later needs the
+    model fails with the same readable error instead of the process dying.
+    """
+    try:
+        client = azure_v1_client()
+    except ModelStackError as e:
+        if required:
+            sys.exit(str(e))
+        return False
+    set_default_openai_client(client)
+    set_default_openai_api(os.environ.get("LANTERN_OPENAI_API", "responses"))
+    return True
+
+
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in LOCAL_ONLY_CMDS:
         if sys.argv[1] == "repos":
@@ -2448,10 +2766,6 @@ def main() -> None:
             return
         import init_product      # D21: `pipeline.py init-product <path> [--force] [--dry-run]`
         sys.exit(init_product.main(sys.argv[2:]))
-    set_default_openai_client(azure_v1_client())
-    # Responses API — chat_completions drops image tool outputs, blinding vision
-    # critique loops (see orchestrator.py for the full note).
-    set_default_openai_api(os.environ.get("LANTERN_OPENAI_API", "responses"))
     set_tracing_disabled(True)  # no OpenAI-platform key on the Azure credential set
 
     ap = argparse.ArgumentParser(prog="lantern")
@@ -2470,6 +2784,10 @@ def main() -> None:
     p.add_argument("--working-branch", default="",
                    help="existing branch to continue on (feat/*|fix/*|proto/*); default: "
                         "a fresh branch derived from the run id")
+    p.add_argument("--design-mode", choices=DESIGN_MODES, default="",
+                   help="how stage 1 converges (D25): paper = Paper artboards on a design "
+                        "workstation (default); html = HTML prototypes + browser screenshots "
+                        "on the ec2 runner, no Paper seat needed")
     p = sub.add_parser("set-product", help="point an existing run at a product repo/branch")
     p.add_argument("run_id"); p.add_argument("--repo", required=True)
     p.add_argument("--branch", default=PRODUCT_BRANCH_DEFAULT, help="base branch")
@@ -2481,6 +2799,9 @@ def main() -> None:
     p = sub.add_parser("set-coding-mode", help="human (developer's own session) or auto "
                                                "(the coding agent implements the plan → PR)")
     p.add_argument("run_id"); p.add_argument("mode", choices=CODING_MODES)
+    p = sub.add_parser("set-design-mode", help="paper (design workstation) or html (ec2 runner, "
+                                               "HTML prototypes + screenshots) for stage 1 (D25)")
+    p.add_argument("run_id"); p.add_argument("mode", choices=DESIGN_MODES)
     p = sub.add_parser("publish", help="(re)push an auto-coding run's branch and open/refresh "
                                        "its PR from the 03-coding handoff")
     p.add_argument("run_id")
@@ -2490,7 +2811,18 @@ def main() -> None:
     for name in ("approve", "reject"):
         p = sub.add_parser(name); p.add_argument("run_id"); p.add_argument("gate")
         p.add_argument("--by", required=True); p.add_argument("--note", default="")
+    p = sub.add_parser("step", help="execute one run's current stage once, in the foreground, then exit "
+                                    "(a single daemon tick — laptops and debugging)")
+    p.add_argument("run_id")
+    p.add_argument("--runner", choices=["ec2", "workstation"],
+                   default=os.environ.get("LANTERN_RUNNER", "ec2"))
     p = sub.add_parser("retry"); p.add_argument("run_id")
+    p = sub.add_parser("review", help="re-run ONLY the review loop on an auto-coding run's published "
+                                      "handoff (a round lost to a 429 or a daemon restart) and "
+                                      "open/refresh code_complete — never re-runs coding")
+    p.add_argument("run_id")
+    p.add_argument("--runner", choices=["ec2", "workstation"],
+                   default=os.environ.get("LANTERN_RUNNER", "ec2"))
     p = sub.add_parser("rework", help="send a failed/waiting run back to an earlier stage "
                                       "(D17 loop: validation or QA findings → the builder)")
     p.add_argument("run_id"); p.add_argument("--to", required=True, choices=REWORK_TARGETS)
@@ -2498,6 +2830,14 @@ def main() -> None:
     p.add_argument("--note", default="")
     p = sub.add_parser("qa-preflight", help="can a QA stage reach its target, from the sandbox?")
     p.add_argument("--stage", choices=sorted(QA_TARGET_PREFIX), default="qa-dev")
+    p = sub.add_parser("qa-target", help="point a QA stage at a running app: write its URL, user "
+                                         "and password into .env (values never printed)")
+    p.add_argument("stage", choices=sorted(QA_TARGET_PREFIX))
+    p.add_argument("--base-url", required=True, help="as a sandbox container reaches it, e.g. http://172.17.0.1:8000")
+    p.add_argument("--user", default="", help="the QA account's login; a changed user regenerates the password")
+    p.add_argument("--pass", dest="password", default="", help="use this password instead of generating one")
+    p.add_argument("--rotate-pass", action="store_true", help="generate a new password even for an unchanged user")
+    p.add_argument("--env-file", default="", help="default: tools/azure-runner/.env")
     p = sub.add_parser("status"); p.add_argument("--json", action="store_true")
     sub.add_parser("agents")
     p = sub.add_parser("ask"); p.add_argument("role"); p.add_argument("prompt")
@@ -2541,24 +2881,33 @@ def main() -> None:
     p = sub.add_parser("evals", help="the factory measures itself: build | run --suite <name> [--live] | report")
     p.add_argument("evals_args", nargs=argparse.REMAINDER)
     a = ap.parse_args()
+    # The model client is wired AFTER argparse, and only insisted on by the commands
+    # that run an agent turn: `--help`, `init-db`, `status`, `approve`, … must work on a
+    # box with no Azure credentials (bug-20260908-help-crash-without-env).
+    configure_model_client(required=a.cmd in MODEL_CMDS
+                           or (a.cmd in ("run", "bug") and a.follow))
 
     match a.cmd:
         case "init-db": asyncio.run(cmd_init_db())
         case "run":     asyncio.run(cmd_run(a.brief, a.run_id, a.by, a.follow,
                                             a.product_repo, a.product_branch, a.coding_mode,
-                                            a.working_branch))
+                                            a.working_branch, a.design_mode))
         case "set-product":   asyncio.run(cmd_set_product(a.run_id, a.repo, a.branch,
                                                           a.working_branch))
         case "repos":   cmd_repos()
         case "set-coding-mode": asyncio.run(cmd_set_coding_mode(a.run_id, a.mode))
+        case "set-design-mode": asyncio.run(cmd_set_design_mode(a.run_id, a.mode))   # D25
         case "publish":       asyncio.run(cmd_publish(a.run_id))
         case "daemon":  asyncio.run(cmd_daemon(a.runner))
         case "approve": asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, True))
         case "reject":  asyncio.run(cmd_decide(a.run_id, a.gate, a.by, a.note, False))
+        case "step":    asyncio.run(cmd_step(a.run_id, a.runner))
         case "retry":   asyncio.run(cmd_retry(a.run_id))
+        case "review":  asyncio.run(cmd_review(a.run_id, a.runner))
         case "rework":  asyncio.run(cmd_rework(a.run_id, a.to, a.by, a.note))
         case "status":  asyncio.run(cmd_status(a.json))
         case "qa-preflight":  asyncio.run(cmd_qa_preflight(a.stage))
+        case "qa-target":     cmd_qa_target(a.stage, a.base_url, a.user, a.password, a.rotate_pass, a.env_file)
         case "agents":  asyncio.run(cmd_agents())
         case "ask":     asyncio.run(cmd_ask(a.role, a.prompt, a.session, a.by,
                                             a.new, a.interactive, a.no_browser))

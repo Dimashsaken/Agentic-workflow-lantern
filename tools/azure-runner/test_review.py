@@ -261,6 +261,38 @@ class Loop(Base):
         self.assertEqual([e[1] for e in self.events].count("review_round"), 2)
         self.assertEqual(r.read_state(RUN)["phase"], "done")
 
+    def test_second_cycle_after_rework_continues_the_numbering(self):
+        # 2026-09-11, feat-20260911-tender-onboarding: after `rework --to 03-coding` the
+        # previous cycle's round-1/round-2 files stayed in review/, the loop restarted at
+        # 1, the reviewer wrote a valid `"round": 3` approve, and the loop discarded it.
+        write_review(review_doc(1, "request_changes", [finding("R-1")], ["R-1"]))
+        write_review(review_doc(2, "request_changes", [finding("R-6", summary="413 before 403")], ["R-6"]))
+        r.write_state(RUN, phase="done", round=2, max_rounds=2, verdict="request_changes", capped=True,
+                      history=[{"round": 1, "verdict": "request_changes"},
+                               {"round": 2, "verdict": "request_changes"}])
+        blocks = []
+
+        async def execute(conn, run_id, stage, runner):
+            self.calls.append(("execute", stage))
+            st = r.read_state(run_id)
+            blocks.append(r.task_block(run_id, stage))
+            write_review(review_doc(st["round"], "approve"))     # the reviewer numbers as told
+
+        conn, out = self.run_loop(self.deps(execute=execute))
+        rv = out["review"]
+        self.assertEqual([x["round"] for x in rv["rounds"]], [3])
+        self.assertEqual(rv["verdict"], "approve")
+        self.assertFalse(rv["capped"])
+        self.assertIn("3 of 4", blocks[0])                          # this cycle: rounds 3 and 4
+        self.assertIn("Rounds 1, 2 on this branch belong to an EARLIER review cycle", blocks[0])
+        self.assertIn("round-<k>.md", blocks[0])
+        self.assertTrue((r.review_dir(RUN) / "round-3.md").exists())
+        st = r.read_state(RUN)
+        self.assertEqual((st["phase"], st["round"], st["cycle_start"], st["prior_rounds"]),
+                         ("done", 3, 3, [1, 2]))
+        # A first cycle is unchanged: no prior rounds, numbering starts at 1.
+        self.assertEqual(r.prior_rounds("feat-20260908-nothing-here"), [])
+
     def test_never_approve_is_capped_with_the_last_review_attached(self):
         execute, _ = self.scripted(["request_changes", "request_changes", "request_changes"])
         conn, out = self.run_loop(self.deps(execute=execute))
@@ -339,8 +371,11 @@ class Loop(Base):
         self.assertEqual(posted[0][1], "/repos/o/n/pulls/7/reviews")
         self.assertTrue(out["review"]["rounds"][0]["pr_review"]["posted"])
         self.assertIn("https://mc/run/" + RUN, posted[0][2]["body"])
-        # and without a PR (local-path repo) nothing is attempted, nothing fails
+        # and without a PR (local-path repo) nothing is attempted, nothing fails — a fresh
+        # first cycle: the previous loop's round-1.md would otherwise (correctly) make this
+        # cycle start at round 2.
         posted.clear()
+        rmtree(r.review_dir(RUN))
         execute, _ = self.scripted(["approve"])
         conn, out = self.run_loop(self.deps(execute=execute, gh_api=gh_api))
         self.assertEqual(posted, [])

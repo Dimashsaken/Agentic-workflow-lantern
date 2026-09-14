@@ -146,6 +146,19 @@ class Capabilities(unittest.TestCase):
                 policy.write(path)
             policy.write(path, append=True)
 
+    def test_review_rounds_are_write_once(self):
+        # 2026-09-11: a reviewer wrote "round 1" after a rework and overwrote the real round-1.md.
+        review_dir = self.repo / "workflow" / "runs" / RUN / "03-coding" / "review"
+        review_dir.mkdir(parents=True)
+        (review_dir / "round-1.md").write_text("# Verdict: REQUEST CHANGES\n", encoding="utf-8")
+        policy = self.policy("reviewer", "03-coding")
+        with self.assertRaises(PermissionError):
+            policy.write(f"workflow/runs/{RUN}/03-coding/review/round-1.md")
+        policy.write(f"workflow/runs/{RUN}/03-coding/review/round-4.md")          # a new round is fine
+        (review_dir / "review.json").write_text("{}", encoding="utf-8")
+        policy.write(f"workflow/runs/{RUN}/03-coding/review/review.json")          # the envelope is rewritten each round
+        self.assertEqual((review_dir / "round-1.md").read_text(encoding="utf-8"), "# Verdict: REQUEST CHANGES\n")
+
     def test_product_file_scope_is_checked_before_write(self):
         policy = self.policy(product_write=True, product_scope=("src/**",))
         policy.write("product/src/api.py")

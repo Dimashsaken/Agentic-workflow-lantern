@@ -1059,3 +1059,45 @@ command trace and controller receipt mechanics only. Azure, Agents SDK, Codex,
 the fixed lifecycle and human approval/merge/deployment ownership stay unchanged.
 The engineering reports distinguish local fixtures from live GitHub, external
 QA and production acceptance; staging is NO-GO.
+## D25 — 2026-09-11 — Stage 1 converges without Paper when a run says so (`design mode html`)
+
+Found while carrying the first product feature (`feat-20260911-tender-onboarding`,
+the Tender WhatsApp assistant) through the pipeline in a sandbox: **every feature run
+stalls at `01-ui-ux.design` until someone with Paper Desktop runs a workstation
+daemon.** The runboard on 2026-09-11 showed five runs parked there, one since
+2026-08-31. D9's split is right for a team with design seats; it is a silent stop for
+everyone else, and "the whole team can use this" cannot depend on one laptop.
+
+**Decision.** A run carries a `design_mode` (`runs.design_mode`, default `paper`):
+the brief's `- **Design mode:**`, `pipeline.py run --design-mode`, or
+`set-design-mode <run-id>` for a parked run. `paper` is D9 unchanged. `html` makes
+the ec2 runner claim `01-ui-ux.design` (the workstation never sees it) and the same
+`ui-ux` execution converge the divergence survivors into self-contained HTML
+prototypes under `01-ui-ux/prototype/`, critique them from browser screenshots (the
+Playwright MCP it already has, launched at device scale 2 into `01-ui-ux/media/`),
+and hand off those screenshots as the option PNGs. `handoff.json` declares the mode
+and names each prototype; the orchestrator checks the prototypes exist and are real
+(≥500 bytes) instead of the `jsx/` provenance it checks in Paper mode. The gate,
+the critique log and `flow-spec.md` are unchanged. Skills: `agents/ui-ux/skills.md`
+§3B-html.
+
+**Why not make html the default.** Paper artboards are the team's design medium
+and the JSX handoff is a better structural source than a prototype page; the
+constraint layer (`design/`) was written for it. `html` is the mode for runs and
+boxes that have no seat — it must never be the reason a designer stops being in the
+loop. Mission Control's "needs the design workstation" warning is therefore only
+shown for `paper` runs.
+
+**Also in this change (same session, same cause — proving the pipeline in a sandbox
+without credentials):** `pipeline.py` wires the model client after argparse and only
+for commands that run an agent turn, so `--help`, `init-db`, `status`, `approve` work
+on a box without Azure keys (`bug-20260908-help-crash-without-env`; regression test in
+`lantern/regressions/`); a misconfigured model stack raises `ModelStackError` and
+fails the stage instead of `sys.exit`ing the daemon with a claim held;
+`LANTERN_MODEL_TIMEOUT_S` sets the per-request model timeout; Mission Control imports
+on Python 3.11 again (two f-strings needed 3.12); `LANTERN_DAILY_SPEND_ALARM_USD`
+defaults to 500; `pipeline.py step <run-id>` executes one stage of one run in the
+foreground (a single daemon tick, for laptops and debugging); and `tools/relay-model/`
+is a stand-in OpenAI-compatible endpoint that lets a person answer a stage's model
+requests by hand — for debugging a prompt or a gate without spending credits.
+

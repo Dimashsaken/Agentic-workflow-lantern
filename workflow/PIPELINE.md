@@ -47,6 +47,13 @@ Runs as **two executions with different runners** (D9, `docs/plans/ui-ux-agent-p
   artboards grounded in `design/design-system.md`, run the screenshot-critique loop
   (≤3 iterations per option, layout pass separate from style pass per
   `design/critique-checklist.md`), export 2x PNGs, write `handoff.json`.
+  **Design mode `html` (D25):** the same execution runs on the ec2 runner with the
+  browser instead of Paper — the survivors become self-contained HTML prototypes under
+  `01-ui-ux/prototype/`, critiqued from browser screenshots, whose final 2x screenshots
+  are the option PNGs; `handoff.json` says `design_mode: html` and names each prototype
+  instead of `jsx/`. Chosen per run: `- **Design mode:**` in the brief,
+  `pipeline.py run --design-mode`, or `pipeline.py set-design-mode <run-id> html` for a
+  run parked at the design stage without a workstation. Default stays `paper`.
 
 **In:** the feature brief + the design constraint layer (`design/`).
 **Out:** `options.md`, `divergence/`, per-option 2x PNGs, `handoff.json` (feeds the

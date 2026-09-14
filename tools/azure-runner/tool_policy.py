@@ -150,6 +150,15 @@ class StageAccess:
             raise PermissionError("other executions' outputs are read-only")
         if self.role == "post-coding" and name in {"validation.md", "validation.json"}:
             raise PermissionError("validation belongs to the independent validator")
+        if relative[0] == "review" and re.fullmatch(r"round-\d+\.md", name) \
+                and confined(self.repo, parts).exists():
+            # Each review round is evidence a human reads at code_complete. Found
+            # 2026-09-11: after a rework the reviewer wrote its verdict as round 1 and
+            # overwrote the original round-1.md; the loop rejected the round and the
+            # earlier evidence was gone. Rounds are write-once — the round to write is
+            # the one review/state.json names.
+            raise PermissionError(f"{name} already exists — review rounds are write-once; write the "
+                                  "round named in review/state.json")
         _, allowed = ROLE_OUTPUTS[self.role]
         if allowed and not any(PurePosixPath(*relative).match(p) for p in allowed):
             raise PermissionError("artifact belongs to another role")

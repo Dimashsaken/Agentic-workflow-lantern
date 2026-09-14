@@ -384,8 +384,14 @@ def run_short(run_id: str) -> str:
 
 
 def workstation_blocked(run, online: dict) -> bool:
+    # D25: an html-mode run converges on the ec2 runner and never needs the workstation.
+    try:
+        design_mode = run["design_mode"] or "paper"
+    except (KeyError, TypeError):
+        design_mode = "paper"
     return (run["status"] in ("running", "executing")
             and STAGE_RUNNER.get(run["current_stage"]) == "workstation"
+            and design_mode == "paper"
             and not online.get("workstation"))
 
 

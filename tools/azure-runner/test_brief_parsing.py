@@ -51,6 +51,44 @@ class BriefFields(unittest.TestCase):
         text = BRIEF.replace("- **Working branch:**", "- **working branch:**   fix/y   ")
         self.assertEqual(p.parse_brief_product(text)[2], "fix/y")
 
+    def test_inline_html_comment_is_annotation_not_value(self):
+        # Found 2026-09-12 creating feat-20260911-tender-onboarding: the brief annotates
+        # the repo line, and the comment rode along into the URL handed to git.
+        text = BRIEF.replace(
+            "- **Product repo:** C:/repos/product",
+            "- **Product repo:** https://github.com/org/repo   <!-- seed lives here for now -->")
+        self.assertEqual(p.parse_brief_product(text)[0], "https://github.com/org/repo")
+        text = BRIEF.replace("- **Coding mode:** human",
+                             "- **Coding mode:** auto   <!-- human = …; auto = … (D14) -->")
+        self.assertEqual(p.parse_brief_coding_mode(text), "auto")
+        text = BRIEF + "- **Design mode:** html <!-- paper = …; html = … (D25) -->\n"
+        self.assertEqual(p.parse_brief_design_mode(text), "html")
+        # A field that is ONLY an annotation is blank, and an unclosed comment does not
+        # leak its text into the value either.
+        text = BRIEF.replace("- **Working branch:**", "- **Working branch:** <!-- fresh -->")
+        self.assertEqual(p.parse_brief_product(text)[2], "")
+        text = BRIEF.replace("- **Base branch:** main", "- **Base branch:** main <!-- unclosed")
+        self.assertEqual(p.parse_brief_product(text)[1], "main")
+
+    def test_the_shipped_template_reads_as_its_defaults(self):
+        template = Path(__file__).resolve().parents[2] / "workflow" / "briefs" / "_TEMPLATE.md"
+        text = template.read_text(encoding="utf-8")
+        self.assertEqual(p.parse_brief_coding_mode(text), "human")
+        self.assertEqual(p.parse_brief_design_mode(text), "paper")
+        self.assertEqual(p.parse_brief_product(text), ("", "main", ""))
+
+    def test_the_tender_briefs_parse_to_their_targets(self):
+        briefs = Path(__file__).resolve().parents[2] / "workflow" / "briefs"
+        for name in ("tender-onboarding", "tender-catalog-orders", "tender-escalations"):
+            text = (briefs / f"{name}.md").read_text(encoding="utf-8")
+            with self.subTest(brief=name):
+                self.assertEqual(
+                    p.parse_brief_product(text),
+                    ("https://github.com/Dimashsaken/Agentic-workflow-lantern",
+                     "product/tender-whatsapp", ""))
+                self.assertEqual(p.parse_brief_coding_mode(text), "auto")
+                self.assertEqual(p.parse_brief_design_mode(text), "html")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
