@@ -23,6 +23,10 @@ BRIEF=${BRIEF:-workflow/briefs/tender-onboarding.md}
 RUN_ID=${RUN_ID:-feat-20260911-tender-onboarding}
 PRODUCT_URL=https://github.com/Dimashsaken/Agentic-workflow-lantern
 BRIDGE_IP=${LANTERN_BRIDGE_IP:-172.17.0.1}   # what a sandbox container calls the host
+# Host name the served builds put in owner-notification links (TENDER_PUBLIC_BASE_URL). The
+# bridge IP works for the QA sandbox only; a public IP or DNS name works for people too, and
+# the sandbox still reaches it when the port is open on the security group.
+PUBLIC_HOST=${LANTERN_PUBLIC_HOST:-$BRIDGE_IP}
 
 say() { printf '\n== %s\n' "$*"; }
 
@@ -103,7 +107,7 @@ serve() {
   if grep -q '^TENDER_ALLOW_INSECURE_PUBLIC_BASE_URL=' "$dir/.env.example"; then
     printf 'TENDER_PUBLIC_BASE_URL=http://%s:%s
 TENDER_ALLOW_INSECURE_PUBLIC_BASE_URL=true
-' "$BRIDGE_IP" "$port" >> "$envfile"
+' "$PUBLIC_HOST" "$port" >> "$envfile"
   else
     echo "TENDER_PUBLIC_BASE_URL=http://localhost:$port" >> "$envfile"
     echo "   TENDER_PUBLIC_BASE_URL: localhost — the build allows no plain-http origin for other hosts (owner links will not reach the QA sandbox)"
