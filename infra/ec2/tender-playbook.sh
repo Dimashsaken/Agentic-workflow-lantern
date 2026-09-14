@@ -21,7 +21,7 @@ PY=$RUNNER/.venv/bin/python
 #   BRIEF=workflow/briefs/tender-catalog-orders.md RUN_ID=feat-20260911-tender-catalog-orders #     bash infra/ec2/tender-playbook.sh start --by dimash --product-branch feat/20260911-tender-onboarding
 BRIEF=${BRIEF:-workflow/briefs/tender-onboarding.md}
 RUN_ID=${RUN_ID:-feat-20260911-tender-onboarding}
-PRODUCT_URL=https://github.com/Dimashsaken/Agentic-workflow-lantern
+PRODUCT_URL=${LANTERN_PRODUCT_URL:-https://github.com/Dimashsaken/tender-whatsapp}   # Tender's own repo since 2026-09-14
 BRIDGE_IP=${LANTERN_BRIDGE_IP:-172.17.0.1}   # what a sandbox container calls the host
 # Host name the served builds put in owner-notification links (TENDER_PUBLIC_BASE_URL). The
 # bridge IP works for the QA sandbox only; a public IP or DNS name works for people too, and
@@ -81,6 +81,8 @@ serve() {
   say "checking out $branch into $dir"
   if [ ! -d "$dir/.git" ]; then git clone -q "$PRODUCT_URL" "$dir"; fi
   cd "$dir"
+  # The product moved to its own repository on 2026-09-14; an older clone follows.
+  [ "$(git remote get-url origin)" = "$PRODUCT_URL" ] || git remote set-url origin "$PRODUCT_URL"
   git fetch -q origin "$branch"
   git checkout -q -B serve "origin/$branch"
   python3 -m venv .venv >/dev/null && .venv/bin/pip install -q -e '.[dev]'
