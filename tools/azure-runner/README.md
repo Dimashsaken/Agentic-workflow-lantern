@@ -110,26 +110,28 @@ carries the three rates so the ledger prices each tier at its own rate (`.env.ex
 The human-mode coding session (Codex CLI on the developer's laptop) is the builder
 tier too: `codex-config.example.toml` names terra.
 
-**As of 2026-09-14 the resource still has ONE deployment, `gpt-5.6-sol`** — `gpt-5.6-terra`
-and `gpt-5.6-luna` answer `DeploymentNotFound` (probed with `smoke_test.py`), so every
-tier resolves to sol through the fallback chain. Making the split real is a portal
-action, then two env vars:
+**The fleet's resource is `lantern-agentic-foundry`** (endpoint
+`https://lantern-agentic-foundry.openai.azure.com/openai/v1`), which has carried all
+three deployments since 2026-09-14 — `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, all
+Standard; `smoke_test.py` prints the three tiers `[OK]` against it and the laptop `.env`
+is split. The older resource, `lantern-prod-agent`, still exists with only `gpt-5.6-sol`;
+the box and SSM pointed at it until the rollout below, and it can be retired once nothing
+does. Rolling the split out to the box:
 
-1. Microsoft Foundry portal → the `lantern-prod-agent` resource → **Deployments → Deploy
-   base model** → `gpt-5.6-terra` (version 2026-07-09), deployment name exactly
-   `gpt-5.6-terra`, type Global Standard; repeat for `gpt-5.6-luna`. Some quota tiers
-   need a GPT-5.6 quota request first (the portal says so). There is no Azure CLI or
-   management credential on the laptop — this is a browser step.
-2. Verify from any machine with the `.env`:
-   `.venv/Scripts/python smoke_test.py gpt-5.6-terra gpt-5.6-luna` → both `[OK]`.
-3. Set `LANTERN_MODEL_CODING=gpt-5.6-terra` and `LANTERN_MODEL_FAST=gpt-5.6-luna` in the
-   laptop `.env`, in SSM `/lantern/dotenv` and the box `.env`; `smoke_test.py` with no
-   arguments must print the three tiers `[OK]` (it exits 1 otherwise); restart the
-   daemon (`sudo systemctl restart lantern-orchestrator lantern-mission-control` when no
-   stage is executing — `infra/ec2/tender-playbook.sh deploy` does that check).
+1. In SSM `/lantern/dotenv` and the box `.env`, set `AZURE_OPENAI_ENDPOINT` to the new
+   resource's `/openai/v1` endpoint and `AZURE_OPENAI_API_KEY` to its key (the portal
+   shows both next to the project), then `LANTERN_MODEL_CODING=gpt-5.6-terra`,
+   `LANTERN_MODEL_FAST=gpt-5.6-luna` and `LANTERN_PRICE_JSON` (values in `.env.example`).
+   Flipping only the tier vars while the endpoint still names `lantern-prod-agent` fails
+   every coding and QA execution with `DeploymentNotFound`.
+2. `.venv/bin/python smoke_test.py` on the box must print the three tiers `[OK]` (it
+   exits 1 otherwise) before the restart.
+3. Restart the daemon and Mission Control (`sudo systemctl restart lantern-orchestrator
+   lantern-mission-control` when no stage is executing — `infra/ec2/tender-playbook.sh
+   deploy` does that check).
 
-Do **not** set the two vars before the deployments exist: the fallback chain covers
-unset vars, not missing deployments, and every coding and QA execution would fail —
+A tier may only name a deployment the configured resource has: the fallback chain
+covers unset vars, not missing deployments, and a wrong name fails its stages —
 loudly, which is the intended failure mode.
 
 ## The pipeline runner (the "one call")

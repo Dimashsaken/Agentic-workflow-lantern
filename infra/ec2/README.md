@@ -41,8 +41,9 @@ export AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
 export AZURE_OPENAI_API_KEY=<from SSM>
 export AZURE_OPENAI_API_VERSION=<current GA version>
 export LANTERN_MODEL_REASONING=gpt-5.6-sol    # frontier size: planning, review, security, debug… (D26)
-export LANTERN_MODEL_CODING=gpt-5.6-terra     # mid size: the auto-mode builders — once deployed
-export LANTERN_MODEL_FAST=gpt-5.6-luna        # cheap size: QA charter execution, ui-ux divergence — once deployed
+export LANTERN_MODEL_CODING=gpt-5.6-terra     # mid size: the auto-mode builders
+export LANTERN_MODEL_FAST=gpt-5.6-luna        # cheap size: QA charter execution, ui-ux divergence
+# All three are deployed on lantern-agentic-foundry (2026-09-14); the endpoint above must name it.
 ```
 
 Codex CLI on EC2 uses the same key via `tools/azure-runner/codex-config.example.toml`
@@ -296,11 +297,12 @@ entrypoint rsyncs the repo copy into every container. What changes on the box:
 1. Ship the commit (bundle over scp or `git pull --ff-only`), then `pipeline.py init-db`
    (idempotent; only a comment changed in `schema.sql`).
 2. Put the model stack in SSM `/lantern/dotenv` and the box `.env`:
-   `LANTERN_MODEL_REASONING=gpt-5.6-sol`, `_CODING=gpt-5.6-terra`, `_FAST=gpt-5.6-luna`
-   (D26 — the two lower tiers stay on sol, or unset, until those deployments exist: a
-   var naming a missing deployment fails its stages), `LANTERN_EFFORT_*`,
-   `LANTERN_PRICE_JSON` (the three rates, `tools/azure-runner/.env.example`),
-   `LANTERN_FIX_ROUNDS=3`.
+   `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` of `lantern-agentic-foundry` (the
+   resource with all three GPT-5.6 sizes since 2026-09-14 — the box pointed at
+   `lantern-prod-agent`, which has only sol), `LANTERN_MODEL_REASONING=gpt-5.6-sol`,
+   `_CODING=gpt-5.6-terra`, `_FAST=gpt-5.6-luna` (D26; a var naming a deployment the
+   endpoint lacks fails its stages), `LANTERN_EFFORT_*`, `LANTERN_PRICE_JSON` (the three
+   rates, `tools/azure-runner/.env.example`), `LANTERN_FIX_ROUNDS=3`.
 3. **Restart the daemon** — it loads `pipeline.py` at start, and the stage table now
    begins at `00-story.scout` (`PIPELINE_VERSION=3`). Runs already past stage 0 keep
    their `current_stage` keys unchanged; new runs start with the researcher.

@@ -199,12 +199,11 @@ def html_design_stage(stage: str) -> bool:
 # tier (docs/DECISIONS.md D26; the per-execution table is in workflow/PIPELINE.md).
 #
 # Only REASONING is mandatory: CODING falls back to FAST, FAST to REASONING, so a
-# resource with one deployment still routes every stage (2026-09-14: gpt-5.6-sol is
-# still the only deployment on lantern-prod-agent; terra/luna answer
-# DeploymentNotFound until someone creates them in the Foundry portal). Deploy the
-# target models, set the vars, and the tiers separate with no code change. The
-# chain covers UNSET vars only — a var naming a missing deployment fails its
-# stages loudly, by design.
+# resource with one deployment still routes every stage. Since 2026-09-14 the fleet's
+# resource is lantern-agentic-foundry, which carries all three deployments (the older
+# lantern-prod-agent kept only gpt-5.6-sol); the tiers split with no code change. The
+# chain covers UNSET vars only — a var naming a deployment the configured resource
+# lacks fails its stages loudly, by design.
 #
 # LANTERN_TIER_OVERRIDES ("qa-dev=coding,00-story.scout=coding") re-tiers single
 # executions or whole roles for an experiment without a commit: a stage key wins

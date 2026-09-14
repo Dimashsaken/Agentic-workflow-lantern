@@ -124,8 +124,9 @@ control-plane layer C calls the most underserved (C 39:55–40:03). Keep it.
   a Flash-class model on coding — is wired but resolves to `sol` until the deployments
   exist. In an Azure-OpenAI-only fleet (D7) the Flash analogue is `gpt-5.6-luna`.
   **Corrected 2026-09-14 (D26, §6):** sol is the frontier size, terra the mid, luna the
-  cheap one — so sol plans and reviews, terra builds, luna labours. Still one deployment
-  on that date.
+  cheap one — so sol plans and reviews, terra builds, luna labours. One deployment on
+  that resource that morning; by the afternoon a second resource, `lantern-agentic-foundry`,
+  carried all three (§6.1).
 - **Positioning:** README and AGENTS.md present the system as a software factory with
   Lantern as codename. Identifiers stay `lantern`.
 
@@ -153,13 +154,15 @@ Ordered by leverage per rule in §1; each phase names the gaps it closes.
 
 ### Phase A — make the model stack real (this week, human actions)
 
-1. In the Foundry portal create deployments `gpt-5.6-terra` (coding) and `gpt-5.6-luna`
-   (fast) on `lantern-prod-agent` — sol, already deployed, is the reasoning tier (D26
-   corrected the order: sol > terra > luna). Verify: `smoke_test.py gpt-5.6-terra gpt-5.6-luna`.
-2. Set `LANTERN_MODEL_CODING=gpt-5.6-terra`, `LANTERN_MODEL_FAST=gpt-5.6-luna` and
-   `LANTERN_PRICE_JSON` in SSM `/lantern/dotenv` and the box `.env`, **restart the
-   daemon** (it loads `pipeline.py` at start). Phase B landed (D17), so the mid-tier
-   builder is behind the quality gate it needs.
+1. *Done 2026-09-14:* a second resource, `lantern-agentic-foundry`, carries `gpt-5.6-sol`,
+   `gpt-5.6-terra` and `gpt-5.6-luna` (sol is the reasoning tier; D26 corrected the
+   order: sol > terra > luna). Verified: `smoke_test.py` prints all three tiers `[OK]`
+   against it, and the laptop `.env` is split.
+2. Still to do on SSM `/lantern/dotenv` and the box `.env`: `AZURE_OPENAI_ENDPOINT` /
+   `AZURE_OPENAI_API_KEY` of the new resource, then `LANTERN_MODEL_CODING=gpt-5.6-terra`,
+   `LANTERN_MODEL_FAST=gpt-5.6-luna` and `LANTERN_PRICE_JSON`; `smoke_test.py` on the box;
+   **restart the daemon** (it loads `pipeline.py` at start). Phase B landed (D17), so the
+   mid-tier builder is behind the quality gate it needs.
 3. First experiments, each an env var (`LANTERN_TIER_OVERRIDES`), ten runs before and
    after: `qa-dev=coding,qa-staging=coding` (does QA on terra find more of what the
    validator later flags?) and `researcher=coding` (does a mid-tier scout change the
@@ -228,9 +231,9 @@ identity provisioning in the sandbox layer; warm sandbox pools when the t3.large
 
 ## 5. Decisions needed
 
-1. **Azure deployments** — who creates `gpt-5.6-terra` and `gpt-5.6-luna`, and when. Nothing in
-   Phase A works without them. Still open on 2026-09-14: no Azure CLI or management
-   credential on the laptop, so it is a portal click by whoever owns the subscription.
+1. **Azure deployments** — *done 2026-09-14 by dimash:* `lantern-agentic-foundry` carries all
+   three GPT-5.6 sizes and the laptop runs against it. What remains is the box/SSM switch
+   (Phase A step 2) and retiring `lantern-prod-agent`, which still bills a lone sol.
 2. **Cheap coding tier timing** — *decided 2026-09-14 (D26):* Phase B landed with D17, so
    the builder moves to the mid size (terra) the day it is deployed; the cheapest size
    (luna) builds nothing — B's warning about a cheap builder without code gates
@@ -274,8 +277,9 @@ latency-sensitive workloads".
 OpenAI's own price list (developers.openai.com/api/docs/pricing) carries the same
 numbers; requests above 272 K input tokens bill at roughly double. So the order is
 **sol > terra > luna** — the message that started this had terra as the strongest; the
-mapping follows its intent with the verified order. On 2026-09-14 `lantern-prod-agent`
-still has only `gpt-5.6-sol` deployed (terra / luna: `DeploymentNotFound`).
+mapping follows its intent with the verified order. On 2026-09-14 the deployments moved
+to a second resource, `lantern-agentic-foundry`, which carries all three; `lantern-prod-agent`
+keeps only `gpt-5.6-sol`.
 
 ### 6.2 What each system publishes
 

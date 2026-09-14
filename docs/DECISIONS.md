@@ -1169,7 +1169,12 @@ resource `lantern-prod-agent`) carries: sol, terra, luna. The survey behind this
   action (recipe in `tools/azure-runner/README.md` "Model stack"). Until then
   `LANTERN_MODEL_CODING` / `_FAST` stay on sol; setting them to the target names before
   the deployments exist fails every stage they route, on purpose — the fallback chain
-  covers unset vars, not missing deployments.
+  covers unset vars, not missing deployments. **Same day, later:** dimash created a
+  second resource, `lantern-agentic-foundry`, with all three deployments (Standard); the
+  laptop `.env` now points at it with the tiers split and `smoke_test.py` shows `[OK]`
+  for all three. What remains is the rollout to SSM and the box — endpoint, key, the two
+  tier vars, the prices — in the README recipe; `lantern-prod-agent` keeps a lone sol
+  until it is retired.
 - **Not changed:** the pipeline shape, the gates, D7 (Azure OpenAI only), the tier
   policy and its tests, the human-mode coding session (Codex CLI on the developer's
   laptop; the example config now names terra as its model and notes the Codex-on-Azure
