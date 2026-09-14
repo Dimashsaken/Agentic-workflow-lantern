@@ -172,5 +172,20 @@ class TierOverrides(unittest.TestCase):
             self.assertEqual(o.model_settings_for("qa-dev", "04-qa-dev").reasoning.effort, "high")
 
 
+class SandboxEnv(unittest.TestCase):
+    """Under the docker executor the routing decision runs INSIDE the sandbox
+    (orchestrator.py picks the model there), so every variable tier_for / effort_for /
+    deployment_for_tier read must cross pipeline.SANDBOX_ENV_ALLOWLIST — otherwise
+    Mission Control, reading the host env, shows a routing the containers do not apply."""
+
+    def test_every_routing_var_crosses_into_sandboxes(self):
+        import pipeline
+        needed = ({f"LANTERN_MODEL_{t.upper()}" for t in o.MODEL_TIERS}
+                  | {f"LANTERN_EFFORT_{t.upper()}" for t in o.MODEL_TIERS}
+                  | {"LANTERN_TIER_OVERRIDES"})
+        missing = needed - set(pipeline.SANDBOX_ENV_ALLOWLIST)
+        self.assertFalse(missing, f"routing vars a sandbox would never see: {sorted(missing)}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
