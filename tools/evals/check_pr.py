@@ -179,8 +179,11 @@ def evaluate(changed_paths: list[str], touched: list[str], report_changed: bool,
 # ── git plumbing ─────────────────────────────────────────────────────────────
 
 def _git(args: list[str], root: Path) -> subprocess.CompletedProcess:
+    # encoding pinned: on Windows text=True decodes with the console code page, which
+    # turned every "—" in a git-shown blob into mojibake and made the checker report
+    # all 23 watched units as touched by any edit to orchestrator.py (2026-09-14).
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
-                          errors="replace", timeout=120)
+                          encoding="utf-8", errors="replace", timeout=120)
 
 
 def resolve_base(root: Path, base: str | None) -> str | None:
