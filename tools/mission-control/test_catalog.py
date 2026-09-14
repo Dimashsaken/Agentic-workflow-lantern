@@ -98,6 +98,10 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("invalid", tiers["coding"]["effort_note"])
         self.assertEqual(tiers["reasoning"]["effort"], "high")
         self.assertTrue(tiers["reasoning"]["effort_default"])
+        # D26: what the catalog advertises as the target deployment per tier
+        self.assertEqual({t["tier"]: t["intended"] for t in ms["tiers"]},
+                         {"reasoning": "gpt-5.6-sol", "coding": "gpt-5.6-terra", "fast": "gpt-5.6-luna"})
+        self.assertIn("LANTERN_TIER_OVERRIDES", [k["var"] for k in ms["knobs"]])
         self.assertTrue(ms["endpoint"])
         knobs = {k["var"]: k for k in ms["knobs"]}
         self.assertEqual(knobs["LANTERN_FIX_ROUNDS"]["value"], "2")

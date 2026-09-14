@@ -1101,3 +1101,76 @@ foreground (a single daemon tick, for laptops and debugging); and `tools/relay-m
 is a stand-in OpenAI-compatible endpoint that lets a person answer a stage's model
 requests by hand — for debugging a prompt or a gate without spending credits.
 
+## D26 — 2026-09-14 — Which GPT-5.6 size runs which phase: sol plans, terra builds, luna labours
+
+Dimash asked for the split the other software factories use — the state-of-the-art
+model only for planning, a less expensive one for the builders, the cheapest for
+labour — and named the three deployments the Azure project (`agent-production`,
+resource `lantern-prod-agent`) carries: sol, terra, luna. The survey behind this is
+`docs/plans/software-factory-alignment.md` §6. What it settled:
+
+- **The names are OpenAI's sizes, not ours, and the order is sol > terra > luna.** The
+  Foundry catalog lists `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` (all version
+  2026-07-09; 1.05 M context, 128 K output). Microsoft's launch post: Sol "delivers the
+  most advanced reasoning capabilities yet, supporting extended reasoning, agentic
+  workflows, and code-focused scenarios"; Terra "a balanced model for everyday work,
+  delivering performance competitive with GPT-5.5 at a lower cost"; Luna "the fastest
+  and most affordable model in the family". Rates per 1 M tokens, Azure Standard Global
+  (in / cached / out): Sol 5 / 0.50 / 30, promo 4 / 0.40 / 20 from 2026-09-01 to
+  2026-11-30; Terra 2 / 0.20 / 12; Luna 0.20 / 0.02 / 1.20 — the planner costs 2.5× the
+  builder and 25× the labour tier. The request as phrased had terra as the strongest;
+  the mapping below follows its intent (the SOTA plans) with the verified order, which
+  makes the one deployment that already exists — sol — the planner.
+- **Mapping:** `reasoning` → `gpt-5.6-sol`, `coding` → `gpt-5.6-terra`, `fast` →
+  `gpt-5.6-luna`. The tier policy in `tier_for` does not change: sol runs the
+  researcher, the story writer, ui-ux design, pre-coding, the review bot, post-coding,
+  the validator, security and the debug role; terra runs every coding execution
+  (builders, integrator, review fixes); luna runs QA charter execution and ui-ux
+  divergence. The execution-by-execution table is in `workflow/PIPELINE.md` ("Which
+  model runs which execution"); the D16 note and plan Phase A step 3, which had terra
+  as the reasoning tier and luna as the coding tier, were written before the sizes were
+  known and are superseded.
+- **Why this and not what the survey also offered.** (1) Planning on the frontier tier is
+  unanimous — Claude Code `opusplan`, Cline / Roo / Kilo per-mode models, Devin Fusion's
+  lead agent, OpenHands profiles, Aider's architect, Codex's `plan_mode_reasoning_effort`.
+  (2) Building on the mid tier is the majority — Kilo Auto puts Code / Debug on Sonnet,
+  Devin's sidekick "implements changes, runs tests", OpenHands switches to a cheaper
+  model "for the implementation loop", OpenAI recommends Terra for Codex subagents; the
+  dissent (Symphony and the Copilot coding agent run one strong model end to end) is
+  answered by D17: a cheaper builder is only safe behind a quality gate as code, which
+  stage 3 has. No factory in the survey builds on its *smallest* model, so luna builds
+  nothing. (3) Review stays on the frontier — Factory's `review_depth: deep` default is
+  `gpt-5.6-sol` at `high`, Amp's oracle and Devin's lead keep "the final review"; a cheap
+  reviewer approving cheap code is the failure mode to avoid. (4) QA execution on luna
+  is the one place the survey leans the other way (Devin and OpenHands keep test loops
+  on the mid tier), so it is experiment 1: `LANTERN_TIER_OVERRIDES=qa-dev=coding,
+  qa-staging=coding`, ten runs, compare stage-4 bug counts with the validator's
+  `missing` / `off-spec` verdicts. (5) The researcher stays on sol although explorers
+  run cheaper elsewhere (Codex `explorer`, Factory `explorer`, Cursor's explore
+  subagent): its 2.5-minute execution is a rounding error next to coding's 3.7 M input
+  tokens on the first Tender run, and the plan is built on it — `researcher=coding` is
+  experiment 2. (6) Routing is by stage, never by a per-prompt classifier: Cognition's
+  argument that coding difficulty "reveals itself late", and the fact that RouteLLM /
+  FrugalGPT numbers come from chat benchmarks.
+- **What changed in code.** `LANTERN_TIER_OVERRIDES` (`<stage key | role>=<tier>`, stage
+  key wins, bad entries noted once and skipped) so an experiment is an env var, not a
+  commit — Mission Control's catalog and lanes read the same `tier_for`, so the override
+  shows wherever a tier is shown. `smoke_test.py` prints which tier each deployment
+  serves and exits 1 on a failed probe, so the box deploy can use it as a preflight.
+  The catalog's intended deployments and tier purposes follow the mapping;
+  `LANTERN_PRICE_JSON` is documented with the three rates so the ledger prices each tier
+  at its own rate (`est_cost_usd` already read it). Reasoning effort stays high / high /
+  medium (token-max, D16); `xhigh` on the reasoning tier is a knob, not the default,
+  until a run shows the planner short of it.
+- **Fact that bounds this decision:** on 2026-09-14 the resource still has exactly one
+  deployment, `gpt-5.6-sol`; `gpt-5.6-terra` and `gpt-5.6-luna` return
+  `DeploymentNotFound` (probed against `/openai/v1/responses`), and there is no Azure
+  CLI or management credential on the laptop, so creating them is a Foundry-portal
+  action (recipe in `tools/azure-runner/README.md` "Model stack"). Until then
+  `LANTERN_MODEL_CODING` / `_FAST` stay on sol; setting them to the target names before
+  the deployments exist fails every stage they route, on purpose — the fallback chain
+  covers unset vars, not missing deployments.
+- **Not changed:** the pipeline shape, the gates, D7 (Azure OpenAI only), the tier
+  policy and its tests, the human-mode coding session (Codex CLI on the developer's
+  laptop; the example config now names terra as its model and notes the Codex-on-Azure
+  400 for `gpt-5.6-*` names recorded in `docs/plans/symphony-alignment.md`).

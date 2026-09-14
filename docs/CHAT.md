@@ -140,7 +140,7 @@ surface (or the CLI) reuses sessions, ledger, and agent construction without
 touching the web layer.
 
 Model calls use the same Azure OpenAI client, deployment routing
-(`LANTERN_MODEL_REASONING`/`_FAST`), and `set_default_openai_api` setup as the
+(`LANTERN_MODEL_<TIER>`, D16/D26), and `set_default_openai_api` setup as the
 orchestrator. If the Azure env vars are absent, chat pages render with an honest
 "model backend not configured" notice instead of crashing the board.
 

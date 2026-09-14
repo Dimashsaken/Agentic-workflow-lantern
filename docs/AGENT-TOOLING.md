@@ -9,8 +9,9 @@ itself** (branches, prior sessions, project state) at the start of every session
 ## 1. The runtime stack — Azure OpenAI only (D7)
 
 An agent is two separable things: the **brain** (the LLM — one of the org's Azure
-OpenAI deployments, `sol`/`terra`) and the **harness** (the loop that gives the brain
-tools, MCP connections, file access, and enforces our conventions).
+OpenAI GPT-5.6 deployments: `gpt-5.6-sol`, `-terra`, `-luna`) and the **harness** (the
+loop that gives the brain tools, MCP connections, file access, and enforces our
+conventions).
 
 By decision D7 the brain side is fixed: **every agent runs on Azure OpenAI** (the
 startup credits). That rules out Claude Code as a harness (it runs Claude models
@@ -21,9 +22,11 @@ only), so the fleet uses the OpenAI-native harnesses:
 | **OpenAI Agents SDK** — `tools/azure-runner/orchestrator.py` | All pipeline stages except coding; the debug lifecycle | One stage per invocation; postconditions enforced in code; MCP + function tools |
 | **Codex CLI** (Azure provider config) | Stage 3 coding on developer laptops; `codex exec` for headless repo tasks on EC2 | Reads `AGENTS.md` natively — same contract file as the SDK stages load |
 
-Deployment routing lives in the orchestrator: `LANTERN_MODEL_REASONING` (the stronger
-deployment) for judgement-heavy roles, `LANTERN_MODEL_FAST` for volume QA execution.
-Swapping which of `sol`/`terra` fills which slot is a one-env-var change.
+Deployment routing lives in the orchestrator (D16/D26): `LANTERN_MODEL_REASONING` (sol,
+the frontier size) for judgement-heavy roles, `LANTERN_MODEL_CODING` (terra, the mid
+size) for the auto-mode builders, `LANTERN_MODEL_FAST` (luna, the cheap size) for volume
+QA execution and ui-ux divergence. Which deployment fills which slot is a one-env-var
+change; `LANTERN_TIER_OVERRIDES` re-tiers a single execution or role for an experiment.
 
 `AGENTS.md` at the repo root is the canonical contract (the OpenAI-ecosystem
 convention); `CLAUDE.md` is just a pointer to it. The `.claude/agents/` wrappers are

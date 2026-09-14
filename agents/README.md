@@ -31,7 +31,8 @@ invariant is what made the D7 provider pivot cheap).
 1. Copy `agents/_template/` to `agents/<new-role>/` and fill in all three files.
 2. Register the role in the orchestrator's stage map
    (`tools/azure-runner/orchestrator.py`: `ROLE_FOR_STAGE`, plus `BROWSER_ROLES` and
-   the model tier — `FAST_ROLES` / `CODING_ROLES`, default `reasoning` — if applicable).
+   the model tier — `FAST_ROLES` / `CODING_ROLES`, default `reasoning`; to try a role
+   on another tier first, `LANTERN_TIER_OVERRIDES=<role>=<tier>` needs no commit, D26).
 3. Update the roster above, the pipeline table in `AGENTS.md`, and
    `workflow/PIPELINE.md` if the role is a pipeline stage — same commit.
    (`.claude/agents/` wrappers are dormant — only touch them if reviving the Claude

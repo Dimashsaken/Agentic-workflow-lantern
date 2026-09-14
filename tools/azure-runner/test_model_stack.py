@@ -120,5 +120,57 @@ class ReasoningEffort(unittest.TestCase):
             self.assertIsNone(o.model_settings_for("security", purpose="chat").reasoning)
 
 
+class DocumentedStack(unittest.TestCase):
+    """D26: sol plans and reviews, terra builds, luna does the volume work — the README's
+    mapping, checked against every registered execution so a stage cannot drift."""
+
+    def test_sol_terra_luna_land_where_the_decision_says(self):
+        with env(LANTERN_MODEL_REASONING="gpt-5.6-sol", LANTERN_MODEL_CODING="gpt-5.6-terra",
+                 LANTERN_MODEL_FAST="gpt-5.6-luna"):
+            judgement = {s for s, r in o.ROLE_FOR_STAGE.items() if o.tier_for(r, s) == "reasoning"}
+            for stage in ("00-story.scout", "00-story.write", "01-ui-ux.design", "02-pre-coding",
+                          "03-coding.review", "05-post-coding", "05-post-coding.validate",
+                          "06-security", "01-triage", "03-root-cause"):
+                self.assertIn(stage, judgement)
+                self.assertEqual(o.model_for(o.ROLE_FOR_STAGE[stage], stage), "gpt-5.6-sol", stage)
+            for stage in ("03-coding", "03-coding.fix", "03-coding.regate", "03-coding.api"):
+                self.assertEqual(o.model_for(o.ROLE_FOR_STAGE.get(stage, "coding"), stage),
+                                 "gpt-5.6-terra", stage)
+            for stage in ("04-qa-dev", "07-qa-staging", "05-regression", "01-ui-ux.diverge"):
+                self.assertEqual(o.model_for(o.ROLE_FOR_STAGE[stage], stage), "gpt-5.6-luna", stage)
+
+
+class TierOverrides(unittest.TestCase):
+    def setUp(self):
+        o._ROUTING_NOTES.clear()
+
+    def test_stage_key_beats_role_beats_policy(self):
+        with env(LANTERN_TIER_OVERRIDES="00-story.scout=coding, qa-dev=coding ,03-coding.review=fast"):
+            self.assertEqual(o.tier_for("researcher", "00-story.scout"), "coding")
+            self.assertEqual(o.tier_for("researcher"), "reasoning")          # the role itself: policy
+            self.assertEqual(o.tier_for("qa-dev", "04-qa-dev"), "coding")     # role-wide
+            self.assertEqual(o.tier_for("qa-dev", "05-regression"), "coding")
+            self.assertEqual(o.tier_for("reviewer", "03-coding.review"), "fast")
+            self.assertEqual(o.tier_for("coding", "03-coding.api"), "coding")  # untouched: policy
+            self.assertEqual(o.tier_for("security", "06-security"), "reasoning")
+
+    def test_bad_entries_are_ignored_not_fatal(self):
+        with env(LANTERN_TIER_OVERRIDES="qa-dev=cheap,=fast,nonsense,security=FAST"):
+            self.assertEqual(o.tier_for("qa-dev", "04-qa-dev"), "fast")       # unknown tier → policy
+            self.assertEqual(o.tier_for("security", "06-security"), "fast")   # tier names are case-free
+        self.assertEqual(len(o._ROUTING_NOTES), 3)
+
+    def test_unset_means_no_overrides(self):
+        with env():
+            self.assertEqual(o.tier_overrides(), {})
+            self.assertEqual(o.tier_for("qa-dev", "04-qa-dev"), "fast")
+
+    def test_override_reaches_the_deployment_and_the_effort(self):
+        with env(LANTERN_MODEL_REASONING="sol", LANTERN_MODEL_CODING="terra", LANTERN_MODEL_FAST="luna",
+                 LANTERN_TIER_OVERRIDES="qa-dev=coding"):
+            self.assertEqual(o.model_for("qa-dev", "04-qa-dev"), "terra")
+            self.assertEqual(o.model_settings_for("qa-dev", "04-qa-dev").reasoning.effort, "high")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

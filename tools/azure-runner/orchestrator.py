@@ -177,20 +177,39 @@ def design_mode() -> str:
 def html_design_stage(stage: str) -> bool:
     return stage == "01-ui-ux.design" and design_mode() == "html"
 
-# ── Model stack (D16) ────────────────────────────────────────────────────────
+# ── Model stack (D16, D26) ───────────────────────────────────────────────────
 # Three price/latency classes — the "right model at the right cost" stack of a
-# software factory. Deployment names are org-internal Azure labels; the code reasons
-# about TIERS. Env: LANTERN_MODEL_REASONING / _CODING / _FAST (deployment names) and
+# software factory. The code reasons about TIERS; each tier names one Azure
+# deployment. Env: LANTERN_MODEL_REASONING / _CODING / _FAST (deployment names) and
 # LANTERN_EFFORT_REASONING / _CODING / _FAST (reasoning effort per tier).
 #
-#   reasoning — research, scoping, planning, review, security, debug, ui-ux design
-#   coding    — stage-3 auto mode: the builder that executes an approved plan
-#   fast      — volume execution: QA charter runs, ui-ux divergence
+#   reasoning — judgement: research, scoping, planning, review, validation, security,
+#               debug, ui-ux design → the frontier size, gpt-5.6-sol
+#   coding    — building: stage-3 auto mode — builders, integrator, review fixes
+#               → the mid size, gpt-5.6-terra
+#   fast      — labour: volume execution — QA charter runs, ui-ux divergence
+#               → the cheap size, gpt-5.6-luna
+#
+# gpt-5.6-sol / -terra / -luna are OpenAI's three GPT-5.6 sizes as Azure sells them
+# (Foundry catalog, version 2026-07-09), not org labels: Sol "the most advanced
+# reasoning", Terra "balanced … at a lower cost", Luna "the fastest and most
+# affordable". Azure Standard Global rates per 1M tokens on 2026-09-14 (in/out): Sol
+# 5/30 — promo 4/20 through 2026-11-30 —, Terra 2/12, Luna 0.20/1.20. The planner
+# costs 2.5× the builder and 25× the labour tier: that ratio is why routing is by
+# tier (docs/DECISIONS.md D26; the per-execution table is in workflow/PIPELINE.md).
 #
 # Only REASONING is mandatory: CODING falls back to FAST, FAST to REASONING, so a
-# resource with one deployment (2026-09-08: gpt-5.6-sol is the only deployment on
-# lantern-prod-agent; terra/luna 404) still routes every stage. Deploy the target
-# models, set the vars, and the tiers separate with no code change.
+# resource with one deployment still routes every stage (2026-09-14: gpt-5.6-sol is
+# still the only deployment on lantern-prod-agent; terra/luna answer
+# DeploymentNotFound until someone creates them in the Foundry portal). Deploy the
+# target models, set the vars, and the tiers separate with no code change. The
+# chain covers UNSET vars only — a var naming a missing deployment fails its
+# stages loudly, by design.
+#
+# LANTERN_TIER_OVERRIDES ("qa-dev=coding,00-story.scout=coding") re-tiers single
+# executions or whole roles for an experiment without a commit: a stage key wins
+# over a role, an entry naming an unknown tier is ignored with one note. It is the
+# knob for the before/after comparisons the plan asks for, not a second policy.
 MODEL_TIERS = ("reasoning", "coding", "fast")
 TIER_FALLBACK = {"coding": "fast", "fast": "reasoning"}
 FAST_ROLES = {"qa-dev", "qa-staging"}
@@ -208,8 +227,32 @@ def stage_dir(stage: str) -> str:
     return stage.split(".", 1)[0]
 
 
+def tier_overrides() -> dict[str, str]:
+    """LANTERN_TIER_OVERRIDES parsed: {stage key or role: tier}. Bad entries are noted
+    once and skipped — an experiment knob must never take a stage down."""
+    out: dict[str, str] = {}
+    for item in os.environ.get("LANTERN_TIER_OVERRIDES", "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        key, sep, tier = item.partition("=")
+        key, tier = key.strip(), tier.strip().lower()
+        if not sep or not key or tier not in MODEL_TIERS:
+            _note_once(f"LANTERN_TIER_OVERRIDES entry {item!r} ignored — expected "
+                       f"<stage-key|role>=<{'|'.join(MODEL_TIERS)}>")
+            continue
+        out[key] = tier
+    return out
+
+
 def tier_for(role: str, stage: str | None = None) -> str:
-    """Model tier for a role/stage — the only place routing policy lives."""
+    """Model tier for a role/stage — the only place routing policy lives. An override
+    for the exact stage key wins, then one for the role, then the policy."""
+    overrides = tier_overrides()
+    if stage and stage in overrides:
+        return overrides[stage]
+    if role in overrides:
+        return overrides[role]
     if role in FAST_ROLES or stage in FAST_STAGES:
         return "fast"
     if role in CODING_ROLES:

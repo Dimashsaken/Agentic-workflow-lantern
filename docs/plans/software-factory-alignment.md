@@ -123,6 +123,9 @@ control-plane layer C calls the most underserved (C 39:55–40:03). Keep it.
   `smoke_test.py`). So the split dimash asked for — Terra on research/scoping/planning,
   a Flash-class model on coding — is wired but resolves to `sol` until the deployments
   exist. In an Azure-OpenAI-only fleet (D7) the Flash analogue is `gpt-5.6-luna`.
+  **Corrected 2026-09-14 (D26, §6):** sol is the frontier size, terra the mid, luna the
+  cheap one — so sol plans and reviews, terra builds, luna labours. Still one deployment
+  on that date.
 - **Positioning:** README and AGENTS.md present the system as a software factory with
   Lantern as codename. Identifiers stay `lantern`.
 
@@ -150,12 +153,17 @@ Ordered by leverage per rule in §1; each phase names the gaps it closes.
 
 ### Phase A — make the model stack real (this week, human actions)
 
-1. In the Azure portal create deployments `gpt-5.6-terra` (reasoning) and `gpt-5.6-luna`
-   (fast, and later coding) on `lantern-prod-agent`. Verify: `smoke_test.py gpt-5.6-terra gpt-5.6-luna`.
-2. Set the six `LANTERN_MODEL_*` / `LANTERN_EFFORT_*` vars in SSM `/lantern/dotenv`,
-   redeploy the box env, **restart the daemon** (it loads `pipeline.py` at start).
-3. Keep `LANTERN_MODEL_CODING` on the strong deployment until Phase B lands; then move
-   it to luna and compare stage-4 bug counts before/after over ten runs.
+1. In the Foundry portal create deployments `gpt-5.6-terra` (coding) and `gpt-5.6-luna`
+   (fast) on `lantern-prod-agent` — sol, already deployed, is the reasoning tier (D26
+   corrected the order: sol > terra > luna). Verify: `smoke_test.py gpt-5.6-terra gpt-5.6-luna`.
+2. Set `LANTERN_MODEL_CODING=gpt-5.6-terra`, `LANTERN_MODEL_FAST=gpt-5.6-luna` and
+   `LANTERN_PRICE_JSON` in SSM `/lantern/dotenv` and the box `.env`, **restart the
+   daemon** (it loads `pipeline.py` at start). Phase B landed (D17), so the mid-tier
+   builder is behind the quality gate it needs.
+3. First experiments, each an env var (`LANTERN_TIER_OVERRIDES`), ten runs before and
+   after: `qa-dev=coding,qa-staging=coding` (does QA on terra find more of what the
+   validator later flags?) and `researcher=coding` (does a mid-tier scout change the
+   plan's quality?). Results go into §6.
 4. Token-max knobs already present: raise `LANTERN_DAILY_SPEND_ALARM_USD` (alarm, not a
    block) and `LANTERN_STAGE_TIMEOUT_MIN` if high-effort stages start hitting 45 min.
    Closes gap 9.
@@ -221,9 +229,13 @@ identity provisioning in the sandbox layer; warm sandbox pools when the t3.large
 ## 5. Decisions needed
 
 1. **Azure deployments** — who creates `gpt-5.6-terra` and `gpt-5.6-luna`, and when. Nothing in
-   Phase A works without them.
-2. **Cheap coding tier timing** — recommend *after* Phase B; a cheap builder without
-   code gates is the exact failure mode B warns about (B 13:33–13:49).
+   Phase A works without them. Still open on 2026-09-14: no Azure CLI or management
+   credential on the laptop, so it is a portal click by whoever owns the subscription.
+2. **Cheap coding tier timing** — *decided 2026-09-14 (D26):* Phase B landed with D17, so
+   the builder moves to the mid size (terra) the day it is deployed; the cheapest size
+   (luna) builds nothing — B's warning about a cheap builder without code gates
+   (B 13:33–13:49) is answered by the gate, and no factory in the §6 survey builds on
+   its smallest model.
 3. **GitHub repository rename** to `software-factory` — one click on GitHub, then
    `git remote set-url origin …` on every clone and the box's `infra/ec2/bootstrap.sh`
    SSM parameters. Recommended, but a human action.
@@ -233,3 +245,84 @@ identity provisioning in the sandbox layer; warm sandbox pools when the t3.large
    sign-off.
 5. **Token-max guardrails** — keep the spend tripwires as alarms and raise them, or
    remove them. Recommend keep-and-raise: the ledger is how Phase F's evals are priced.
+
+## 6. Which model runs which phase — the survey behind D26 (2026-09-14)
+
+Dimash's ask: the state-of-the-art model only for planning, a less expensive one for
+the builders, the cheapest for labour — "other software factories are built like
+this". Checked against what the systems actually publish; every claim below was read
+on the page cited, and "not found" is said where it is so.
+
+### 6.1 The three deployments, verified
+
+`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` are OpenAI's three GPT-5.6 sizes as
+Azure sells them (Foundry catalog, version 2026-07-09; 1.05 M context, 128 K output,
+knowledge cutoff February 2026 — learn.microsoft.com, "Foundry Models sold by Azure").
+Microsoft's launch post ("GPT-5.6 now available in Microsoft Foundry"): Sol "delivers
+the most advanced reasoning capabilities yet, supporting extended reasoning, agentic
+workflows, and code-focused scenarios"; Terra "a balanced model for everyday work,
+delivering performance competitive with GPT-5.5 at a lower cost"; Luna "the fastest and
+most affordable model in the family, making it well suited to high-volume,
+latency-sensitive workloads".
+
+| Size | Deployment | $/1M in / cached / out (Azure Standard Global) |
+|---|---|---|
+| frontier | `gpt-5.6-sol` | 5 / 0.50 / 30 — promo 4 / 0.40 / 20 from 2026-09-01 to 2026-11-30 |
+| mid | `gpt-5.6-terra` | 2 / 0.20 / 12 |
+| cheap | `gpt-5.6-luna` | 0.20 / 0.02 / 1.20 |
+
+OpenAI's own price list (developers.openai.com/api/docs/pricing) carries the same
+numbers; requests above 272 K input tokens bill at roughly double. So the order is
+**sol > terra > luna** — the message that started this had terra as the strongest; the
+mapping follows its intent with the verified order. On 2026-09-14 `lantern-prod-agent`
+still has only `gpt-5.6-sol` deployed (terra / luna: `DeploymentNotFound`).
+
+### 6.2 What each system publishes
+
+| System | Phases it distinguishes | Model class per phase | Where it says so | Confidence |
+|---|---|---|---|---|
+| openai/symphony | none — one Codex thread per issue | one frontier model at max effort: `codex --config 'model="gpt-5.5"' --config model_reasoning_effort=xhigh` | github.com/openai/symphony — elixir/WORKFLOW.md, SPEC.md | high — *against* tiering |
+| Codex CLI (what Symphony wraps) | main agent vs subagents (`default`, `worker`, `explorer`); plan mode | per-subagent `model` / `model_reasoning_effort`; OpenAI: "Use `gpt-5.6-terra` when you want a faster, lower-cost option for lighter subagent work"; `plan_mode_reasoning_effort` for planning; "medium" effort for everyday interactive coding, "high or xhigh … for your hardest tasks" | learn.chatgpt.com/docs/agent-configuration/subagents; …/config-file/config-reference; the GPT-5 Codex prompting guide | high |
+| Aider | architect (solve) → editor (format the edits) | strong reasoning model plus a cheaper editor; R1 + Sonnet scored higher than o1 alone at "14X less cost" | aider.chat/2024/09/26/architect.html; aider.chat/2025/01/24/r1-sonnet.html | high |
+| Claude Code | plan vs execution; subagents | `opusplan`: "In plan mode: uses opus … In execution mode: automatically switches to sonnet"; subagents carry their own `model`, "routing tasks to faster, cheaper models like Haiku"; since v2.1.198 Explore *inherits* the main model instead of always running on Haiku | code.claude.com/docs/en/model-config; …/sub-agents | high |
+| Anthropic guidance | routing; lead + workers | "Routing easy/common questions to smaller, cost-efficient models … and hard/unusual questions to more capable models"; an Opus lead with Sonnet subagents beat a single Opus | anthropic.com/engineering/building-effective-agents; …/multi-agent-research-system | high |
+| Cline / Roo Code / Kilo Code | Plan vs Act; per-mode models | Cline: "a stronger reasoning model for planning and a faster model for implementation"; Kilo Auto: Architect / Orchestrator / Plan → Opus, Code / Build / Debug / Explore → Sonnet — "frontier-level thinking where it matters, cost-effective execution where it doesn't"; Cline's telemetry: most users keep the mid model for both modes | docs.cline.bot/core-workflows/plan-and-act; blog.kilo.ai/p/auto-model-picks-the-right-ai-model; cline.ghost.io/plan-act-model-usage-patterns-in-cline | high |
+| Cursor | a per-request router; an explore subagent | "Simple work goes to the most price-efficient models, UI updates go to the model with the best taste, and more complex, long-horizon problems go to frontier reasoning models" (30–50 % cheaper); "The explore subagent uses a faster model by default" | cursor.com/blog/router; cursor.com/docs/subagents | high |
+| Cognition Devin (Fusion) | lead vs sidekick | the frontier lead makes "the plan, the interpretation of ambiguity, the final review"; the sidekick "explores code, implements changes, runs tests, and reports back"; 35–60 % cheaper; rejects prompt-level routers because task difficulty "reveals itself late" | cognition.com/blog/devin-fusion; …/local-fusion | high |
+| Factory Droids | subagent tiers light / medium / heavy; review depth | `explorer` = light, `worker` = medium, each pinnable; **review `deep` (the default) = `gpt-5.6-sol` at `high`**, `shallow` = a cheap model | docs.factory.ai/cli/configuration/mixed-models; github.com/Factory-AI/droid-action | high — frontier on review |
+| OpenHands | plan / implement / review; the condenser | "Start with a strong but expensive reasoning model to inspect the repository and write a plan. Switch to [a cheaper model] for the implementation loop. Switch back for final review, test failure analysis, or a risky refactor"; summarisation on an "often cheaper model" | openhands.dev/blog/model-choice-llm-profiles; docs.openhands.dev/sdk/arch/condenser | high |
+| GitHub Copilot | none per phase; auto model selection | one user-picked model for the coding agent; auto selection reserves "higher-cost reasoning models for problems that truly need it" | github.blog changelog 2026-04-01; docs.github.com, auto-model-selection | high |
+| Google Jules | a plan critic | a separate "Planning Critic" agent (−9.5 % task failures); models come with the plan tier, not the phase | jules.google/docs/changelog | medium |
+| Amazon Kiro | none — per-mode model request "Closed as not planned" | one model | github.com/kirodotdev/Kiro/issues/4812 | high (absence) |
+| Sourcegraph Amp | main agent vs oracle | Sonnet as the main agent; the oracle is a read-only o3 / GPT-5 subagent "good at reviewing, at debugging, at analyzing", deliberately not over-invoked | ampcode.com/news/oracle; …/gpt-5-oracle | high |
+| MetaGPT / ChatDev / AgentCoder | roles, not tiers | one backbone for every role | arxiv 2308.00352, 2307.07924, 2312.13010 | high |
+| BudgetMLAgent, RouteLLM, FrugalGPT | cascade / router | cheap by default, escalate on failure: −94 % cost with higher success (BudgetMLAgent); RouteLLM −85 % cost at 95 % of GPT-4 — on chat benchmarks | arxiv 2411.07464; lmsys.org/blog/2024-07-01-routellm; arxiv 2305.05176 | high, chat benchmarks |
+
+Vendor sizing guidance: OpenAI — build with "the most capable model for every task …
+then try swapping in smaller models"; Microsoft's effort table — minimal for "bulk
+operations, simple transforms", low for "triage, short answers, simple edits", medium
+for "moderate coding", high for "complex planning, analysis, multihop reasoning"
+(learn.microsoft.com, Foundry "model choice guide"; its model router claims "up to 60 %"
+saving at comparable quality). Cost shape: agentic coding spends ~1000× the tokens of
+code chat, input tokens dominate (often above 99 %), and "accuracy often peaks at
+intermediate cost" (arxiv 2604.22750). Nobody publishes a planning-versus-build split;
+every router vendor's saving (Cursor, Devin, Replit, Foundry: 30–65 %) comes from moving
+the build / test loop off the frontier model.
+
+### 6.3 Consensus, and where Lantern lands
+
+| Phase | Consensus class | Lantern (D26) |
+|---|---|---|
+| planning / architecture | frontier, high effort — unanimous | `reasoning` → sol: story, ui-ux design, pre-coding |
+| research / scoping | mid; small only for raw search | sol for now — 2.5 min of a 40-min run, and the plan is built on it; `researcher=coding` is experiment 2 |
+| code generation | mid — the majority; Symphony and Copilot dissent with one strong model end to end | `coding` → terra, behind the D17 quality gate that makes a cheaper builder safe |
+| test / QA loop | mid for running and fixing; frontier for failure analysis | fix loops ride the coding tier (terra); charter execution → luna, and `qa-dev=coding,qa-staging=coding` is experiment 1 |
+| code review | split — Factory deep = sol at high, Amp's oracle, Devin's lead for "the final review"; cheap pre-screens elsewhere | `reasoning` → sol: the review bot is the merge gate |
+| security | frontier, high — inferred; no system publishes a security-specific choice | `reasoning` → sol |
+| cheap labour (search, summarise, classify, bulk generation) | small | `fast` → luna: ui-ux divergence, QA charter runs |
+| orchestration / routing | a frontier or mid orchestrator; routing by a small classifier or by stage | consults route by role; routing is by **stage**, never per prompt (Cognition's argument) |
+
+Two honest caveats. The one system closest to Lantern's control plane, Symphony, does
+not tier at all; and prompt-level routers are benchmarked on chat, not on multi-step
+coding. Tiering by stage with an env-var override for experiments is the conservative
+reading of both.

@@ -1,15 +1,24 @@
-# Codex CLI on Azure OpenAI — copy into ~/.codex/config.toml and fill in.
-# Verify the current api-version value against Codex + Azure OpenAI docs at setup time.
+# Codex CLI on Azure OpenAI — copy into ~/.codex/config.toml, or keep it as an opt-in
+# profile (`[profiles.azure]`, run `codex --profile azure`) and fill in.
+#
+# The developer's coding session IS the builder tier of the model stack (D16/D26):
+# gpt-5.6-terra, the mid size of GPT-5.6. Reach for gpt-5.6-sol — the frontier size,
+# 2.5x the price — only for planning-heavy sessions. Whatever you name here must be
+# DEPLOYED on the resource first (tools/azure-runner/README.md "Model stack";
+# `smoke_test.py <name>` says). Known issue as of Codex 0.149 (Aug 2026): gpt-5.6-*
+# names sent to Azure with the responses-lite / multi-agent flags come back 400
+# (openai/codex #31870); the workaround is a custom `model_catalog_json` —
+# docs/plans/symphony-alignment.md. Verify on your version before relying on it.
 
-model = "sol"                      # your Azure *deployment* name (sol / terra / ...)
+model = "gpt-5.6-terra"            # the coding tier — an Azure *deployment* name
+model_reasoning_effort = "high"    # the tier's default effort; "xhigh" for the hardest tasks
 model_provider = "azure"
 
 [model_providers.azure]
 name = "Azure OpenAI"
-base_url = "https://YOUR-RESOURCE.openai.azure.com/openai"
+base_url = "https://YOUR-RESOURCE.openai.azure.com/openai/v1"   # v1 surface: no api-version needed
 env_key = "AZURE_OPENAI_API_KEY"   # Codex reads the key from this env var
-query_params = { api-version = "FILL-ME-IN" }
-wire_api = "responses"             # fall back to "chat" if the deployment lacks Responses API
+wire_api = "responses"             # Chat Completions was removed from Codex in Feb 2026
 
 # Mirror the shared MCP servers from .mcp.json (repo root) that the coding stage needs:
 [mcp_servers.playwright]

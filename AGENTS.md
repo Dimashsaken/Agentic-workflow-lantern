@@ -174,16 +174,19 @@ pinged when the fix is ready.
 
 ## Models and providers
 
-- **Single provider: Azure OpenAI.** Every agent brain is one of the org's GPT
-  deployments (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, …). Routing is a
-  three-tier **model stack** (D16, `tier_for()` in `tools/azure-runner/orchestrator.py`):
-  `reasoning` for research, scoping, planning, review, security and debug;
-  `coding` for the stage-3 builder in auto mode; `fast` for volume execution (QA
-  charter runs, ui-ux divergence). Each tier is one env var (`LANTERN_MODEL_<TIER>`)
-  with a fallback chain, plus a reasoning-effort knob (`LANTERN_EFFORT_<TIER>`,
-  token-max defaults high/high/medium). Right model at the right cost — the same
-  planner-strong / builder-cheap split the software-factory reference designs use
-  (`docs/plans/software-factory-alignment.md`).
+- **Single provider: Azure OpenAI.** Every agent brain is one of the org's GPT-5.6
+  deployments — `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` are the three sizes of
+  that family as Azure sells them (frontier, mid, cheap). Routing is a three-tier
+  **model stack** (D16, D26, `tier_for()` in `tools/azure-runner/orchestrator.py`):
+  `reasoning` (sol) for research, scoping, planning, review, validation, security and
+  debug; `coding` (terra) for the stage-3 builders in auto mode; `fast` (luna) for
+  volume execution (QA charter runs, ui-ux divergence). Each tier is one env var
+  (`LANTERN_MODEL_<TIER>`) with a fallback chain, plus a reasoning-effort knob
+  (`LANTERN_EFFORT_<TIER>`, token-max defaults high/high/medium) and a per-execution
+  override for experiments (`LANTERN_TIER_OVERRIDES`). The model behind every execution
+  is tabled in `workflow/PIPELINE.md` ("Which model runs which execution"). Right model
+  at the right cost — the planner-strong / builder-mid / labour-cheap split the
+  software-factory reference designs use (`docs/plans/software-factory-alignment.md` §6).
 - Harnesses: **OpenAI Agents SDK** (pipeline stages) and **Codex CLI** (coding stage).
   Both read this file and both are wired to the same MCP tool layer
   (`docs/AGENT-TOOLING.md` §2). Decision record: `docs/DECISIONS.md` D7.

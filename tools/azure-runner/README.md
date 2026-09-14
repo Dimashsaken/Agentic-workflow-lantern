@@ -16,17 +16,22 @@ AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
 AZURE_OPENAI_API_KEY=<from SSM>
 AZURE_OPENAI_API_VERSION=<current GA version>
 
-# Model stack (D16) — three tiers, each an Azure deployment name. Only REASONING is
-# required: CODING falls back to FAST, FAST to REASONING.
-LANTERN_MODEL_REASONING=gpt-5.6-terra   # research, scoping, planning, review, security, debug, ui-ux design
-LANTERN_MODEL_CODING=gpt-5.6-luna       # stage-3 auto mode: the builder executing an approved plan
-LANTERN_MODEL_FAST=gpt-5.6-luna         # volume execution: QA charter runs, ui-ux divergence
+# Model stack (D16/D26) — three tiers, each one Azure deployment of a GPT-5.6 size.
+# Only REASONING is required: CODING falls back to FAST, FAST to REASONING. A tier may
+# only name a deployment that exists (`smoke_test.py <name>`), see "Model stack" below.
+LANTERN_MODEL_REASONING=gpt-5.6-sol     # judgement: research, scoping, planning, review, validation, security, debug, ui-ux design
+LANTERN_MODEL_CODING=gpt-5.6-terra      # building: stage-3 builders, integrator, review fixes (auto mode)
+LANTERN_MODEL_FAST=gpt-5.6-luna         # labour: QA charter execution, ui-ux divergence
+LANTERN_TIER_OVERRIDES=                 # experiments: "<stage-key|role>=<tier>,…" e.g. qa-dev=coding
 # Reasoning effort per tier (minimal|low|medium|high|xhigh, or 'default' to send none).
 # Defaults are token-max: reasoning=high, coding=high, fast=medium.
 LANTERN_EFFORT_REASONING=high
 LANTERN_EFFORT_CODING=high
 LANTERN_EFFORT_FAST=medium
 LANTERN_EFFORT_CHAT=            # optional override for interactive consults (Chat tab, `ask`)
+# Per-deployment rates so the ledger prices each tier at its own rate (.env.example has
+# the 2026-09-14 numbers: sol 4/0.40/20 promo, terra 2/0.20/12, luna 0.20/0.02/1.20).
+LANTERN_PRICE_JSON=
 
 # Runner affinity (docs/plans/ui-ux-agent-paper.md):
 LANTERN_RUNNER=ec2                               # 'workstation' on the design machine
@@ -84,18 +89,48 @@ LANTERN_ALARM_WEBHOOK=              # Slack-compatible webhook; unset = journal 
 
 ### Model stack
 
-Deployment names (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, …) are org-internal
-Azure deployment labels — the runner treats them as opaque strings and reasons about
-three **tiers** (`tier_for()` in `orchestrator.py` is the only place routing policy
-lives): `reasoning` for judgement-heavy stages, `coding` for the stage-3 builder,
-`fast` for volume execution. The intended split is the strong deployment for research,
-scoping and planning and a cheap one for coding — the planner/builder pattern of the
-software-factory reference designs (`docs/plans/software-factory-alignment.md`).
-**As of 2026-09-08 the resource has ONE deployment (`gpt-5.6-sol`)**; the tiers all
-resolve to it until `gpt-5.6-terra` / `gpt-5.6-luna` are created in the Azure portal —
-`smoke_test.py` probes whatever the three vars name. A cheap coding tier is only safe
-once the deterministic build gates of that plan's Phase B exist; until then point
-`LANTERN_MODEL_CODING` at the strong deployment.
+The runner reasons about three **tiers** (`tier_for()` in `orchestrator.py` is the only
+place routing policy lives) and each tier names one Azure deployment. The deployments
+are the three sizes of OpenAI's GPT-5.6 family as Azure sells them (Foundry catalog,
+version 2026-07-09) — not org labels, and the order is **sol > terra > luna**:
+
+| Tier | Deployment | Size | Azure rate, $/1M tokens (in / cached / out) | Runs |
+|---|---|---|---|---|
+| `reasoning` | `gpt-5.6-sol` | frontier — "the most advanced reasoning" | 5 / 0.50 / 30; promo **4 / 0.40 / 20** 2026-09-01 → 11-30 | research, story, ui-ux design, pre-coding, review bot, post-coding, validator, security, debug, consults |
+| `coding` | `gpt-5.6-terra` | mid — "balanced … competitive with GPT-5.5 at a lower cost" | 2 / 0.20 / 12 | stage-3 auto mode: builders, integrator, review fixes |
+| `fast` | `gpt-5.6-luna` | cheap — "the fastest and most affordable" | 0.20 / 0.02 / 1.20 | QA charter execution (dev, staging, regression), ui-ux divergence |
+
+Sol plans and reviews, terra builds, luna does the volume work — the planner-strong /
+builder-mid / labour-cheap split of the software-factory reference designs, with the
+survey in `docs/plans/software-factory-alignment.md` §6 and the decision in
+`docs/DECISIONS.md` D26. The execution-by-execution table is in `workflow/PIPELINE.md`
+("Which model runs which execution"). `LANTERN_TIER_OVERRIDES` re-tiers one execution
+or role for an experiment (`qa-dev=coding` runs dev QA on terra); `LANTERN_PRICE_JSON`
+carries the three rates so the ledger prices each tier at its own rate (`.env.example`).
+The human-mode coding session (Codex CLI on the developer's laptop) is the builder
+tier too: `codex-config.example.toml` names terra.
+
+**As of 2026-09-14 the resource still has ONE deployment, `gpt-5.6-sol`** — `gpt-5.6-terra`
+and `gpt-5.6-luna` answer `DeploymentNotFound` (probed with `smoke_test.py`), so every
+tier resolves to sol through the fallback chain. Making the split real is a portal
+action, then two env vars:
+
+1. Microsoft Foundry portal → the `lantern-prod-agent` resource → **Deployments → Deploy
+   base model** → `gpt-5.6-terra` (version 2026-07-09), deployment name exactly
+   `gpt-5.6-terra`, type Global Standard; repeat for `gpt-5.6-luna`. Some quota tiers
+   need a GPT-5.6 quota request first (the portal says so). There is no Azure CLI or
+   management credential on the laptop — this is a browser step.
+2. Verify from any machine with the `.env`:
+   `.venv/Scripts/python smoke_test.py gpt-5.6-terra gpt-5.6-luna` → both `[OK]`.
+3. Set `LANTERN_MODEL_CODING=gpt-5.6-terra` and `LANTERN_MODEL_FAST=gpt-5.6-luna` in the
+   laptop `.env`, in SSM `/lantern/dotenv` and the box `.env`; `smoke_test.py` with no
+   arguments must print the three tiers `[OK]` (it exits 1 otherwise); restart the
+   daemon (`sudo systemctl restart lantern-orchestrator lantern-mission-control` when no
+   stage is executing — `infra/ec2/tender-playbook.sh deploy` does that check).
+
+Do **not** set the two vars before the deployments exist: the fallback chain covers
+unset vars, not missing deployments, and every coding and QA execution would fail —
+loudly, which is the intended failure mode.
 
 ## The pipeline runner (the "one call")
 

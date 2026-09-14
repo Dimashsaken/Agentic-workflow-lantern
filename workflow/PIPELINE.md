@@ -16,6 +16,36 @@ brief ──▶ 00 story ──▶ 01 ui-ux ──▶ 02 pre-coding ──▶ 03
 
 ---
 
+## Which model runs which execution (D16, D26)
+
+Three tiers, each one Azure deployment of a GPT-5.6 size; `tier_for()` in
+`tools/azure-runner/orchestrator.py` is the only routing point and `LANTERN_TIER_OVERRIDES`
+re-tiers one execution or role for an experiment. Sol is the frontier size, terra the
+mid, luna the cheap one — Azure rates per 1M tokens on 2026-09-14 (in / out): 4 / 20
+(promo), 2 / 12, 0.20 / 1.20. The frontier does the judgement, the mid size builds, the
+cheap one does volume work; evidence and dissent in `docs/plans/software-factory-alignment.md` §6.
+
+| Execution | Role | Tier | Deployment | Why this tier |
+|---|---|---|---|---|
+| `00-story.scout` | `researcher` | reasoning | `gpt-5.6-sol` | the codebase map every plan is built on — 2.5 min of a 40-min run; first candidate for `researcher=coding` once evals can compare |
+| `00-story.write` | `story` | reasoning | `gpt-5.6-sol` | the acceptance criteria are the contract every later gate checks |
+| `01-ui-ux.diverge` | `ui-ux` | fast | `gpt-5.6-luna` | 5–10 low-fi skeletons plus a judge pass: volume, not judgement |
+| `01-ui-ux.design` | `ui-ux` | reasoning | `gpt-5.6-sol` | convergence and the critique loop — the one place the reference practitioners reach for the frontier |
+| `02-pre-coding` | `pre-coding` | reasoning | `gpt-5.6-sol` | the plan: blast radius, schema, write scope, builders |
+| `03-coding`, `03-coding.<builder>`, `.integrate`, `.fix` | `coding` | coding | `gpt-5.6-terra` | executing an approved plan behind the quality gate as code (D17) — the gate is what makes a cheaper builder safe |
+| `03-coding.review` | `reviewer` | reasoning | `gpt-5.6-sol` | the merge-gate review; a cheap reviewer approving cheap code is the failure mode to avoid |
+| `03-coding.regate` | — | — | — | code only, no model turn |
+| `04-qa-dev`, `07-qa-staging`, `05-regression` | `qa-dev` / `qa-staging` | fast | `gpt-5.6-luna` | charter execution with video: volume; the survey leans mid here, so `qa-dev=coding,qa-staging=coding` is experiment 1 |
+| `05-post-coding` | `post-coding` | reasoning | `gpt-5.6-sol` | cleanliness, debt, backward compatibility |
+| `05-post-coding.validate` | `validator` | reasoning | `gpt-5.6-sol` | a verdict per criterion with evidence |
+| `06-security` | `security` | reasoning | `gpt-5.6-sol` | go / no-go before staging |
+| bug runs `01-triage` … `06-postmortem` | `debug` | reasoning | `gpt-5.6-sol` | root cause is judgement; the fix rides stage 3 on terra |
+| consults, Chat tab, `pipeline.py ask` | by role | by role | as above | custom chat agents carry a `model_pref` (`reasoning` / `fast`) |
+
+Human-mode stage 3 — the developer's Codex CLI session — is the builder tier as well:
+`tools/azure-runner/codex-config.example.toml` names terra. Effort per tier is
+`LANTERN_EFFORT_<TIER>` (high / high / medium).
+
 ## Stage 0 — Research & story (`researcher` → `story` agents) → `00-story/`
 
 Two executions in one stage dir (D17). Ray Fu's agents 1 and 2: map the code before
@@ -40,7 +70,7 @@ story execution with the same session memory. `HITL: required`.
 
 Runs as **two executions with different runners** (D9, `docs/plans/ui-ux-agent-paper.md`):
 
-- `01-ui-ux.diverge` (EC2, fast model): map the user flow, generate 5–10 low-fi HTML
+- `01-ui-ux.diverge` (EC2, fast tier — luna): map the user flow, generate 5–10 low-fi HTML
   skeletons on named structural axes into `divergence/`, judge-score them against the
   brief, keep the best 2–3.
 - `01-ui-ux.design` (design workstation, Paper MCP): converge the survivors into Paper

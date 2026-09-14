@@ -30,12 +30,14 @@ from pipeline import FEATURE_STAGES
 from ui import H, chip
 
 TIER_PURPOSE = {
-    "reasoning": "research, scoping, planning, review, security, debug, ui-ux design",
-    "coding": "the stage-3 builder in auto mode",
-    "fast": "volume execution: QA charter runs, ui-ux divergence",
+    "reasoning": "judgement: research, scoping, planning, review, validation, security, debug, ui-ux design",
+    "coding": "building: the stage-3 builders, integrator and review fixes in auto mode",
+    "fast": "labour: volume execution — QA charter runs, ui-ux divergence",
 }
-INTENDED_DEPLOYMENT = {"reasoning": "gpt-5.6-terra", "coding": "gpt-5.6-luna", "fast": "gpt-5.6-luna"}
+# D26: the three GPT-5.6 sizes — sol is the frontier, terra the mid, luna the cheap one.
+INTENDED_DEPLOYMENT = {"reasoning": "gpt-5.6-sol", "coding": "gpt-5.6-terra", "fast": "gpt-5.6-luna"}
 KNOBS = [
+    ("LANTERN_TIER_OVERRIDES", "re-tier single executions or roles for an experiment: <stage-key|role>=<tier>, comma-separated (D26)", ""),
     ("LANTERN_EFFORT_CHAT", "reasoning effort for interactive consults (overrides the tier)", ""),
     ("LANTERN_FIX_ROUNDS", "quality-gate fix rounds before a red coding stage fails", "3"),
     ("LANTERN_EXECUTOR", "how stages run: inprocess or docker sandboxes", "inprocess"),
@@ -256,9 +258,10 @@ def render_catalog(c: dict, render_markdown) -> str:
         for k in ms["knobs"])
     endpoint = ("Azure OpenAI endpoint configured" if ms["endpoint"]
                 else "no AZURE_OPENAI_ENDPOINT in this process — model calls are off here")
-    out.append("<h2 class='sect'>Model stack</h2><p class='sub'>Three tiers (D16): the strongest "
-               "model thinks and reviews, the cheapest builds. Each tier is one env var with a "
-               f"fallback chain coding → fast → reasoning. {H(endpoint)}.</p>"
+    out.append("<h2 class='sect'>Model stack</h2><p class='sub'>Three tiers (D16, D26): the frontier "
+               "size (sol) plans and reviews, the mid size (terra) builds, the cheapest (luna) does "
+               "the volume work. Each tier is one env var with a fallback chain coding → fast → "
+               f"reasoning; LANTERN_TIER_OVERRIDES re-tiers one execution. {H(endpoint)}.</p>"
                "<div class='stripwrap'><table class='cattbl'><tr><th>Tier</th><th>Purpose</th>"
                f"<th>Deployment</th><th>Effort</th><th>Config</th></tr>{''.join(rows)}</table></div>"
                "<h3 class='caps' style='margin:18px 0 0'>Knobs</h3>"
