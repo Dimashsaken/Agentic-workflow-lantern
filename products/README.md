@@ -1,21 +1,18 @@
 # products/ — where the factory's product seeds are
 
-**Tender** (the AI WhatsApp assistant for small sellers) lives on this repository's
-`product/tender-whatsapp` branch — an orphan branch holding only the product (seed
-commit `81e39c4`), pushed 2026-09-11 because this session could not create
-`Dimashsaken/tender-whatsapp`. The briefs under `workflow/briefs/tender-*.md` point at
-it (`Product repo:` this repo, `Base branch: product/tender-whatsapp`); the coding
-agent's `feat/*` branches land here too, and pull requests target that base.
+**Tender** (the AI WhatsApp assistant for small sellers) now lives in its own repository:
+**https://github.com/Dimashsaken/tender-whatsapp** (private). Its `main` is the head of the
+three stacked feature branches the factory built (`feat/20260911-tender-onboarding` →
+`feat/20260911-tender-catalog-orders` → `feat/20260911-tender-escalations`, all pushed there
+too), and `seed` is the two-file skeleton the first run started from (`81e39c4`/`f708fbe`).
+The three briefs under `workflow/briefs/tender-*.md` point at it (`Product repo:` that URL,
+`Base branch: main`).
 
-To give Tender its own repository (one minute, from any laptop):
+Until 2026-09-14 the seed lived on this repository's `product/tender-whatsapp` branch and the
+runs landed their `feat/*` branches here; those branches are still present because the three
+completed runs' gate payloads and compare links reference them. They are exact mirrors of the
+branches in the product repository and can be deleted once nobody needs the old links.
 
-```bash
-gh repo create Dimashsaken/tender-whatsapp --private
-git push https://github.com/Dimashsaken/tender-whatsapp product/tender-whatsapp:main
-```
-
-then update the three briefs' `Product repo:` / `Base branch:` lines (or an existing run
-with `pipeline.py set-product <run-id> --repo <url> --branch main`) and delete the
-`product/tender-whatsapp` branch here. A product never lives inside the factory for long.
-
-On the box, `bash infra/ec2/tender-playbook.sh` runs the whole thing step by step.
+On the box, `bash infra/ec2/tender-playbook.sh` runs the whole thing step by step; set
+`PRODUCT_URL` there (or `pipeline.py set-product <run-id> --repo <url> --branch main` for a
+run) when the target moves.
