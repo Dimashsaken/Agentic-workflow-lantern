@@ -158,11 +158,11 @@ Ordered by leverage per rule in §1; each phase names the gaps it closes.
    `gpt-5.6-terra` and `gpt-5.6-luna` (sol is the reasoning tier; D26 corrected the
    order: sol > terra > luna). Verified: `smoke_test.py` prints all three tiers `[OK]`
    against it, and the laptop `.env` is split.
-2. Still to do on SSM `/lantern/dotenv` and the box `.env`: `AZURE_OPENAI_ENDPOINT` /
-   `AZURE_OPENAI_API_KEY` of the new resource, then `LANTERN_MODEL_CODING=gpt-5.6-terra`,
-   `LANTERN_MODEL_FAST=gpt-5.6-luna` and `LANTERN_PRICE_JSON`; `smoke_test.py` on the box;
-   **restart the daemon** (it loads `pipeline.py` at start). Phase B landed (D17), so the
-   mid-tier builder is behind the quality gate it needs.
+2. *Done 2026-09-14:* SSM `/lantern/dotenv` (version 2) and the box `.env` carry the new
+   resource's endpoint and key, `LANTERN_MODEL_CODING=gpt-5.6-terra`,
+   `LANTERN_MODEL_FAST=gpt-5.6-luna` and `LANTERN_PRICE_JSON`; `smoke_test.py` on the box
+   printed the three tiers `[OK]`; the daemon restarted on main `34bfaa9`. Phase B landed
+   (D17), so the mid-tier builder is behind the quality gate it needs.
 3. First experiments, each an env var (`LANTERN_TIER_OVERRIDES`), ten runs before and
    after: `qa-dev=coding,qa-staging=coding` (does QA on terra find more of what the
    validator later flags?) and `researcher=coding` (does a mid-tier scout change the
@@ -232,8 +232,10 @@ identity provisioning in the sandbox layer; warm sandbox pools when the t3.large
 ## 5. Decisions needed
 
 1. **Azure deployments** — *done 2026-09-14 by dimash:* `lantern-agentic-foundry` carries all
-   three GPT-5.6 sizes and the laptop runs against it. What remains is the box/SSM switch
-   (Phase A step 2) and retiring `lantern-prod-agent`, which still bills a lone sol.
+   three GPT-5.6 sizes and the laptop runs against it; the box/SSM switch landed the same
+   day. `lantern-prod-agent` was retired on 2026-09-15 (its deployment deleted — an idle
+   Standard deployment never billed; the point was the exposed key and one less thing to
+   confuse); the empty resource can be deleted in the portal.
 2. **Cheap coding tier timing** — *decided 2026-09-14 (D26):* Phase B landed with D17, so
    the builder moves to the mid size (terra) the day it is deployed; the cheapest size
    (luna) builds nothing — B's warning about a cheap builder without code gates

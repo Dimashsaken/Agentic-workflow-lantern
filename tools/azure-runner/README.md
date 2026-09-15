@@ -114,9 +114,13 @@ tier too: `codex-config.example.toml` names terra.
 `https://lantern-agentic-foundry.openai.azure.com/openai/v1`), which has carried all
 three deployments since 2026-09-14 — `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, all
 Standard; `smoke_test.py` prints the three tiers `[OK]` against it and the laptop `.env`
-is split. The older resource, `lantern-prod-agent`, still exists with only `gpt-5.6-sol`;
-the box and SSM pointed at it until the rollout below, and it can be retired once nothing
-does. Rolling the split out to the box:
+is split, and so are SSM `/lantern/dotenv` and the box `.env` (2026-09-14). The older
+resource, `lantern-prod-agent`, was retired on 2026-09-15: its only deployment
+(`gpt-5.6-sol`) was deleted through the legacy data-plane API
+(`DELETE /openai/deployments/<name>?api-version=2023-03-15-preview` with the resource
+key — the same API lists a resource's deployments, which `models.list()` does not), so
+its key reaches no model any more; deleting the empty resource itself is a portal step.
+Rolling the split out to a box:
 
 1. In SSM `/lantern/dotenv` and the box `.env`, set `AZURE_OPENAI_ENDPOINT` to the new
    resource's `/openai/v1` endpoint and `AZURE_OPENAI_API_KEY` to its key (the portal

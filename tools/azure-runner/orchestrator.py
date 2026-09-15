@@ -201,7 +201,7 @@ def html_design_stage(stage: str) -> bool:
 # Only REASONING is mandatory: CODING falls back to FAST, FAST to REASONING, so a
 # resource with one deployment still routes every stage. Since 2026-09-14 the fleet's
 # resource is lantern-agentic-foundry, which carries all three deployments (the older
-# lantern-prod-agent kept only gpt-5.6-sol); the tiers split with no code change. The
+# lantern-prod-agent was retired on 2026-09-15); the tiers split with no code change. The
 # chain covers UNSET vars only — a var naming a deployment the configured resource
 # lacks fails its stages loudly, by design.
 #

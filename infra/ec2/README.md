@@ -298,8 +298,8 @@ entrypoint rsyncs the repo copy into every container. What changes on the box:
    (idempotent; only a comment changed in `schema.sql`).
 2. Put the model stack in SSM `/lantern/dotenv` and the box `.env`:
    `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` of `lantern-agentic-foundry` (the
-   resource with all three GPT-5.6 sizes since 2026-09-14 — the box pointed at
-   `lantern-prod-agent`, which has only sol), `LANTERN_MODEL_REASONING=gpt-5.6-sol`,
+   resource with all three GPT-5.6 sizes since 2026-09-14; the box's previous resource,
+   `lantern-prod-agent`, was retired on 2026-09-15), `LANTERN_MODEL_REASONING=gpt-5.6-sol`,
    `_CODING=gpt-5.6-terra`, `_FAST=gpt-5.6-luna` (D26; a var naming a deployment the
    endpoint lacks fails its stages), `LANTERN_EFFORT_*`, `LANTERN_PRICE_JSON` (the three
    rates, `tools/azure-runner/.env.example`), `LANTERN_FIX_ROUNDS=3`.
