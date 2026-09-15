@@ -62,6 +62,7 @@ import intake  # noqa: E402  D20: the debug lifecycle — bug runs, their envelo
 import execution_runtime as ownership
 import tool_execution
 import github_publication
+import product_repos  # noqa: E402  D27: one definition of which repository, and the factory guard
 
 PIPELINE_VERSION = "3"  # v3 (D17): story stage + validation execution; v2: stage 1 diverge/design split
 POLL_SECONDS = 5
@@ -144,6 +145,16 @@ PRODUCT_MIRROR_DIR = Path(os.environ.get(
 PRODUCT_REPO_DEFAULT = os.environ.get("LANTERN_PRODUCT_REPO", "")
 PRODUCT_BRANCH_DEFAULT = os.environ.get("LANTERN_PRODUCT_BRANCH", "main")
 GIT_TOKEN = os.environ.get("GITHUB_LANTERN_BOT_TOKEN", "")
+# D27: the factory's own repository is not a product. A run pointed at it creates its
+# branches and pull requests next to the pipeline's code, which is how the first Tender
+# runs put their feat/* branches into this repository. Choosing it is said out loud, per run.
+FACTORY_TARGET_REFUSAL = (
+    "'{repo}' is the factory's own repository (Lantern's control plane), not a product: a run "
+    "pointed at it creates its branches and pull requests here. Connect the product's own "
+    "repository instead. If this run really changes the factory itself, say so: --dogfood on "
+    "the command line, or tick the dogfood box in Mission Control.")
+DOGFOOD_HELP = ("the target is the factory's own repository and this run changes Lantern "
+                "itself (D27); such a target is refused without it")
 # Auto-coding (D14): identity for the commits the coding agent makes in its sandbox
 # and for the PR the host opens. Defaults are the bot identity D6 specifies.
 CODING_MODES = ("human", "auto")
@@ -1556,16 +1567,22 @@ async def cmd_init_db() -> None:
 async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
                   product_repo: str = "", product_branch: str = "",
                   coding_mode: str = "", working_branch: str = "",
-                  design_mode: str = "") -> None:
+                  design_mode: str = "", dogfood: bool = False) -> None:
     brief = Path(brief_path)
+    if not brief.is_absolute() and not brief.exists() and (REPO / brief).exists():
+        # A caller whose working directory is not the repository root (Mission Control
+        # runs from tools/mission-control) still names briefs relative to the repository.
+        brief = REPO / brief
     if not brief.exists():
         sys.exit(f"brief not found: {brief_path}")
+    brief_label = str(brief) if brief == Path(brief_path) else brief_path
     # Product target: --flag wins, then the brief's own field, then the box default.
     # Resolved at creation so the run records what it was pointed at, not what the
     # daemon's env happened to say three stages later.
     brief_text = brief.read_text(encoding="utf-8")
     brief_repo, brief_branch, brief_work = parse_brief_product(brief_text)
     product_repo = product_repo or brief_repo or PRODUCT_REPO_DEFAULT
+    product_repo = product_repos.canonical(product_repo)   # D27: one spelling per repository
     product_branch = product_branch or brief_branch or PRODUCT_BRANCH_DEFAULT
     # D15: no env default for the working branch on purpose — a box-wide one would
     # silently land every run on the same branch, the opposite of what it is for.
@@ -1586,14 +1603,14 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
         # Fail here, not inside a container three stages later.
         try:
             await asyncio.to_thread(verify_product_target, product_repo,
-                                    product_branch, working_branch)
+                                    product_branch, working_branch, dogfood)
         except ProductTargetError as e:
             sys.exit(f"{e}\nbranches: {', '.join(e.branches) or '(none)'}")
     else:
         print("WARNING: no product repo for this run — stages 2+ will block asking for "
               "one. Set it with `pipeline.py set-product <run-id> --repo … --branch … "
               "[--working-branch …]`, add a `- **Product repo:**` line to the brief, or "
-              "pick one in Mission Control at /run/<run-id>/repo.", file=sys.stderr)
+              "connect one in Mission Control (Repositories) and pick it at /run/<run-id>/repo.", file=sys.stderr)
     if not run_id:
         run_id = f"feat-{datetime.now(timezone.utc):%Y%m%d}-{brief.stem.lstrip('_').lower()}"
     run_dir = REPO / "workflow" / "runs" / run_id
@@ -1606,14 +1623,16 @@ async def cmd_run(brief_path: str, run_id: str | None, by: str, follow: bool,
                              product_repo, product_branch, product_working_branch,
                              coding_mode, design_mode)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
-        run_id, str(brief), PIPELINE_VERSION, FEATURE_STAGES[0][0], by,
+        run_id, brief_label, PIPELINE_VERSION, FEATURE_STAGES[0][0], by,
         product_repo or None, product_branch or None, working_branch or None, coding_mode,
         design_mode)
     await log_event(conn, run_id, f"human:{by}", "run_created",
-                    {"brief": str(brief), "product_repo": product_repo,
+                    {"brief": brief_label, "product_repo": product_repo,
                      "product_branch": product_branch,
                      "product_working_branch": working_branch, "coding_mode": coding_mode,
-                     "design_mode": design_mode})
+                     "design_mode": design_mode, **({"dogfood": True} if dogfood else {})})
+    if product_repo:
+        await product_repos.touch(conn, product_repo, product_branch, by)   # D27: the registry knows every target
     await render_runboard(conn)
     print(f"run {run_id} created (coding mode: {coding_mode}, design mode: {design_mode}) — "
           "the pipeline takes it from here.")
@@ -1889,7 +1908,9 @@ def cmd_repos() -> None:
     width = max(len(r["name"]) for r in repos)
     for r in repos:
         print(f"  {r['name']:<{width}}  {r['head_branch'] or '?':<24}  {r['path']}")
-    print(f"\n{len(repos)} repo(s). Point a run at one with:\n"
+    print(f"\n{len(repos)} repo(s). Connect one so every run can pick it (D27):\n"
+          f"  pipeline.py connect <path-or-url> [--base <branch>]\n"
+          f"or point an existing run at one:\n"
           f"  pipeline.py set-product <run-id> --repo <path> --branch <base> "
           f"[--working-branch feat/…]")
 
@@ -1908,7 +1929,8 @@ def _branch_heads(mirror: Path) -> list[str]:
     return sorted(b for b in r.stdout.split() if b)
 
 
-def verify_product_target(repo: str, base: str, working: str = "") -> dict:
+def verify_product_target(repo: str, base: str, working: str = "",
+                          allow_factory: bool = False) -> dict:
     """Sync the host mirror and prove the branches exist. Sync, no DB, testable.
 
     Verification is the point: a run recorded against a repo the box cannot clone
@@ -1919,10 +1941,15 @@ def verify_product_target(repo: str, base: str, working: str = "") -> dict:
     pushable namespace IS an error: D6 bounds what an agent may push to, and refusing
     at selection time beats refusing three stages later at handoff.
 
+    The factory's own repository is refused unless `allow_factory` (D27): a product run
+    pointed at it lands its branches and pull requests in the control plane.
+
     Returns {'mirror', 'base_sha', 'working', 'working_sha', 'branches', 'local'}.
     """
     if not repo:
         raise ProductTargetError("no product repo given")
+    if not allow_factory and product_repos.is_factory(repo):
+        raise ProductTargetError(FACTORY_TARGET_REFUSAL.format(repo=repo))
     mirror = sync_product_mirror(repo)
     heads = _branch_heads(mirror)
     r = _git("rev-parse", "--verify", f"refs/heads/{base}", cwd=mirror)
@@ -1946,19 +1973,24 @@ def verify_product_target(repo: str, base: str, working: str = "") -> dict:
             "local": not repo.startswith(("http://", "https://", "git@", "ssh://"))}
 
 
-async def cmd_set_product(run_id: str, repo: str, branch: str, working: str = "") -> None:
+async def cmd_set_product(run_id: str, repo: str, branch: str, working: str = "",
+                          dogfood: bool = False) -> None:
     """Point an existing run at a product repo/branch (and optionally an existing
     working branch to continue on) and verify the host can reach it."""
+    repo = product_repos.canonical(repo)   # D27: one spelling per repository
     conn = await connect()
-    if not await conn.fetchval("SELECT 1 FROM runs WHERE id = $1", run_id):
+    row = await conn.fetchrow(
+        "SELECT product_repo, product_branch FROM runs WHERE id = $1", run_id)
+    if not row:
         await conn.close()
         sys.exit(f"unknown run: {run_id}")
     print(f"syncing host mirror for {repo} …")
     try:
-        info = await asyncio.to_thread(verify_product_target, repo, branch, working)
+        info = await asyncio.to_thread(verify_product_target, repo, branch, working, dogfood)
     except ProductTargetError as e:
         await conn.close()
         sys.exit(f"{e}\nbranches: {', '.join(e.branches) or '(none)'}")
+    await product_repos.touch(conn, repo, branch, "cli")
     await conn.execute(
         """UPDATE runs SET product_repo = $1, product_branch = $2,
                            product_working_branch = $3, updated_at = now()
@@ -1966,7 +1998,9 @@ async def cmd_set_product(run_id: str, repo: str, branch: str, working: str = ""
         repo, branch, info["working"] or None, run_id)
     await log_event(conn, run_id, "human:cli", "product_target_set",
                     {"repo": repo, "branch": branch, "working": info["working"],
-                     "head": info["base_sha"][:12], "channel": "cli"})
+                     "head": info["base_sha"][:12], "channel": "cli",
+                     "previous_repo": row["product_repo"], "previous_branch": row["product_branch"],
+                     **({"dogfood": True} if dogfood else {})})
     await conn.close()
     landed = work_branch(run_id, info["working"])
     fate = ("continues an existing branch" if info["working_sha"]
@@ -1978,6 +2012,39 @@ async def cmd_set_product(run_id: str, repo: str, branch: str, working: str = ""
     if info["local"]:
         print("  NOTE: a local-path target is never fetched — the pipeline sees COMMITTED\n"
               "  state only. Uncommitted work in that checkout is invisible to agents.")
+
+
+async def cmd_connect(ref: str, base: str = "", dogfood: bool = False, check_only: bool = False,
+                      by: str = "cli") -> None:
+    """Connect a product repository (D27): run the readiness check Mission Control's
+    Repositories page shows, print it, and record the repository in the registry.
+
+    `--check-only` needs no database: the quickest way to see from a box why a repository
+    is not usable (no access for the bot, no base branch, no quality gate). A repository
+    the host cannot reach yet is still recorded, so the page shows what access to grant."""
+    print(f"checking {ref} ... (the first check of a large repository clones it)")
+    res = await asyncio.to_thread(product_repos.check, ref, base)
+    print(product_repos.render_text(res))
+    if not res["kind"]:
+        sys.exit(1)
+    if check_only:
+        if not (res["usable"] and (dogfood or not res["is_factory"])):
+            sys.exit(1)
+        return
+    if res["is_factory"] and not dogfood:
+        sys.exit(FACTORY_TARGET_REFUSAL.format(repo=res["repo"]))
+    conn = await connect()
+    try:
+        await product_repos.upsert(conn, res, by)
+        await log_event(conn, None, f"human:{by}", "repo_connected",
+                        {"repo": res["repo"], "id": res["id"], "kind": res["kind"],
+                         "base": res["base"], "reachable": res["reachable"],
+                         "status": product_repos.status(res)[0], "dogfood": res["is_factory"],
+                         "channel": "cli"})
+    finally:
+        await conn.close()
+    where = f"{PUBLIC_URL}/repos/{res['id']}" if PUBLIC_URL else f"/repos/{res['id']} in Mission Control"
+    print(f"connected {res['name']}: {where}")
 
 
 async def cmd_publish(run_id: str) -> None:
@@ -2789,14 +2856,24 @@ def main() -> None:
                    help="how stage 1 converges (D25): paper = Paper artboards on a design "
                         "workstation (default); html = HTML prototypes + browser screenshots "
                         "on the ec2 runner, no Paper seat needed")
+    p.add_argument("--dogfood", action="store_true", help=DOGFOOD_HELP)
     p = sub.add_parser("set-product", help="point an existing run at a product repo/branch")
     p.add_argument("run_id"); p.add_argument("--repo", required=True)
     p.add_argument("--branch", default=PRODUCT_BRANCH_DEFAULT, help="base branch")
     p.add_argument("--working-branch", default="",
                    help="existing branch to continue on (feat/*|fix/*|proto/*); default: "
                         "a fresh branch derived from the run id")
+    p.add_argument("--dogfood", action="store_true", help=DOGFOOD_HELP)
     p = sub.add_parser("repos", help="git repos this host can offer as a product target "
                                      "(LANTERN_WORKSPACE_ROOTS)")
+    p = sub.add_parser("connect", help="connect a product repository: check access, the base "
+                                       "branch, publishing and the quality gate, then record it (D27)")
+    p.add_argument("repo", help="https clone URL, or a path on this host")
+    p.add_argument("--base", default="", help="base branch (default: the repository's default branch)")
+    p.add_argument("--dogfood", action="store_true", help=DOGFOOD_HELP)
+    p.add_argument("--check-only", action="store_true",
+                   help="print the checklist and record nothing (needs no database)")
+    p.add_argument("--by", default=os.environ.get("USERNAME") or os.environ.get("USER", "unknown"))
     p = sub.add_parser("set-coding-mode", help="human (developer's own session) or auto "
                                                "(the coding agent implements the plan → PR)")
     p.add_argument("run_id"); p.add_argument("mode", choices=CODING_MODES)
@@ -2876,6 +2953,7 @@ def main() -> None:
     p.add_argument("--working-branch", default="")
     p.add_argument("--coding-mode", choices=CODING_MODES, default="",
                    help="who writes the fix: human (default) or the coding agent (auto)")
+    p.add_argument("--dogfood", action="store_true", help=DOGFOOD_HELP)
     p.add_argument("--shepherd", default="", help="human pinged at fix-ready (default LANTERN_DEFAULT_SHEPHERD)")
     p.add_argument("--run-id", default=""); p.add_argument("--slug", default="")
     p.add_argument("--follow", action="store_true")
@@ -2892,10 +2970,11 @@ def main() -> None:
         case "init-db": asyncio.run(cmd_init_db())
         case "run":     asyncio.run(cmd_run(a.brief, a.run_id, a.by, a.follow,
                                             a.product_repo, a.product_branch, a.coding_mode,
-                                            a.working_branch, a.design_mode))
+                                            a.working_branch, a.design_mode, a.dogfood))
         case "set-product":   asyncio.run(cmd_set_product(a.run_id, a.repo, a.branch,
-                                                          a.working_branch))
+                                                          a.working_branch, a.dogfood))
         case "repos":   cmd_repos()
+        case "connect": asyncio.run(cmd_connect(a.repo, a.base, a.dogfood, a.check_only, a.by))   # D27
         case "set-coding-mode": asyncio.run(cmd_set_coding_mode(a.run_id, a.mode))
         case "set-design-mode": asyncio.run(cmd_set_design_mode(a.run_id, a.mode))   # D25
         case "publish":       asyncio.run(cmd_publish(a.run_id))
@@ -2920,7 +2999,7 @@ def main() -> None:
         case "babysit":       asyncio.run(review.cmd_babysit(a.run_id, a.force))   # D19
         case "bug":           asyncio.run(intake.cmd_bug(a.feedback, a.source, a.by, a.product_repo,   # D20
                                                          a.product_branch, a.working_branch, a.coding_mode,
-                                                         a.shepherd, a.run_id, a.slug, a.follow))
+                                                         a.shepherd, a.run_id, a.slug, a.follow, a.dogfood))
         case "evals":         cmd_evals(a.evals_args)   # D20
 
 

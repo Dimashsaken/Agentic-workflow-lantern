@@ -227,3 +227,26 @@ CREATE TABLE IF NOT EXISTS custom_agents (
     created_at  timestamptz NOT NULL DEFAULT now(),
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
+
+-- ── Connected repositories (D27) ──
+-- A run still records the target it was pointed at (runs.product_repo, D15, now stored
+-- in canonical form); this table is the repository behind that string: connected once,
+-- checked (access, base branch, publishing, quality gate) and picked by every surface.
+-- id is derived from the canonical identity (product_repos.repo_id), so every spelling of
+-- one repository is one row. Rows are archived, never deleted.
+CREATE TABLE IF NOT EXISTS product_repos (
+    id              text PRIMARY KEY,
+    url             text NOT NULL,                 -- canonical clone URL or resolved host path
+    name            text NOT NULL,                 -- 'owner/name', or the checkout's folder name
+    kind            text NOT NULL,                 -- github | https | http | ssh | local
+    default_branch  text NOT NULL DEFAULT 'main',  -- the base a new run starts from
+    is_factory      boolean NOT NULL DEFAULT false,  -- Lantern's own repository: dogfood runs only
+    check_result    jsonb,                         -- the last readiness check (product_repos.check)
+    checked_at      timestamptz,
+    connected_by    text NOT NULL,
+    connected_at    timestamptz NOT NULL DEFAULT now(),
+    last_used_at    timestamptz,                   -- the last time a run was pointed at it
+    archived        boolean NOT NULL DEFAULT false,
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_product_repos_active ON product_repos(name) WHERE NOT archived;

@@ -1,7 +1,7 @@
 # Mission Control
 
 Mission Control opens on the work that needs attention. The primary navigation is
-**Work**, **Reviews**, and **Chat**. Agents, factory configuration, and costs are in
+**Work**, **Reviews**, **Repositories** and **Chat**. Agents, factory configuration, and costs are in
 **Workspace**; theme, keyboard help, and sign-out are under the user's name.
 
 - **Work** `/`: a single searchable list, with reviews and blocked work first.
@@ -12,12 +12,19 @@ Mission Control opens on the work that needs attention. The primary navigation i
 - **Reviews** `/gates`: compact summaries, oldest first. Open a review to see the
   full artifact and decision form. Recent decisions and review timing are folded
   below the queue. Existing `#gate-<id>` links reveal the matching evidence.
+- **Repositories** `/repos`: every connected product repository with its readiness
+  (reachable from the host, base branch, pull-request permission, quality gate) and the
+  repositories runs point at without a connection. Connect one by URL, or a checkout
+  under `LANTERN_WORKSPACE_ROOTS`. Its page `/repos/<id>` shows the checklist with the fix
+  for each failing item, where work lands, and every run on it with its branch, pull
+  request and merge state. **Start work** `/new` begins by picking the repository (D27).
 - **Run** `/run/<id>`: an always-visible lifecycle connects the brief to staging
   QA, with the current stage, human handoff, and next step. Click a stage to inspect
   its agents, attempts, and evidence. Parallel builders remain separate. A return
   from QA appears as a rework arrow with its reason; previous-cycle evidence is
   retained without marking downstream stages complete. Bug runs show their debug
-  lifecycle, including conditional planning. Repository and branch stay visible;
+  lifecycle, including conditional planning. **Where the code goes** shows the
+  repository, `base ← branch`, the pull request, the approval and the merge;
   full execution lanes, reports, and audit history open on demand.
 - **Chat** `/chat`: describe the work to Lantern. Specialist selection is optional,
   and links from a run preserve the chosen role and run context. On phones,
@@ -97,6 +104,8 @@ picker's boundary).
 | **Cost** `/cost` | *What did it cost, and are we near a limit?* Per run, per day, per model, plus both tripwires with what has already fired. |
 | **Gates** `/gates` | The same gate cards as the Inbox, plus the decided history. |
 | **Runs** `/runs` | Every run as a flight strip, open above closed. |
+| **Repositories** `/repos` · `/repos/<id>` | *Where do I connect a repository, and is it ready?* Connected repositories with a readiness checklist and the fix for each failing item, where work lands, and every run on the repository with branch, pull request and merge state (D27). |
+| **Start work** `/new` | *What should the factory build, and in which repository?* Repository first, then title, problem, must-haves, base branch, coding and design mode; the preview names the run, the branch and where the pull request goes. |
 | **Chat** `/chat` · **Agents** `/agents` | Consult mode on the web (docs/CHAT.md, D13). |
 
 `/spend` redirects to `/cost`.
@@ -218,8 +227,10 @@ actor + timestamp + note (`channel='web'`) — the same fail-closed contract as 
 (D8), and the same event names, so one audit stream covers both surfaces. No users
 configured → nobody can log in at all. Agents have no route here.
 
-The drawer's **retry** and **rework-to** are the only other writes, and they call the
-pipeline's own primitives with the web user as the actor: retry re-queues a *failed*
+The other writes are the drawer's **retry** and **rework-to**, the per-run repository
+picker (D15), and connecting, re-checking or archiving a repository and **Start work**
+(D27). Each checks the signed-in user first and calls the pipeline's own primitives
+with the web user as the actor: retry re-queues a *failed*
 run at its current stage, rework sends a failed or waiting run back to an earlier
 `REWORK_TARGETS` stage through `pipeline.cmd_rework`. Approvals are never decided
 there.

@@ -100,7 +100,8 @@ def compose(fields: dict, by: str, today: datetime | None = None,
 
     fields: title, problem, outcome, must_haves (list or newline text), scope, non_goals,
     constraints, existing_context, hitl, product_repo, base_branch, working_branch,
-    coding_mode, developer, target_release, slug (optional; derived from the title).
+    coding_mode, design_mode, developer, target_release, slug (optional; derived from the
+    title).
 
     Returns {slug, run_id, markdown, missing, recommended, problems, ok}. `ok` is False
     when a REQUIRED field is empty or the rendered brief fails the pipeline's parsers —
@@ -125,6 +126,7 @@ def compose(fields: dict, by: str, today: datetime | None = None,
         "Base branch": base_branch,
         "Working branch": _text(f.get("working_branch")),
         "Coding mode": coding_mode,
+        "Design mode": _text(f.get("design_mode")),
     }
     out = [f"# Feature Brief: {title or EMPTY}", ""]
     for label in _header_lines(template):

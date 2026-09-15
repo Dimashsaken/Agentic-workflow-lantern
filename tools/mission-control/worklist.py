@@ -127,6 +127,6 @@ def render(rows, now, *, selected="active", query="", path="/"):
     return ("<main class='page work-page' id='main-content'>"
             "<header class='work-heading'><div><span class='eyebrow'>Your workspace</span>"
             "<h1>Work</h1><p>Build, review, and keep things moving.</p></div>"
-            "<a class='btn primary' href='/chat'>+ New work</a></header>"
+            "<a class='btn primary' href='/new'>+ New work</a></header>"
             f"<div class='work-toolbar'><nav class='work-filters' aria-label='Filter work'>{''.join(tabs)}</nav>{search}</div>"
             f"<section class='work-list' aria-label='Work items'>{''.join(content)}</section></main>")

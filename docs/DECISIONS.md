@@ -327,7 +327,7 @@ item C2.3 designed it; this records what was built and the choices made on the w
   sandbox image carries Python 3.12 + Node 22 + git only, so other toolchains need an
   image change; human-stage token capture is unchanged (unmetered).
 
-## D15 — 2026-09-07 — Codebase connection: a run points at a host-local repo, a base branch, and optionally a branch to continue on
+## D15 — 2026-09-07 — Codebase connection: a run points at a host-local repo, a base branch, and optionally a branch to continue on *(amended by D27)*
 
 Before this, a run's product target was CLI-only (`pipeline.py run --product-repo`,
 `set-product`) and Mission Control showed it read-only. There was no way to see what
@@ -1181,3 +1181,120 @@ resource `lantern-prod-agent`) carries: sol, terra, luna. The survey behind this
   policy and its tests, the human-mode coding session (Codex CLI on the developer's
   laptop; the example config now names terra as its model and notes the Codex-on-Azure
   400 for `gpt-5.6-*` names recorded in `docs/plans/symphony-alignment.md`).
+
+## D27 — 2026-09-15 — Repositories are connected once, checked, and never the factory's own by accident
+
+Dimash asked for the codebase connection to be understandable in Mission Control: where to
+connect a repository, how the factory creates branches and gets them merged, and whether
+the code really lands in that repository. The trigger was the Tender runs putting their
+branches into this repository. That was the target, not a publishing bug: the three
+Tender briefs (2026-09-11) named `https://github.com/Dimashsaken/Agentic-workflow-lantern`
+with base `product/tender-whatsapp`, and the host did what it was told. Nothing asked
+whether a target was the factory itself. The only web control was the per-run picker,
+which appears after a run exists and offers nothing without `LANTERN_WORKSPACE_ROOTS`, and
+the run page showed the target as one line with nothing about what became of the branch.
+The shape below follows a survey read on 2026-09-15: the Copilot coding agent, Codex cloud,
+Jules, Devin, Cursor cloud agents, OpenHands Cloud and its resolver, Claude Code on the web
+and claude-code-action; Uber (SubmitQueue, Piranha, uReview), Google (Rosie, the LLM
+migrations paper), Meta (SapFix, TestGen-LLM), GitHub rulesets, merge queue and App
+guidance, Symphony and Linear's agent API.
+
+- **A registry of connected repositories.** `product_repos` (schema.sql, additive) holds
+  one row per repository, keyed by `product_repos.repo_id()` of its canonical identity, with
+  its last readiness check as jsonb. Rows are archived, never deleted. The Repositories page
+  and `pipeline.py connect` fill it, and so does every `run`, `bug`, `set-product` and
+  picker save (`touch()`), so no surface bypasses it. Proof:
+  `tools/azure-runner/test_product_repos.py`.
+- **One spelling per repository.** `canonical()` turns every GitHub spelling (a `.git`
+  suffix, a trailing slash, `git@github.com:o/r`, `ssh://`, a URL with a pasted token) into
+  `https://github.com/o/r`, keeps other hosts' paths and resolves local paths; `identity()`
+  is the comparison key, case-insensitive for GitHub. `cmd_run`, `cmd_set_product`,
+  `cmd_bug` and the picker store the canonical form, and the picker's "different repository
+  past coding" refusal compares identities, so a respelling is no longer a different
+  repository. A GitHub SSH target becomes the https URL the host token can push to; before,
+  such a run reached code complete with its branch only in the host mirror. Proof: same file.
+- **The factory is not a product unless a run says so.** `is_factory()` recognises this
+  checkout, the main checkout of its worktree, any clone or bare mirror of it (by origin)
+  and its origin in any spelling. `verify_product_target(..., allow_factory=False)` refuses
+  it with `FACTORY_TARGET_REFUSAL`, so `run`, `set-product`, `bug`, `connect`, the picker and
+  Start work need `--dogfood` or the dogfood box, and chat and Slack, which have neither,
+  return the refusal text. Loading branches stays allowed; saving is where it is refused.
+  Proof: `test_product_repos.py` (refused before anything is written; dogfood passes) and
+  `tools/mission-control/test_repos_routes.py`.
+- **A readiness checklist, the way hosted agents gate a repository.** `check()` reports each
+  item with the fix when it fails: reachable from the host (a 403 names the access to grant:
+  invite lantern-bot with Write, or add the repository to the fine-grained token); the base
+  branch; publishing (push permission from `GET /repos/{owner}/{name}`, archived, a token on
+  the host; a non-GitHub https remote is pushed without a pull request; ssh and http cannot
+  publish; a local checkout lands in place; leased mode publishes to GitHub only);
+  `lantern.toml` with a test command on the base (D24); `AGENTS.md` or `CLAUDE.md`; base
+  protection. `pipeline.py connect --check-only` prints it with no database. Proof:
+  `test_product_repos.py`, against real temporary repositories and a fake GitHub.
+- **Mission Control is repository-first.** Repositories is primary navigation. `/repos`
+  lists connected repositories with a status (Ready, Ready for human coding, Needs access,
+  Needs attention, Factory · dogfood only), the repositories runs point at without a
+  connection, a connect form (a URL, or a checkout inside `LANTERN_WORKSPACE_ROOTS`: the D15
+  boundary is unchanged) and six steps of "How work reaches a repository". `/repos/<id>`
+  shows the checklist, where work lands for that kind of target, and every run on the
+  repository with its branch, pull request and merge state. **Start work** (`/new`, the Work
+  page's "+ New work") picks the repository first and previews the run id, the branch and
+  the pull-request target. It refuses an unusable repository, the factory without dogfood,
+  and the coding agent on a repository whose last check cannot publish; otherwise it writes
+  the brief with `brief_composer` and calls `pipeline.cmd_run` as the signed-in human, the
+  same command the CLI, chat and Slack use. The per-run picker lists connected repositories
+  first. Proof: `test_repos_routes.py`, `test_routes_v3.py`.
+- **Where the code goes.** `delivery.py` turns the run row, the `branch_published`,
+  `pr_not_opened`, `branch_updated`, `merge_conflict`, `branch_merged` and `pr_closed` events
+  and the `code_complete` approval into five steps (repository, branch, pull request,
+  approval, merge), shown as a card on the run page and a line in its header. A pushed
+  branch and an opened pull request are separate steps, as in the Copilot, Jules and Claude
+  flows; a local checkout has no pull request; merging is always a human's. Proof:
+  `tools/mission-control/test_delivery.py`.
+- **Why this and not the alternatives.** (1) *Per-run picking only.* Every hosted agent in
+  the survey connects a repository once, through a GitHub App or connector, and puts the
+  repository picker first on the task form; picking per run is what made the target easy to
+  get wrong. (2) *A reserved namespace such as `lantern/<product>/<run>`.* Suggested by the
+  GitHub rulesets reading so only the bot may create it; it changes D6's `feat/fix/proto`
+  and every product's protection rules, so it is its own decision. (3) *A GitHub App instead
+  of the bot token.* GitHub recommends Apps (installed per repository, one-hour tokens, no
+  seat); it would turn "invite lantern-bot to the organisation" into "install the app on
+  these repositories". It is the next step, not part of this change. (4) *Blocking every
+  warning.* Only what stops a run blocks: unreachable, no base, the factory without dogfood,
+  and for the coding agent a failed publish check. A missing gate or missing docs limits
+  automatic coding and is shown, because D24 already enforces the gate at stage 3.
+- **What changed in code.** New `tools/azure-runner/product_repos.py`. `pipeline.py`:
+  `FACTORY_TARGET_REFUSAL`, `verify_product_target(allow_factory)`, the canonical target and
+  registry touch in `cmd_run` and `cmd_set_product`, `previous_repo` on `product_target_set`,
+  `cmd_connect`, `--dogfood` on `run`, `set-product` and `bug`, and a brief path relative to
+  the repository resolves when the caller's working directory is elsewhere (Mission Control
+  runs from `tools/mission-control`). `intake.py`: `cmd_bug(dogfood)`. `brief_composer.py`
+  renders `Design mode`. `schema.sql`: `product_repos`. Mission Control: `repos_ui.py`,
+  `delivery.py`, the routes `/repos`, `/repos/connect`, `/repos/<id>`, `/repos/<id>/check`,
+  `/repos/<id>/archive` and `/new`, the picker, the run page, `ui.py` navigation and styles,
+  `worklist.py`. `test_brief_parsing.py` expected the Tender briefs to name this repository
+  and failed on main since 2026-09-14; it now expects `tender-whatsapp` and that no Tender
+  brief targets the factory. No new environment variable. Mission Control applies
+  `schema.sql` at startup; a daemon-only host runs `pipeline.py init-db`.
+  `tools/evals/REPORT.md` is regenerated because `pipeline.py` and `intake.py` are watched.
+- **Fact that bounds this decision:** on 2026-09-15 the laptop's bot token got 403 from both
+  `Career-Hackers/careerhackers-ai-ats` and `Dimashsaken/tender-whatsapp`. The local
+  careerhackers checkout verifies (base `main`), with no `lantern.toml` and a `package.json`
+  without a real test script. The Repositories page shows exactly that, and the
+  organisation has to give the bot access before a careerhackers run can open a pull request.
+- **Residual risks, stated plainly:** (a) a readiness check is a snapshot: access can be
+  revoked after it, and publication then still fails loudly at code complete; (b) GitHub's
+  `permissions.push` can describe the account rather than a fine-grained token's narrower
+  grant, so a push can still be refused; (c) `is_factory()` recognises clones by origin, so a
+  copy with its origin removed is not recognised; (d) runs created before D27 keep the
+  spelling they stored; (e) the first check of a large repository clones it inside the web
+  request.
+- **Sources (read 2026-09-15):** docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent ·
+  jules.google/docs/running-tasks · code.claude.com/docs/en/claude-code-on-the-web ·
+  docs.openhands.dev/openhands/usage/cloud/github-installation · docs.devin.ai/integrations/gh ·
+  docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/deciding-when-to-build-a-github-app ·
+  docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets ·
+  uber.com/us/en/blog/piranha · arxiv.org/abs/2501.06972 · linear.app/developers/agent-interaction ·
+  github.com/openai/symphony/blob/main/SPEC.md.
+- **Not changed:** D6's push namespace and bot identity, D14's host-side push and pull
+  request, D15's `LANTERN_WORKSPACE_ROOTS` boundary for paths, D19's review bot and
+  babysitter (humans merge), the gates, the pipeline shape.

@@ -69,7 +69,11 @@ Every agent session, **before doing anything else**, reads in this order:
    PRs). Which repo, base branch and working branch is a property of the **run** (the
    brief's `- **Product repo:**` / `- **Base branch:**` / `- **Working branch:**`,
    `pipeline.py set-product`, or Mission Control at `/run/<run-id>/repo`); a run without
-   one blocks at stage 2 rather than guessing paths
+   one blocks at stage 2 rather than guessing paths. Repositories are connected once and
+   checked (access, base branch, publishing, quality gate) on Mission Control's
+   **Repositories** page or with `pipeline.py connect`; every surface stores one canonical
+   spelling, and the factory's own repository is refused as a target unless the run is
+   marked dogfood (D27)
 
 And **before ending**, it must write two things (both verified mechanically by the
 orchestrator after every stage run):

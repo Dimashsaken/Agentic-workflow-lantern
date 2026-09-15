@@ -45,7 +45,8 @@ class EmptyDatabase(unittest.TestCase):
     def test_every_list_page_renders_empty(self):
         for route, needle in ((mc.board, "A clear start"), (mc.gates, "Nothing is waiting"),
                               (mc.runs_index, "A clear start"), (mc.cost_page, "No executions in the ledger yet"),
-                              (mc.factory_page, "Roles")):
+                              (mc.factory_page, "Roles"), (mc.repos_page, "No repositories yet"),
+                              (mc.new_work_page, "Connect a repository first")):
             resp = get(route, signed(), pool=FakePool())
             self.assertEqual(resp.status_code, 200, route.__name__)
             self.assertIn(needle, body_of(resp), route.__name__)
@@ -81,7 +82,7 @@ class EmptyDatabase(unittest.TestCase):
     def test_anonymous_callers_are_redirected_or_refused(self):
         for route, args in ((mc.board, ()), (mc.gates, ()), (mc.runs_index, ()), (mc.cost_page, ()),
                             (mc.factory_page, ()), (mc.run_page, (RUN,)), (mc.trace_matrix, (RUN,)),
-                            (mc.exec_drawer, (RUN, 1))):
+                            (mc.exec_drawer, (RUN, 1)), (mc.repos_page, ()), (mc.new_work_page, ())):
             resp = get(route, *args, Req(), pool=FakePool())
             self.assertEqual(resp.status_code, 303, route.__name__)
             self.assertEqual(resp.headers["location"], "/login")
@@ -155,7 +156,8 @@ class Shell(unittest.TestCase):
         self.assertNotIn("prefers-color-scheme", mc.ui.THEME_BOOT)
         self.assertNotIn("matchMedia", mc.ui.THEME_BOOT)
         self.assertIn("=== 'dark'", mc.ui.THEME_BOOT.replace("==='dark'", "=== 'dark'"))
-        for page in (mc.board, mc.gates, mc.runs_index, mc.cost_page, mc.factory_page):
+        for page in (mc.board, mc.gates, mc.runs_index, mc.cost_page, mc.factory_page,
+                     mc.repos_page, mc.new_work_page):
             html = body_of(get(page, signed(), pool=FakePool()))
             self.assertNotIn("prefers-color-scheme", html, page.__name__)
             self.assertIn("lantern-theme", html, page.__name__)   # the toggle still works

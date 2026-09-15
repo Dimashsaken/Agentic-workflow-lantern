@@ -247,6 +247,105 @@ kbd{font-family:var(--font-mono);font-size:var(--text-caps);border:1px solid var
   color:var(--danger);border-radius:var(--r-sm);padding:10px 12px;
   font-size:var(--text-xs);line-height:1.6;margin:0 0 12px}
 
+/* ── repositories, starting work, where the code goes (D27) ─────────────── */
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.repo-list{border-top:1px solid var(--edge)}
+.repo-row{display:grid;grid-template-columns:minmax(0,1.5fr) auto minmax(150px,.8fr) 190px;gap:14px;
+  align-items:center;min-height:74px;padding:14px 12px;border-bottom:1px solid var(--edge);border-radius:6px}
+.repo-row:hover,.repo-row.kfocus{background:var(--surface-2)}
+.repo-name{display:flex;flex-direction:column;gap:3px;min-width:0}
+.repo-name strong{font-weight:600;font-size:var(--text-sm);overflow-wrap:anywhere}
+.repo-name span{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.repo-kind,.repo-chips{display:flex;gap:6px;flex-wrap:wrap}
+.repo-meta{font-size:var(--text-xs);color:var(--text-muted);line-height:1.6}
+.repo-meta code{font-family:var(--font-mono);font-size:11px}
+.repo-state{justify-self:end}
+.repo-used{list-style:none;margin:8px 0 0;padding:0;border-top:1px solid var(--edge)}
+.repo-used li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:14px;align-items:center;
+  padding:12px;border-bottom:1px solid var(--edge)}
+.repo-used form{margin:0}
+.hostpick{margin:4px 0 12px}
+.hostpick summary{cursor:pointer;font-size:var(--text-xs);color:var(--text-muted);padding:6px 0}
+.checkline{display:flex;gap:8px;align-items:flex-start;font-size:var(--text-xs);color:var(--text-muted);
+  margin:10px 0;line-height:1.5;cursor:pointer}
+.checkline input{margin-top:2px}
+.repo-head{padding:18px 0 22px;border-bottom:1px solid var(--edge)}
+.repo-head h1{font-size:var(--text-xl);font-weight:600;letter-spacing:-.5px;line-height:1.25;
+  margin:8px 0 10px;overflow-wrap:anywhere}
+.repo-head .meta{font-size:var(--text-xs);color:var(--text-muted);margin:12px 0 16px;line-height:1.7;
+  overflow-wrap:anywhere}
+.repo-head .meta code,.repo-head .mono{font-family:var(--font-mono);font-size:12px}
+.repo-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.repo-actions form{margin:0}
+.btn[aria-disabled=true]{opacity:.5;cursor:not-allowed}
+.checks{list-style:none;margin:10px 0 6px;padding:0;border-top:1px solid var(--edge)}
+.ck{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;padding:14px 4px;border-bottom:1px solid var(--edge)}
+.ck-mark{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:12px;
+  font-weight:700;border:1px solid var(--edge);color:var(--text-muted)}
+.ck.ok .ck-mark{color:var(--success);background:var(--success-soft);border-color:var(--success-edge)}
+.ck.warn .ck-mark{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-edge)}
+.ck.fail .ck-mark{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-edge)}
+.ck b{font-weight:600;font-size:var(--text-sm)}
+.ck p{margin:4px 0 0;font-size:var(--text-xs);color:var(--text-muted);line-height:1.6;overflow-wrap:anywhere}
+.ck p.fix{color:var(--text)}
+.ck code,.flow code,.dest code,.dest-preview code,.never code,.run-codebase code{font-family:var(--font-mono);
+  font-size:.9em;overflow-wrap:anywhere}
+.flow{list-style:none;counter-reset:flow;margin:12px 0 0;padding:0;display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--edge);
+  border:1px solid var(--edge);border-radius:var(--r-md);overflow:hidden}
+.flow li{background:var(--surface-1);padding:14px 16px 16px;counter-increment:flow}
+.flow li::before{content:counter(flow);display:inline-grid;place-items:center;width:22px;height:22px;
+  border-radius:50%;background:var(--surface-3);color:var(--text);font-size:11px;font-weight:600;margin-bottom:8px}
+.flow b{display:block;font-size:var(--text-sm);font-weight:600;margin-bottom:4px}
+.flow span{display:block;font-size:var(--text-xs);color:var(--text-muted);line-height:1.6}
+.never{font-size:var(--text-xs);color:var(--text-muted);margin:14px 0 0;padding-left:18px;line-height:1.8}
+@media(max-width:1180px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.dest{margin:4px 0 26px;border:1px solid var(--edge);border-radius:var(--r-md);padding:16px 18px;
+  background:var(--surface-1)}
+.dest-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.dest-head h2{font-size:var(--text-md);font-weight:600;margin:0}
+.dest-head .lnk,.run-codebase .lnk{font-size:var(--text-xs);color:var(--dawn-3);text-decoration:underline;
+  text-underline-offset:3px}
+.dest-route{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:10px 0 16px;font-size:var(--text-sm)}
+.dest-repo{font-weight:600;overflow-wrap:anywhere}
+a.dest-repo{text-decoration:underline;text-underline-offset:3px}
+.dest-branches{font-size:var(--text-xs);color:var(--text-muted);overflow-wrap:anywhere}
+.dest-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.dest-steps li{border-top:3px solid var(--edge);padding-top:10px;font-size:var(--text-xs);color:var(--text-muted);
+  line-height:1.55;min-width:0;overflow-wrap:anywhere}
+.dest-steps li b{display:flex;align-items:center;gap:6px;color:var(--text);font-weight:600;margin-bottom:4px}
+.st-mark{font-size:11px;width:14px;text-align:center}
+.dest-steps li.st-done{border-top-color:var(--success)}.dest-steps li.st-done .st-mark{color:var(--success)}
+.dest-steps li.st-now{border-top-color:var(--accent)}.dest-steps li.st-now .st-mark{color:var(--accent)}
+.dest-steps li.st-warn{border-top-color:var(--warning)}.dest-steps li.st-warn .st-mark{color:var(--warning)}
+.dest-steps li.st-fail{border-top-color:var(--danger)}.dest-steps li.st-fail .st-mark{color:var(--danger)}
+.dest-steps li.st-todo .st-mark,.dest-steps li.st-skip .st-mark{color:var(--text-dim)}
+.dest-steps a{color:var(--dawn-3);text-decoration:underline;text-underline-offset:3px}
+.repo-runs td{vertical-align:top}.repo-runs .dim{color:var(--text-muted);font-size:12px}
+.newwork{max-width:880px}
+.newwork fieldset{border:0;border-top:1px solid var(--edge);margin:0;padding:18px 0 10px;min-width:0}
+.newwork legend{font-size:var(--text-sm);font-weight:600;padding:0 10px 0 0}
+.newwork .frow{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}
+.newwork .fld{display:flex;flex-direction:column;gap:6px;font-size:var(--text-xs);min-width:min(260px,100%)}
+.newwork .fld>span{font-weight:500}
+.newwork .fld em{font-style:normal;color:var(--text-muted);font-weight:400;margin-left:6px}
+.newwork .wide{flex:1 1 100%}
+.newwork select{min-width:0;max-width:100%}
+.newwork textarea{resize:vertical;min-height:84px}
+.newwork .hint{font-size:var(--text-xs);color:var(--text-muted);margin:6px 0;line-height:1.6}
+.newwork .hint a{color:var(--dawn-3);text-decoration:underline;text-underline-offset:3px}
+.newwork .opt{display:flex;gap:10px;align-items:flex-start;flex:1 1 280px;padding:12px 14px;
+  border:1px solid var(--edge);border-radius:var(--r-sm);font-size:var(--text-xs);color:var(--text-muted);
+  line-height:1.55;cursor:pointer}
+.newwork .opt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.newwork .opt b{display:block;color:var(--text);font-size:var(--text-sm);margin-bottom:2px}
+.newwork .opt input{margin-top:3px}
+.dest-preview{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;
+  font-size:var(--text-sm);line-height:1.7;margin:18px 0;overflow-wrap:anywhere}
+
 /* ── readout tiles (cost page, catalog) ───────────────────────────────── */
 .readout{display:grid;grid-template-columns:repeat(5,1fr) auto;gap:1px;
   background:var(--edge);border-bottom:1px solid var(--edge);margin:0 -32px}
@@ -997,6 +1096,14 @@ details.tlo pre{background:var(--surface-0);border:1px solid var(--edge);
  .hub{padding:36px 20px}.hub h1{font-size:24px}.hub .inner{margin:0 auto}
  .chatmain{min-height:calc(100dvh - 118px)}
  .runnav{flex-wrap:wrap;gap:14px}
+ .app-sidebar>nav{overflow-x:auto}.app-sidebar nav a{gap:8px;padding:8px 10px;white-space:nowrap}
+ .app-sidebar>nav .nav-icon{display:none}
+ .repo-row{grid-template-columns:minmax(0,1fr) auto;gap:6px 12px}
+ .repo-row .repo-kind{grid-row:2;grid-column:1}.repo-row .repo-meta{grid-row:3;grid-column:1 / -1}
+ .repo-row .repo-state{grid-row:1;grid-column:2}
+ .repo-used li{grid-template-columns:minmax(0,1fr) auto}.repo-used li .repo-meta{grid-row:2;grid-column:1}
+ .dest-steps{grid-template-columns:1fr}
+ .flow{grid-template-columns:1fr}
 }
 /* The lifecycle stays visible; evidence opens one stage at a time. */
 .run-codebase{font-size:12px;color:var(--text-muted);margin:14px 0;overflow-wrap:anywhere}
@@ -1201,12 +1308,14 @@ KEYS_JS = """
 </script>
 """
 
-NAV = [("Work", "/", "work"), ("Reviews", "/gates", "review"), ("Chat", "/chat", "chat")]
+NAV = [("Work", "/", "work"), ("Reviews", "/gates", "review"),
+       ("Repositories", "/repos", "repos"), ("Chat", "/chat", "chat")]
 SECONDARY_NAV = [("Agents", "/agents", "agents"), ("Factory", "/factory", "factory"), ("Cost", "/cost", "cost")]
 ICONS = {
     "work": "<rect x='3' y='4' width='18' height='16' rx='3'/><path d='M3 9h18M8 9v11'/>",
     "review": "<rect x='4' y='3' width='16' height='18' rx='3'/><path d='m8 12 3 3 5-6'/>",
     "chat": "<path d='M21 11a8 8 0 0 1-8 8H7l-4 3V7a4 4 0 0 1 4-4h6a8 8 0 0 1 8 8Z'/>",
+    "repos": "<circle cx='6' cy='5.5' r='2.5'/><circle cx='6' cy='18.5' r='2.5'/><circle cx='18' cy='8' r='2.5'/><path d='M6 8v8M18 10.5c0 4.5-5 5-11 6'/>",
     "agents": "<circle cx='9' cy='8' r='3'/><path d='M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 4a5 5 0 0 1 3 5'/>",
     "factory": "<path d='M3 21V10l6 3V8l6 3V3h6v18ZM7 17h1m4 0h1m4 0h1'/>",
     "cost": "<circle cx='12' cy='12' r='9'/><path d='M15 8h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9m3-10v12'/>",

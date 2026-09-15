@@ -120,11 +120,14 @@ sequence of reviewable commits mapped to the task plan.
   session on their own machine; the gate opens immediately and the developer approves
   it when the branch is code-complete.
 - `auto` — the fleet's `coding` agent implements the plan in a sandbox on a WRITABLE
-  clone of the product repo (branch `feat/<date>-<slug>`, `fix/…` for bug runs), with a
+  clone of the product repo (branch `feat/<date>-<slug>`, `fix/…` for bug runs, or an
+  existing branch chosen for the run, D15), with a
   shell for builds and tests, committing per task as the bot identity. It cannot push:
   the harness bundles the committed branch into the run folder, and the HOST verifies
   the bundle, pushes the branch and opens the pull request. That PR is the
-  `code_complete` payload a human reviews in Mission Control. Agents never merge.
+  `code_complete` payload a human reviews in Mission Control. Agents never merge. The
+  branch and pull request land in the run's product repository, never the factory's own
+  unless the run is marked dogfood (D27).
   **The gate runs as code (D17):** after the agent's turn the product's `lantern.toml`
   `[quality]` commands (test / lint / typecheck / build) run from the product root, plus
   a check that every changed path is inside the plan's `write_scope`. Failures — only

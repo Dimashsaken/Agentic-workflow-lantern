@@ -29,7 +29,7 @@ class FakePool:
 
     def __init__(self, runs=(), execs=(), approvals=(), arts=(), events=(), memory=(),
                  latency=(), runners=(), agg=(), today=(), feed=(), daily=(), per_run=(),
-                 alltime=(), chat_daily=(), chat_alltime=(), alarms=(), fail_latency=False):
+                 alltime=(), chat_daily=(), chat_alltime=(), alarms=(), repos=(), fail_latency=False):
         self.runs, self.execs = list(runs), list(execs)
         self.approvals, self.arts, self.events = list(approvals), list(arts), list(events)
         self.memory, self.latency, self.runners = list(memory), list(latency), list(runners)
@@ -37,6 +37,7 @@ class FakePool:
         self.daily, self.per_run, self.alltime = list(daily), list(per_run), list(alltime)
         self.chat_daily, self.chat_alltime, self.alarms = list(chat_daily), list(chat_alltime), list(alarms)
         self.fail_latency = fail_latency
+        self.repos = list(repos)
         self.queries: list[str] = []
         self.executed: list[tuple[str, tuple]] = []
 
@@ -49,6 +50,8 @@ class FakePool:
             if self.fail_latency:
                 raise asyncpg.PostgresError("aggregate blew up")
             return self.latency
+        if "from product_repos" in s:
+            return self.repos
         if "from runs" in s:
             if "distinct product_repo" in s:
                 return [{"product_repo": r["product_repo"]} for r in self.runs
@@ -95,6 +98,8 @@ class FakePool:
         if "from events" in s:
             if "usage-check" in s:
                 return self.alarms
+            if "run_id = any($1)" in s:
+                return [e for e in self.events if e.get("run_id") in args[0]]
             return [e for e in self.events if not args or e.get("run_id") == args[0]]
         if "from role_memory" in s:
             return [m for m in self.memory if m["execution_key"] == args[0]]
@@ -107,6 +112,8 @@ class FakePool:
         s = _norm(sql)
         if "percentile_cont" in s:
             raise AssertionError("gate latency must be one grouped fetch(), not a scalar fetchrow()")
+        if "from product_repos" in s:
+            return next((r for r in self.repos if r["id"] == args[0]), None)
         if "from runs" in s:
             return next((r for r in self.runs if r["id"] == args[0]), None)
         if "from stage_executions" in s:
@@ -232,3 +239,17 @@ def live_approval(age_seconds, **over) -> dict:
 def agg_row(key: str, value, model="gpt-5.6-sol", inp=100_000, cached=80_000, outp=5_000, n=1, unmetered=0) -> dict:
     return {key: value, "model": model, "inp": inp, "cached": cached, "outp": outp, "n": n,
             "unmetered": unmetered}
+
+
+def repo_row(url="https://github.com/org/app", check=None, **over) -> dict:
+    """A product_repos row (D27); `check` is stored the way asyncpg returns jsonb: as text."""
+    import json
+    import product_repos
+    row = {"id": product_repos.repo_id(url), "url": url, "name": product_repos.display_name(url),
+           "kind": product_repos.kind(url), "default_branch": "main", "is_factory": False,
+           "check_result": json.dumps(check) if check is not None else None,
+           "checked_at": NOW if check is not None else None, "connected_by": "tester",
+           "connected_at": NOW - timedelta(days=1), "last_used_at": None, "archived": False,
+           "updated_at": NOW}
+    row.update(over)
+    return row

@@ -34,6 +34,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+import contextlib
+import io
 import asyncpg
 import markdown as md
 from dotenv import load_dotenv
@@ -45,8 +47,9 @@ sys.path.insert(0, str(AZURE_RUNNER))
 load_dotenv(AZURE_RUNNER / ".env")
 
 from pipeline import (  # noqa: E402
+    CODING_MODES, DESIGN_MODE_DEFAULT, DESIGN_MODES, FACTORY_TARGET_REFUSAL,
     FEATURE_STAGES, REWORK_TARGETS, STAGE_DIR, STAGE_INDEX, STAGE_RUNNER, ProductTargetError,
-    advance, cmd_rework, db_urls, est_cost_usd, log_event, render_runboard,
+    advance, cmd_rework, cmd_run, db_urls, est_cost_usd, log_event, render_runboard,
     verify_product_target, work_branch,
 )
 from orchestrator import CODING_BRANCH_PREFIXES, ROLE_FOR_STAGE  # noqa: E402
@@ -61,6 +64,10 @@ import ui  # noqa: E402
 import workspace  # noqa: E402
 import worklist  # noqa: E402
 import lifecycle  # noqa: E402
+import brief_composer  # noqa: E402  D27: Start work composes briefs the way chat does
+import delivery  # noqa: E402
+import product_repos  # noqa: E402
+import repos_ui  # noqa: E402
 from ui import H, ago, chip, fmt_int, fmt_k, fmt_money  # noqa: E402
 
 # Board columns = run-folder dirs; split stage-1 executions share one column.
@@ -1010,7 +1017,8 @@ async def cost_page(request: Request):
 
 # ── the run page: swim lanes ─────────────────────────────────────────────────
 
-def run_header(run, run_id: str, now: datetime, totals: dict, active: str) -> str:
+def run_header(run, run_id: str, now: datetime, totals: dict, active: str,
+               dest: dict | None = None, repo_href: str = "") -> str:
     status_chip = {"running": ("Queued", ""), "executing": ("Running", "ok"),
                    "waiting_gate": ("Waiting on a human", "gate"),
                    "failed": ("Failed", "blocked"), "done": ("Completed", "ok"),
@@ -1020,20 +1028,11 @@ def run_header(run, run_id: str, now: datetime, totals: dict, active: str) -> st
         if run["status"] not in ("done", "cancelled") else None
     v_chip = chip("report: blocked", "blocked") if verdict == "BLOCKED" else ""
     mode = chip("auto coding", "tier") if (dict(run).get("coding_mode") == "auto") else ""
-    # D15: the target is editable from here. When it is unset the warn chip IS the
-    # link — that turns "stage 2+ blocks" from a dead end into the fix for it.
-    if dict(run).get("product_repo"):
-        landed = work_branch(run_id, dict(run).get("product_working_branch") or "")
-        derived = not (dict(run).get("product_working_branch") or "")
-        repo_bit = (
-            f"<code>{H(run['product_repo'])}</code> · base "
-            f"<code>{H(run['product_branch'] or 'default')}</code> · branch "
-            f"<code>{H(landed)}</code>{' (derived)' if derived else ''} "
-            f"<a href='/run/{H(run_id)}/repo' class='lnk'>change</a>")
-    else:
-        repo_bit = (f"<a href='/run/{H(run_id)}/repo'>"
-                    + chip("no product repo set — stage 2+ blocks · connect one", "warn")
-                    + "</a>")
+    # D27: where the code lands, in words; the repository links to its own page. When no
+    # repository is set the warn chip IS the link to connect one (D15).
+    if dest is None:
+        dest = delivery.build(run, branch=work_branch(run_id, dict(run).get("product_working_branch") or ""))
+    repo_bit = delivery.render_line(dest, run_id, repo_href)
     tot, inp, cached = totals.get("tot", 0), totals.get("inp", 0), totals.get("cached", 0)
     tok_line = (f"{fmt_int(tot)} tok · {round(cached / inp * 100) if inp else 0}% cached"
                 if tot else "no ledger")
@@ -1042,7 +1041,7 @@ def run_header(run, run_id: str, now: datetime, totals: dict, active: str) -> st
     secs = totals.get("seconds")
     sec_line = f"<br>{ui.dur(secs)} of agent time" if secs else ""
     tabs = [("Overview", f"/run/{run_id}", ""), ("Traceability", f"/run/{run_id}/trace", " data-key-t"),
-            ("Codebase", f"/run/{run_id}/repo", ""),
+            ("Repository", f"/run/{run_id}/repo", ""),
             ("Ask Lantern", f"/chat?agent=lantern&run={run_id}", "")]
     nav = "".join(f"<a href='{H(href)}'{extra}{' class=on' if href == active else ''}>{H(n)}</a>"
                   for n, href, extra in tabs)
@@ -1098,16 +1097,33 @@ async def run_page(run_id: str, request: Request, stage: str = ""):
     if not approvals and pend:
         approvals = pend
 
+    # D27: where the code goes: the repository, the branch, the pull request, the merge.
+    dest_events = await p.fetch(
+        "SELECT type, data, at FROM events WHERE run_id = $1 AND type = ANY($2) ORDER BY at",
+        run_id, list(delivery.EVENT_TYPES))
+    repo_row = (await _registry_row(p, product_repos.repo_id(run["product_repo"]))
+                if run["product_repo"] else None)
+    if repo_row is not None:
+        factory = bool(repo_row.get("is_factory"))
+    else:
+        factory = bool(run["product_repo"]) and await asyncio.to_thread(
+            product_repos.is_factory, run["product_repo"])
+    dest = delivery.build(run, dest_events, approvals, factory=factory,
+                          branch=work_branch(run_id, dict(run).get("product_working_branch") or ""))
+    repo_href = f"/repos/{quote(repo_row['id'])}" if repo_row else ""
+
     model = lanes.build_lanes(run, execs, approvals, now, traces=_trace_keys(run_id, execs))
     tot = sum(e["total_tokens"] or 0 for e in execs)
     inp = sum(e["input_tokens"] or 0 for e in execs)
     cached = sum(e["cached_input_tokens"] or 0 for e in execs)
     totals = {"cost": model["cost"], "tot": tot, "inp": inp, "cached": cached,
               "unmetered": model["unmetered"], "seconds": model["seconds"]}
-    body = [run_header(run, run_id, now, totals, f"/run/{run_id}")]
+    body = [run_header(run, run_id, now, totals, f"/run/{run_id}", dest, repo_href)]
 
     cycle = lifecycle.build(run, execs, approvals, events)
     body.append(lifecycle.render(cycle, now, selected=stage))
+    # D27: where the code goes sits above any review, because it is what the review is about.
+    body.append(delivery.render_card(dest, run_id, repo_href))
 
     for a in pend:
         body.append(gate_card(a, run, now))
@@ -1348,7 +1364,8 @@ async def rework_run(run_id: str, request: Request, to_stage: str = Form(""), no
 # unconfined picker would be a filesystem-read primitive behind a login form.
 
 def _repo_picker_body(run, run_id: str, repos: list[dict], sel: str,
-                      heads: list[str] | None, error: str) -> str:
+                      heads: list[str] | None, error: str, connected: list[dict] = (),
+                      sel_factory: bool = False) -> str:
     cur_repo = run.get("product_repo") or ""
     cur_base = run.get("product_branch") or ""
     cur_work = run.get("product_working_branch") or ""
@@ -1370,10 +1387,35 @@ def _repo_picker_body(run, run_id: str, repos: list[dict], sel: str,
     if error:
         out.append(f"<div class='pick'><div class='errbox'>{H(error)}</div></div>")
 
+    # ── connected repositories first (D27) ──
+    sel_connected = next((r for r in connected if sel and
+                          product_repos.identity(r["url"]) == product_repos.identity(sel)), None)
+    if connected:
+        crows = []
+        for r in connected:
+            label, tone = product_repos.status(product_repos.parse_check(r.get("check_result")))
+            mark = " checked" if sel_connected is r else ""
+            crows.append(
+                f"<label><input type='radio' name='connected' value='{H(r['id'])}'{mark}>"
+                f"<span class='nm'>{H(r['name'])}</span>{chip(label, tone)}"
+                f"<span class='pt'>{H(r['url'])}</span></label>")
+        out.append("<div class='pick'><h3>Connected repositories</h3>"
+                   "<p class='hint'>Connected on the <a href='/repos'>Repositories</a> page and "
+                   "already checked for access and publishing. Pick one, then load its branches.</p>"
+                   f"<div class='repolist'>{''.join(crows)}</div></div>")
+    else:
+        out.append("<div class='pick'><h3>Connected repositories</h3><p class='hint'>None yet. "
+                   "<a href='/repos#connect'>Connect the product's repository</a> once, and every "
+                   "run can pick it.</p></div>")
+    if sel_factory:
+        out.append("<div class='pick'><div class='warnbox'>This is the factory's own repository. A "
+                   "run pointed at it lands its branch and pull request next to Lantern's code. "
+                   "Tick the dogfood box only if this run changes the factory itself.</div></div>")
+
     # ── on this host ──
     rows = []
     for r in repos:
-        checked = " checked" if r["path"] == sel else ""
+        checked = " checked" if r["path"] == sel and not sel_connected else ""
         rows.append(
             f"<label><input type='radio' name='local_path' value='{H(r['path'])}'{checked}>"
             f"<span class='nm'>{H(r['name'])}</span>"
@@ -1406,7 +1448,7 @@ def _repo_picker_body(run, run_id: str, repos: list[dict], sel: str,
         f"<span class='lb'>Clone URL</span>"
         f"<input type='text' name='remote_url' style='width:100%' "
         f"placeholder='https://github.com/org/repo' "
-        f"value='{H(sel if sel and not any(r['path'] == sel for r in repos) else '')}'>"
+        f"value='{H(sel if sel and not sel_connected and not any(r['path'] == sel for r in repos) else '')}'>"
         f"</div></div></div>")
 
     # ── branches (only once a repo has been inspected) ──
@@ -1440,7 +1482,11 @@ def _repo_picker_body(run, run_id: str, repos: list[dict], sel: str,
             f"<div class='fld'><span class='lb'>Working branch</span>"
             f"<select name='working_branch'>{''.join(work_opts)}</select></div>"
             f"<button class='btn primary' name='action' value='save'>Connect this run</button>"
-            f"</div></div>")
+            f"</div>"
+            + ("<label class='checkline'><input type='checkbox' name='dogfood' value='1'> "
+               "<span>This run changes the factory itself (dogfood): its branch and pull request "
+               "land in Lantern's own repository.</span></label>" if sel_factory else "")
+            + "</div>")
     else:
         out.append("<div class='pick'><div class='row'>"
                    "<button class='btn primary' name='action' value='inspect'>"
@@ -1475,7 +1521,9 @@ async def repo_picker(run_id: str, request: Request, repo: str = "", error: str 
             heads = await asyncio.to_thread(_branch_names, sel)
         except (RuntimeError, OSError) as e:
             error = error or f"could not read {sel}: {str(e)[:300]}"
-    body = _repo_picker_body(dict(run), run_id, repos, sel, heads, error)
+    connected, _missing = await _registry(p)
+    sel_factory = bool(sel) and await asyncio.to_thread(product_repos.is_factory, sel)
+    body = _repo_picker_body(dict(run), run_id, repos, sel, heads, error, connected, sel_factory)
     return page(f"Codebase — {run_id}", f"<main class='page'>{body}</main>",
                 user, "/runs", now, kind="repo")
 
@@ -1489,7 +1537,8 @@ def _branch_names(repo: str) -> list[str]:
 @app.post("/run/{run_id}/repo")
 async def set_repo(run_id: str, request: Request, action: str = Form("inspect"),
                    local_path: str = Form(""), remote_url: str = Form(""),
-                   base_branch: str = Form(""), working_branch: str = Form("")):
+                   base_branch: str = Form(""), working_branch: str = Form(""),
+                   connected: str = Form(""), dogfood: str = Form("")):
     user = current_user(request)
     if user is None:
         raise HTTPException(401, "sign in required")    # fail closed, like gates
@@ -1500,7 +1549,20 @@ async def set_repo(run_id: str, request: Request, action: str = Form("inspect"),
     if run["status"] in ("done", "cancelled"):
         raise HTTPException(409, f"run is {run['status']} — its codebase is history now")
 
-    local_path, remote_url = local_path.strip(), remote_url.strip()
+    local_path, remote_url, connected = _form(local_path), _form(remote_url), _form(connected)
+    base_branch, working_branch = _form(base_branch), _form(working_branch)
+    if connected and (local_path or remote_url):
+        raise HTTPException(400, "choose one repository: a connected one, one on this host, or a URL")
+    if connected:
+        # D27: a connected repository resolves to the URL or path it was registered with,
+        # and a path still has to pass the workspace boundary below.
+        reg = await _registry_row(p, connected)
+        if reg is None or reg.get("archived"):
+            raise HTTPException(400, "that repository is not connected; connect it on the Repositories page")
+        if reg.get("kind") == "local":
+            local_path = reg["url"]
+        else:
+            remote_url = reg["url"]
     if local_path and remote_url:
         raise HTTPException(400, "choose a repo on this host OR a remote URL, not both")
     if local_path:
@@ -1515,7 +1577,7 @@ async def set_repo(run_id: str, request: Request, action: str = Form("inspect"),
     elif remote_url:
         if not remote_url.startswith(("https://", "http://", "git@", "ssh://")):
             raise HTTPException(400, "a remote target must be a clone URL")
-        repo = remote_url
+        repo = product_repos.canonical(remote_url)   # D27: one spelling per repository
     else:
         raise HTTPException(400, "pick a repository first")
 
@@ -1523,7 +1585,8 @@ async def set_repo(run_id: str, request: Request, action: str = Form("inspect"),
     # report — the blast radius, the task plan and the QA charter all name paths in
     # the old tree. Refuse loudly rather than corrupt the run's history.
     stage_i = STAGE_SEQ.index(run["current_stage"]) if run["current_stage"] in STAGE_SEQ else 0
-    if (run["product_repo"] and run["product_repo"] != repo
+    if (run["product_repo"]
+            and product_repos.identity(run["product_repo"]) != product_repos.identity(repo)
             and stage_i > STAGE_SEQ.index("03-coding")):
         raise HTTPException(409, (
             "this run is past coding — pointing it at a different repository would "
@@ -1537,7 +1600,7 @@ async def set_repo(run_id: str, request: Request, action: str = Form("inspect"),
     try:
         info = await asyncio.to_thread(
             verify_product_target, repo, base_branch or run["product_branch"] or "main",
-            working_branch)
+            working_branch, action != "save" or _truthy(dogfood))
     except ProductTargetError as e:
         return _back(f"{e} (branches: {', '.join(e.branches) or 'none'})")
     except (RuntimeError, OSError) as e:
@@ -1546,17 +1609,313 @@ async def set_repo(run_id: str, request: Request, action: str = Form("inspect"),
     if action != "save":
         return _back()
 
+    base = base_branch or run["product_branch"] or "main"
     async with p.acquire() as conn:
+        await product_repos.touch(conn, repo, base, user)   # D27: the registry knows every target
         await conn.execute(
             """UPDATE runs SET product_repo = $1, product_branch = $2,
                                product_working_branch = $3, updated_at = now()
                WHERE id = $4""",
-            repo, base_branch or run["product_branch"] or "main",
-            info["working"] or None, run_id)
+            repo, base, info["working"] or None, run_id)
         await log_event(conn, run_id, f"human:{user}", "product_target_set",
-                        {"repo": repo, "branch": base_branch,
+                        {"repo": repo, "branch": base,
                          "working": info["working"], "head": info["base_sha"][:12],
+                         "previous_repo": run["product_repo"],
+                         "previous_branch": run["product_branch"],
+                         "channel": "web", **({"dogfood": True} if _truthy(dogfood) else {})})
+    return RedirectResponse(f"/run/{run_id}", status_code=303)
+
+
+# ── connected repositories and starting work (D27) ───────────────────────────
+# Connect a repository once, see whether it is ready and why not, then start work by
+# picking it first: the order the hosted coding agents we compared all use. A path is
+# still admitted only through workspace.contains() (D15), the factory's own repository
+# needs the dogfood box ticked every time, and starting work is pipeline.py's own `run`
+# command, recorded against the signed-in human.
+
+BRIEFS_DIR = brief_composer.BRIEFS_DIR
+
+
+def _form(value) -> str:
+    """A Form() default arrives as a FieldInfo when a route is called directly (tests do)."""
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _truthy(value) -> bool:
+    return _form(value).lower() in ("1", "true", "on", "yes")
+
+
+async def _registry(p, include_archived: bool = False) -> tuple[list[dict], bool]:
+    """(rows, missing): `missing` is True on a database that predates the registry."""
+    try:
+        rows = [dict(r) for r in await p.fetch("SELECT * FROM product_repos ORDER BY name")]
+    except asyncpg.PostgresError:
+        return [], True
+    return (rows if include_archived else [r for r in rows if not r.get("archived")]), False
+
+
+async def _registry_row(p, repo_id: str) -> dict | None:
+    if not repo_id:
+        return None
+    try:
+        row = await p.fetchrow("SELECT * FROM product_repos WHERE id = $1", repo_id)
+    except asyncpg.PostgresError:
+        return None
+    return dict(row) if row else None
+
+
+def _runs_by_repo(runs) -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = {}
+    for r in runs:
+        r = dict(r)
+        if r.get("product_repo"):
+            out.setdefault(product_repos.repo_id(r["product_repo"]), []).append(r)
+    return out
+
+
+async def _pipeline_call(coro) -> dict:
+    """Run a pipeline.py command in-process; a SystemExit is its way of saying no."""
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            await coro
+    except SystemExit as e:
+        return {"ok": False, "error": str(e) or "refused", "output": buf.getvalue()}
+    except Exception as e:  # noqa: BLE001 — shown to the human, never swallowed
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:400]}", "output": buf.getvalue()}
+    return {"ok": True, "output": buf.getvalue()}
+
+
+@app.get("/repos", response_class=HTMLResponse)
+async def repos_page(request: Request, error: str = "", repo: str = ""):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
+    rows, missing = await _registry(p)
+    by_repo = _runs_by_repo(await p.fetch("SELECT * FROM runs ORDER BY created_at DESC"))
+    known = {r["id"] for r in rows}
+    unconnected = []
+    for rid, runs in by_repo.items():
+        if rid in known:
+            continue
+        url = product_repos.canonical(runs[0]["product_repo"])
+        unconnected.append({"id": rid, "url": url, "name": product_repos.display_name(url),
+                            "kind": product_repos.kind(url), "runs": len(runs), "factory": False})
+    # The same factory test the connect route applies, so the list never offers a
+    # one-click Connect that the server then refuses (a clone or worktree of Lantern).
+    flags = await asyncio.to_thread(lambda: [product_repos.is_factory(u["url"]) for u in unconnected])
+    for u, flag in zip(unconnected, flags):
+        u["factory"] = flag
+    connected_ids = {product_repos.identity(r["url"]) for r in rows}
+    found = await asyncio.to_thread(workspace.discover_repos)
+    marks = await asyncio.to_thread(lambda: [product_repos.looks_like_factory(d["path"]) for d in found])
+    discovered = [dict(d, factory=mark, connected=product_repos.identity(d["path"]) in connected_ids)
+                  for d, mark in zip(found, marks)]
+    body = repos_ui.render_index(rows, by_repo, discovered, unconnected, now, error=error,
+                                 prefill=repo, roots=workspace.roots_label(),
+                                 registry_missing=missing)
+    return page("Repositories — Lantern", f"<main class='page work-page'>{body}</main>",
+                user, "/repos", now, kind="repos")
+
+
+@app.post("/repos/connect")
+async def connect_repo(request: Request, remote_url: str = Form(""), local_path: str = Form(""),
+                       base_branch: str = Form(""), dogfood: str = Form("")):
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401, "sign in required")      # before any input is looked at
+    remote_url, local_path, base_branch = _form(remote_url), _form(local_path), _form(base_branch)
+    if remote_url and local_path:
+        raise HTTPException(400, "paste a URL or pick a checkout on this host, not both")
+    if local_path:
+        admitted = workspace.contains(local_path)
+        if admitted is None:
+            raise HTTPException(400, (
+                f"'{local_path}' is not an available repository. Only git repositories inside "
+                f"LANTERN_WORKSPACE_ROOTS ({workspace.roots_label()}) can be connected by path."))
+        ref = str(admitted)
+    elif remote_url:
+        if product_repos.kind(remote_url) in ("", "local"):
+            raise HTTPException(400, "a remote repository must be a clone URL: https://…, "
+                                     "ssh://… or git@host:owner/repo")
+        ref = product_repos.canonical(remote_url)
+    else:
+        raise HTTPException(400, "paste the repository's clone URL, or pick a checkout on this host")
+
+    def back(err: str) -> RedirectResponse:
+        return RedirectResponse(f"/repos?error={quote(err[:600])}&repo={quote(remote_url)}#connect",
+                                status_code=303)
+
+    if await asyncio.to_thread(product_repos.is_factory, ref) and not _truthy(dogfood):
+        return back(FACTORY_TARGET_REFUSAL.format(repo=ref))
+    res = await asyncio.to_thread(product_repos.check, ref, base_branch)
+    if base_branch and res["reachable"] and not res["base_exists"]:
+        return back(f"branch '{base_branch}' not found in {res['name']} "
+                    f"(branches: {', '.join(res['branches'][:20]) or 'none'})")
+    p = await get_pool()
+    async with p.acquire() as conn:
+        try:
+            await product_repos.upsert(conn, res, user)
+        except asyncpg.PostgresError as e:
+            return back(f"could not record the repository ({str(e)[:200]}); run pipeline.py init-db")
+        await log_event(conn, None, f"human:{user}", "repo_connected",
+                        {"repo": res["repo"], "id": res["id"], "kind": res["kind"],
+                         "base": res["base"], "reachable": res["reachable"],
+                         "status": product_repos.status(res)[0], "dogfood": res["is_factory"],
                          "channel": "web"})
+    return RedirectResponse(f"/repos/{quote(res['id'])}", status_code=303)
+
+
+@app.get("/repos/{repo_id}", response_class=HTMLResponse)
+async def repo_page(repo_id: str, request: Request, error: str = ""):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
+    row = await _registry_row(p, repo_id)
+    if not row:
+        raise HTTPException(404, "repository not connected")
+    runs = _runs_by_repo(await p.fetch("SELECT * FROM runs ORDER BY created_at DESC")).get(repo_id, [])
+    ids = [r["id"] for r in runs]
+    events, approvals = [], []
+    if ids:
+        events = [dict(e) for e in await p.fetch(
+            "SELECT run_id, type, data, at FROM events WHERE run_id = ANY($1) AND type = ANY($2) "
+            "ORDER BY at", ids, list(delivery.EVENT_TYPES))]
+        approvals = [dict(a) for a in await p.fetch(
+            "SELECT * FROM approvals WHERE run_id = ANY($1) AND gate = 'code_complete' "
+            "ORDER BY requested_at", ids)]
+    models = {r["id"]: delivery.build(
+        r, [e for e in events if e.get("run_id") == r["id"]],
+        [x for x in approvals if x.get("run_id") == r["id"]], factory=bool(row.get("is_factory")),
+        branch=work_branch(r["id"], r.get("product_working_branch") or "")) for r in runs}
+    body = repos_ui.render_detail(row, product_repos.parse_check(row.get("check_result")), runs,
+                                  models, now, error=error, prefixes=tuple(CODING_BRANCH_PREFIXES))
+    return page(f"{row['name']} — Repositories", f"<main class='page'>{body}</main>",
+                user, "/repos", now, kind="repos")
+
+
+@app.post("/repos/{repo_id}/check")
+async def recheck_repo(repo_id: str, request: Request):
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401, "sign in required")
+    p = await get_pool()
+    row = await _registry_row(p, repo_id)
+    if not row:
+        raise HTTPException(404, "repository not connected")
+    res = await asyncio.to_thread(product_repos.check, row["url"], row.get("default_branch") or "")
+    async with p.acquire() as conn:
+        await conn.execute(
+            """UPDATE product_repos SET check_result = $1, checked_at = now(), is_factory = $2,
+                                        updated_at = now() WHERE id = $3""",
+            json.dumps(res), bool(res["is_factory"]), repo_id)
+    return RedirectResponse(f"/repos/{quote(repo_id)}", status_code=303)
+
+
+@app.post("/repos/{repo_id}/archive")
+async def archive_repo(repo_id: str, request: Request):
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401, "sign in required")
+    p = await get_pool()
+    row = await _registry_row(p, repo_id)
+    if not row:
+        raise HTTPException(404, "repository not connected")
+    async with p.acquire() as conn:
+        await conn.execute(
+            "UPDATE product_repos SET archived = true, updated_at = now() WHERE id = $1", repo_id)
+        await log_event(conn, None, f"human:{user}", "repo_archived",
+                        {"repo": row["url"], "id": repo_id, "channel": "web"})
+    return RedirectResponse("/repos", status_code=303)
+
+
+def _new_page(rows, selected, fields, user, now, error="", status_code=200) -> HTMLResponse:
+    body = repos_ui.render_new(rows, selected, fields, now, error=error,
+                               design_default=DESIGN_MODE_DEFAULT,
+                               prefixes=tuple(CODING_BRANCH_PREFIXES))
+    resp = page("Start work — Lantern", f"<main class='page work-page'>{body}</main>",
+                user, "/", now, kind="new")
+    resp.status_code = status_code
+    return resp
+
+
+@app.get("/new", response_class=HTMLResponse)
+async def new_work_page(request: Request, repo: str = ""):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    p = await get_pool()
+    rows, _missing = await _registry(p)
+    return _new_page(rows, repo, {}, user, datetime.now(timezone.utc))
+
+
+@app.post("/new")
+async def start_work(request: Request, repo_id: str = Form(""), title: str = Form(""),
+                     problem: str = Form(""), must_haves: str = Form(""),
+                     base_branch: str = Form(""), working_branch: str = Form(""),
+                     coding_mode: str = Form("human"), design_mode: str = Form(""),
+                     dogfood: str = Form("")):
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401, "sign in required")
+    fields = {"title": _form(title), "problem": _form(problem), "must_haves": _form(must_haves),
+              "base_branch": _form(base_branch), "working_branch": _form(working_branch),
+              "coding_mode": _form(coding_mode).lower() or "human",
+              "design_mode": _form(design_mode).lower(), "dogfood": _truthy(dogfood)}
+    p = await get_pool()
+    now = datetime.now(timezone.utc)
+    rows, _missing = await _registry(p)
+    rid = _form(repo_id)
+
+    def refuse(message: str) -> HTMLResponse:
+        return _new_page(rows, rid, fields, user, now, error=message, status_code=400)
+
+    row = next((r for r in rows if r["id"] == rid), None)
+    if row is None:
+        return refuse("Pick one of the connected repositories.")
+    check = product_repos.parse_check(row.get("check_result")) or {}
+    if not check.get("usable"):
+        return refuse(f"{row['name']} is not usable yet ({product_repos.status(check or None)[0]}). "
+                      "Open its page, fix the blocking checks and check again.")
+    if row.get("is_factory") and not fields["dogfood"]:
+        return refuse(FACTORY_TARGET_REFUSAL.format(repo=row["url"]))
+    if fields["coding_mode"] not in CODING_MODES:
+        return refuse(f"Coding mode must be one of {', '.join(CODING_MODES)}.")
+    if fields["coding_mode"] == "auto" and any(
+            i.get("key") == "publish" and i.get("state") == "fail" for i in check.get("items", [])):
+        return refuse(f"The coding agent could not publish to {row['name']}: its last check says the "
+                      "branch cannot be pushed. Fix access and check again, or choose a developer.")
+    design = fields["design_mode"] if fields["design_mode"] in DESIGN_MODES else DESIGN_MODE_DEFAULT
+    base = fields["base_branch"] or row.get("default_branch") or "main"
+    composed = brief_composer.compose({
+        "title": fields["title"], "problem": fields["problem"], "must_haves": fields["must_haves"],
+        "product_repo": row["url"], "base_branch": base, "working_branch": fields["working_branch"],
+        "coding_mode": fields["coding_mode"], "design_mode": design, "developer": user,
+        "existing_context": "Started from Mission Control's Start work form; the researcher maps "
+                            "the codebase before the story is written."}, by=user)
+    if not composed["ok"]:
+        asks = {"title": "a title", "problem": "the problem", "product_repo": "a repository",
+                "coding_mode": "who writes the code"}
+        missing = [asks.get(m, m) for m in composed["missing"]]
+        return refuse("; ".join(([f"Missing {', '.join(missing)}"] if missing else [])
+                                + composed["problems"]))
+    run_id = composed["run_id"]
+    if await p.fetchval("SELECT count(*) FROM runs WHERE id = $1", run_id):
+        return refuse(f"A run called {run_id} already exists today. Give this work a different title.")
+    try:
+        path = brief_composer.write_brief(composed["slug"], composed["markdown"], BRIEFS_DIR)
+    except (FileExistsError, ValueError) as e:
+        return refuse(str(e))
+    brief_ref = path.relative_to(REPO).as_posix() if path.is_relative_to(REPO) else str(path)
+    res = await _pipeline_call(cmd_run(
+        brief_ref, run_id, user, False, row["url"], base, fields["coding_mode"],
+        fields["working_branch"], design, dogfood=bool(row.get("is_factory")) and fields["dogfood"]))
+    if not res["ok"]:
+        return refuse(res["error"])
     return RedirectResponse(f"/run/{run_id}", status_code=303)
 
 

@@ -17,3 +17,8 @@ read the same commits in `Dimashsaken/tender-whatsapp` instead.
 On the box, `bash infra/ec2/tender-playbook.sh` runs the whole thing step by step; set
 `PRODUCT_URL` there (or `pipeline.py set-product <run-id> --repo <url> --branch main` for a
 run) when the target moves.
+
+Since D27 (2026-09-15) the factory refuses its own repository as a product target unless a
+run is marked dogfood, so a product seed branch here cannot happen by accident again.
+Connect a product's own repository on Mission Control's **Repositories** page, or with
+`pipeline.py connect <url>`, and start its runs from there.

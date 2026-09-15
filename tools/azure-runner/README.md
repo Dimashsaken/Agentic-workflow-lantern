@@ -190,6 +190,26 @@ artifacts table, and deletes the local files.
 A run works on ONE product repository, the way a developer's coding agent works in one
 checkout. Point the run at it and the fleet does the rest:
 
+**Connect the repository first (D27).** Mission Control's **Repositories** page (`/repos`),
+or `python pipeline.py connect <https-url-or-path> [--base main]`, checks a repository once
+and records it: can this host read it, does the base branch exist, will the host push
+branches and open pull requests (the bot token's push permission on GitHub), does the base
+carry `lantern.toml` with a test command (automatic coding needs it, D24), is the base
+protected. Every failing item says what to grant or add. `--check-only` prints the same
+checklist with no database, which is the quickest way to see why a box cannot use a
+repository. **Start work** (`/new`) then begins with the repository: title, problem,
+must-haves, base branch, coding and design mode. It writes the brief and calls
+`pipeline.py run` as the signed-in human, and the run page's **Where the code goes** card
+follows the branch to its pull request and merge.
+
+Every surface (brief, CLI flag, `set-product`, the picker, chat, Slack) stores the
+repository in one canonical spelling, so `git@github.com:o/r.git` and `…/r.git/` become
+`https://github.com/o/r` and pasted credentials are dropped, and registers it. **The
+factory's own repository is refused as a product target** (this checkout, any clone or
+worktree of it, its origin) unless the run says it changes Lantern itself: `--dogfood` on
+`run`, `set-product`, `bug` and `connect`, or the dogfood box in Mission Control. A target
+like that is how the first Tender runs put their branches into this repository.
+
 There are three ways to point a run at a codebase, and they resolve in this order:
 **CLI flag → the brief's own field → the box default**.
 
@@ -204,6 +224,8 @@ There are three ways to point a run at a codebase, and they resolve in this orde
 ```bash
 # or on the command line
 python pipeline.py repos                             # git repos THIS host can offer
+python pipeline.py connect https://github.com/org/repo --check-only   # readiness checklist, no DB (D27)
+python pipeline.py connect https://github.com/org/repo                # check it and register it
 python pipeline.py run workflow/briefs/x.md --product-repo https://github.com/org/repo --coding-mode auto
 python pipeline.py set-product <run-id> --repo <url-or-path> --branch main   # an existing run
 python pipeline.py set-product <run-id> --repo <url-or-path> --branch main \
@@ -218,7 +240,8 @@ a repo, load its branches, choose the base and (optionally) an existing working 
 and save. The picker only looks inside `LANTERN_WORKSPACE_ROOTS`; unset means it offers
 nothing, falling back to `~/work` when that exists. That is deliberate — whatever path
 is admitted becomes a run's product tree, so an unconfined picker would be a
-filesystem-read primitive behind a login form.
+filesystem-read primitive behind a login form. Since D27 the picker lists connected
+repositories first, and saving the factory's own repository needs the dogfood box.
 
 **Base vs working branch.** `product_branch` is the base. `product_working_branch` is
 where commits land; leave it unset and the branch is derived from the run id, exactly as

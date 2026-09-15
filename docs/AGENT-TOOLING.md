@@ -126,6 +126,15 @@ back to `~/work` when it exists). That is a security boundary, not a convenience
 D15. A working branch must sit inside the `feat/*|fix/*|proto/*` namespace D6 lets
 agents push to, and is refused at selection time if it does not.
 
+**Connect first, and never the factory by accident (D27).** Repositories are connected
+once, on Mission Control's Repositories page or with `pipeline.py connect <url-or-path>`,
+and checked: access for the host, the base branch, push permission and pull requests for
+the bot, the quality gate, branch protection. A run stores the repository's canonical
+spelling, and the factory's own repository (this checkout, its clones and worktrees, its
+origin) is refused as a target unless the run is marked dogfood. An organisation's private
+repository needs the bot's access first: invite `lantern-bot` with Write, or add the
+repository to the fine-grained token's repository access.
+
 Two things to know about a **local-path** target: it is never fetched, so the pipeline
 sees that repo's **committed** state only (uncommitted work in your checkout is
 invisible to agents); and publishing fetches the bundle into that repo, which git

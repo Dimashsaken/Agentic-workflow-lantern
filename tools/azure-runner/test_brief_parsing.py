@@ -82,10 +82,13 @@ class BriefFields(unittest.TestCase):
         for name in ("tender-onboarding", "tender-catalog-orders", "tender-escalations"):
             text = (briefs / f"{name}.md").read_text(encoding="utf-8")
             with self.subTest(brief=name):
+                # Tender lives in its own repository since 2026-09-14. Before that these
+                # briefs named this factory repository with a product/tender-whatsapp base,
+                # which is how the Tender runs landed their branches here (D27).
                 self.assertEqual(
                     p.parse_brief_product(text),
-                    ("https://github.com/Dimashsaken/Agentic-workflow-lantern",
-                     "product/tender-whatsapp", ""))
+                    ("https://github.com/Dimashsaken/tender-whatsapp", "main", ""))
+                self.assertFalse(p.product_repos.is_factory(p.parse_brief_product(text)[0]))
                 self.assertEqual(p.parse_brief_coding_mode(text), "auto")
                 self.assertEqual(p.parse_brief_design_mode(text), "html")
 

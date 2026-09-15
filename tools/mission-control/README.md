@@ -7,9 +7,11 @@ The web UI for the software factory — design and rationale in
 |------|--------|-----------------|
 | **Work** `/`, `/runs` | `worklist.py`, `app.py` | One searchable queue. Reviews and blocked runs first; filters for active work, reviews, completed work, and history. |
 | **Reviews** `/gates` | `app.py` | Open one review to see its artifact and decide. Timing and decision history are optional disclosures. |
-| **Run** `/run/<id>` | `app.py`, `lifecycle.py`, `lanes.py` | Connected lifecycle, current agents, next handoff, and rework. Select a stage for attempts and evidence; open the full execution history on demand. |
+| **Run** `/run/<id>` | `app.py`, `lifecycle.py`, `lanes.py`, `delivery.py` | Connected lifecycle, current agents, next handoff, and rework; **Where the code goes** follows the branch to its pull request, approval and merge. Select a stage for attempts and evidence; open the full execution history on demand. |
 | **Drawer** `/run/<id>/exec/<n>` | `drawer.py` | Prompt, tool calls, report, validation, quality gate, memory, ledger, retry and rework. |
 | **Traceability** `/run/<id>/trace` | `traceability.py` | Story criteria mapped to plan tasks, commits, QA, and validation. |
+| **Repositories** `/repos`, `/repos/<id>` | `repos_ui.py`, `app.py` | Connect a repository once. Its readiness checklist (access, base branch, publishing, quality gate, protection) with the fix for each failing item, where work lands, and every run on it with branch, pull request and merge state (D27). |
+| **Start work** `/new` | `repos_ui.py`, `app.py` | Repository first, then the work, base branch and coding mode; writes the brief and calls `pipeline.py run` as the signed-in human. |
 | **Chat** `/chat` | `chat.py` | Start with Lantern; choose a specialist only when needed. |
 | **Workspace** | `catalog.py`, `cost.py`, `chat.py` | Secondary navigation for Agents, Factory and Cost. |
 

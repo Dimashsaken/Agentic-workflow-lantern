@@ -908,7 +908,8 @@ def check_bug_stage_inputs(run_id: str, stage: str) -> str | None:
 
 async def cmd_bug(text_or_file: str, source: str, by: str, product_repo: str = "",
                   product_branch: str = "", working_branch: str = "", coding_mode: str = "",
-                  shepherd: str = "", run_id: str = "", slug: str = "", follow: bool = False) -> None:
+                  shepherd: str = "", run_id: str = "", slug: str = "", follow: bool = False,
+                  dogfood: bool = False) -> None:
     """`pipeline.py bug` — the run folder + the runs row at 01-triage."""
     import asyncio  # noqa: PLC0415
     import pipeline  # noqa: PLC0415
@@ -922,7 +923,9 @@ async def cmd_bug(text_or_file: str, source: str, by: str, product_repo: str = "
     shepherd = (shepherd or default_shepherd()).strip()
     if product_repo:
         try:
-            await asyncio.to_thread(pipeline.verify_product_target, product_repo, product_branch, working_branch)
+            product_repo = pipeline.product_repos.canonical(product_repo)   # D27: one spelling
+            await asyncio.to_thread(pipeline.verify_product_target, product_repo, product_branch,
+                                    working_branch, dogfood)
         except pipeline.ProductTargetError as e:
             sys.exit(f"{e}\nbranches: {', '.join(e.branches) or '(none)'}")
     else:
@@ -947,6 +950,8 @@ async def cmd_bug(text_or_file: str, source: str, by: str, product_repo: str = "
                               "product_repo": product_repo, "product_branch": product_branch,
                               "coding_mode": coding_mode,
                               "dedup": [{"run_id": c["run_id"], "score": c["score"]} for c in made["candidates"]]})
+    if product_repo:
+        await pipeline.product_repos.touch(conn, product_repo, product_branch, by)   # D27
     await pipeline.render_runboard(conn)
     print(f"bug run {run_id} created - \"{made['title']}\" (source: {source}, coding mode: {coding_mode}, "
           f"shepherd: {shepherd or 'none'})")
