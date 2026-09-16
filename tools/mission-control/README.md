@@ -57,5 +57,7 @@ Auth: login page + signed session cookie. Users from
 `LANTERN_WEB_USERS="justin:pw,dev:pw"` in the azure-runner `.env` (or SSM on EC2);
 optional `LANTERN_WEB_SECRET` for the cookie key. **No page is served without
 login**, and with no users configured nobody can log in. Every gate decision
-records actor + note + timestamp. Never expose the port publicly — Tailscale or an
+records actor + note + timestamp. QA video links go through `/media`, which signs a
+15-minute S3 URL with the host's instance role when clicked; the bucket stays private
+(`test_media_route.py`). Never expose the port publicly — Tailscale or an
 IP-allowlisted security group.

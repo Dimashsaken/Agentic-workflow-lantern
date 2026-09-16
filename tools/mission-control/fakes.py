@@ -114,6 +114,9 @@ class FakePool:
             raise AssertionError("gate latency must be one grouped fetch(), not a scalar fetchrow()")
         if "from product_repos" in s:
             return next((r for r in self.repos if r["id"] == args[0]), None)
+        if "from artifacts" in s:                      # /media: by id, or by the uri a manifest names
+            key = "id" if "where id = $1" in s else "uri"
+            return next((a for a in self.arts if a.get(key) == args[0]), None)
         if "from runs" in s:
             return next((r for r in self.runs if r["id"] == args[0]), None)
         if "from stage_executions" in s:

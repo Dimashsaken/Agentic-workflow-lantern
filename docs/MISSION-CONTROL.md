@@ -55,6 +55,41 @@ The work list uses the latest execution snapshot; the run page shows full attemp
 and the most recent rework among its latest 100 audit events. Both retain the
 existing 30-second refresh behavior; they are not a live agent stream.
 
+## QA videos: signed links
+
+QA videos live in the artifact bucket, which blocks all public access, so a raw `s3://`
+link does nothing in a browser. Every link to a bucket object therefore points at
+Mission Control, which signs a short-lived URL when the link is clicked. A reviewer
+needs a Mission Control login, not AWS credentials.
+
+| Route | Linked from |
+|-------|-------------|
+| `GET /media/<artifact id>` | a run's artifact rows (**Reports & files**) |
+| `GET /media?uri=s3://…` | the session links read from a stage's `media-manifest.json`: a review's staging videos, and each stage folder on the run page |
+
+On each click the route:
+
+1. sends an anonymous request to `/login`, like every page;
+2. finds the object's `artifacts` row, and answers 404 when there is none. The `?uri=`
+   form signs only a URI a row records, so a `media-manifest.json` planted in the run
+   folder cannot widen what the host signs;
+3. accepts only `s3://$LANTERN_ARTIFACT_BUCKET/lantern/…` with plain path segments, and
+   answers 403 for anything else or when that variable is unset. The instance role can
+   read the whole bucket, so this check is what keeps links inside `lantern/`;
+4. runs `aws s3 presign <uri> --expires-in 900` and answers **302** to the result, with
+   `Cache-Control: no-store`. The browser then plays the `video/webm` object directly
+   from S3.
+
+The URL is signed by the host's own AWS identity. On the box that is the `lantern-ec2`
+instance role, which has `s3:GetObject` on the bucket, so no keys are stored. The CLI is
+the same `aws` the dispatcher uploads with (boto3 is not in the venv), and Mission
+Control reads `LANTERN_ARTIFACT_BUCKET` from the same `tools/azure-runner/.env`. A
+signed URL is a bearer credential for one object for 15 minutes, so it appears only in
+the redirect's `Location` header: it is never rendered or logged, and rendering a page
+signs nothing. When signing fails the route answers 502 and writes the CLI's stderr
+(never its stdout) to the unit's journal, `journalctl -u lantern-mission-control`.
+Proof: `tools/mission-control/test_media_route.py`, part of the `lantern.toml` gate.
+
 ## Earlier design and evidence
 
 The following describes the v3 implementation before the September 11 simplification.
@@ -220,7 +255,8 @@ showing an empty panel.
 
 ## Gate integrity in the UI
 
-**Nothing is served unauthenticated** — every page redirects to a login screen;
+**Nothing is served unauthenticated** — every page, and every video link (`/media`),
+redirects to a login screen;
 sessions are HMAC-signed cookies (7-day TTL, key from `LANTERN_WEB_SECRET`, falling
 back to a hash of `LANTERN_WEB_USERS`). Decisions write the `approvals` row with
 actor + timestamp + note (`channel='web'`) — the same fail-closed contract as the CLI
@@ -244,5 +280,5 @@ there.
   page, light mode, the keyboard map, phone layout. **Done.**
 - v4: per-tool-call timings (needs a streamed run, not the final result); SSE on the
   run page so a live execution's lane grows without a reload; inline `<video>` playback
-  via presigned S3 URLs; a brief-composer form; the debug lifecycle's own lane table
-  once `pipeline.py bug` lands (D20).
+  (the signed links it needs exist since `/media`); a brief-composer form; the debug
+  lifecycle's own lane table once `pipeline.py bug` lands (D20).

@@ -15,7 +15,8 @@ hurts.
   Postgres notices.
 - 50 GB gp3. No GPU needed — Playwright records video headless in software.
 - IAM instance profile with: read on the SSM parameters below, read/write on the
-  artifact bucket. No long-lived AWS keys on disk.
+  artifact bucket (write for the dispatcher's uploads, read for the video links
+  Mission Control signs). No long-lived AWS keys on disk.
 
 ## Base setup — one script
 
@@ -76,8 +77,10 @@ AWS credentials never cross into a sandbox) to
 — attempt-prefixed so a retry never overwrites earlier evidence, session-numbered in
 recording order (the MCP names files itself). It records an `artifacts` row per file,
 regenerates `media-manifest.json` next to the report FROM those rows (never merged
-from the agent-writable run dir), and deletes the local copies. Set `LANTERN_ARTIFACT_BUCKET` in the daemon env. Reports link the S3
-URL (or a presigned/CloudFront URL if reviewers lack AWS access). Lifecycle rule:
+from the agent-writable run dir), and deletes the local copies. Set `LANTERN_ARTIFACT_BUCKET` in the daemon env. A report may name the S3
+URL; Mission Control links every video through `/media`, which signs a 15-minute URL with
+the instance role when it is clicked, so reviewers need no AWS access and the bucket stays
+private (docs/MISSION-CONTROL.md, "QA videos: signed links"). Lifecycle rule:
 expire run artifacts after 90 days; postmortem-linked videos are copied to
 `/lantern/permanent/` first.
 

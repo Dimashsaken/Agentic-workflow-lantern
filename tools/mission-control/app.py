@@ -309,8 +309,12 @@ def _payload(a) -> dict:
     return p or {}
 
 
-def art_href(uri: str) -> str:
-    return uri if uri.startswith(("http://", "https://", "s3://")) else f"/file/{uri}"
+def art_href(uri: str, artifact_id: int | None = None) -> str:
+    """Where an artifact link points. Bucket objects are private, so an s3:// URI goes
+    through /media, which signs a short-lived URL when the link is clicked."""
+    if uri.startswith("s3://"):
+        return f"/media/{artifact_id}" if artifact_id is not None else f"/media?uri={quote(uri, safe='')}"
+    return uri if uri.startswith(("http://", "https://")) else f"/file/{uri}"
 
 
 def png_exists(rel) -> bool:
@@ -1086,7 +1090,7 @@ async def run_page(run_id: str, request: Request, stage: str = ""):
     execs = await p.fetch(
         "SELECT * FROM stage_executions WHERE run_id = $1 ORDER BY started_at", run_id)
     arts = await p.fetch(
-        "SELECT stage, kind, uri FROM artifacts WHERE run_id = $1 ORDER BY created_at", run_id)
+        "SELECT id, stage, kind, uri FROM artifacts WHERE run_id = $1 ORDER BY created_at", run_id)
     events = await p.fetch(
         "SELECT actor, type, data, at FROM events WHERE run_id = $1 ORDER BY at DESC LIMIT 100",
         run_id)
@@ -1195,7 +1199,7 @@ async def run_page(run_id: str, request: Request, stage: str = ""):
                         f"<div class='prose'>{render_markdown(text)}</div></details>")
         stage_arts = [a for a in arts if a["stage"] == d]
         links = "".join(
-            f"<a href='{H(art_href(a['uri']))}' target='_blank'>"
+            f"<a href='{H(art_href(a['uri'], a['id']))}' target='_blank'>"
             f"{KIND_ICON.get(a['kind'], '')}{H(a['kind'])}</a>"
             for a in stage_arts)
         if links:
@@ -1929,6 +1933,105 @@ async def serve_file(rel: str, request: Request):
     if not p.is_relative_to(runs_root) or not p.is_file():
         raise HTTPException(404, "not found")
     return FileResponse(p)
+
+
+# ── QA media: signed redirects into the artifact bucket ──────────────────────
+# The bucket blocks all public access, so an s3:// href does nothing in a browser and a
+# reviewer without AWS credentials cannot watch any QA evidence. Pages link /media
+# instead: it finds the object's artifacts row, signs a short-lived GET with this host's
+# own AWS identity (the instance role on the box: no keys on disk) using the `aws` CLI the
+# dispatcher uploads with (boto3 is not in the venv), and redirects to it. The signed URL
+# is a bearer credential for one object, so it goes into the Location header and nowhere
+# else: not into a page, not into a log line.
+
+MEDIA_TTL_S = 15 * 60          # long enough to watch a QA session, short enough to lapse
+PRESIGN_TIMEOUT_S = 20
+MEDIA_SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+
+
+class MediaUnavailable(RuntimeError):
+    """This host could not sign a media link (no aws CLI, no credentials, a hang)."""
+
+
+def media_refusal(uri) -> str | None:
+    """Why this host will not sign `uri`, or None when it will. Only what the dispatcher
+    uploads (pipeline.upload_stage_media): s3://$LANTERN_ARTIFACT_BUCKET/lantern/ and
+    plain path segments. The instance role can read the whole bucket, so this check is
+    what keeps a link inside lantern/."""
+    bucket = os.environ.get("LANTERN_ARTIFACT_BUCKET", "").strip()
+    if not bucket:
+        return "LANTERN_ARTIFACT_BUCKET is not set on this host, so it signs no media links"
+    head = f"s3://{bucket}/"
+    parts = uri[len(head):].split("/") if isinstance(uri, str) and uri.startswith(head) else []
+    if len(parts) < 2 or parts[0] != "lantern" or not all(MEDIA_SEGMENT.fullmatch(p) for p in parts):
+        return f"only objects under s3://{bucket}/lantern/ are served here"
+    return None
+
+
+async def presign_media(uri: str, ttl: int) -> str:
+    """A GET URL for one bucket object, valid for `ttl` seconds. The CLI signs locally; its
+    only network call fetches the instance role's credentials."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "aws", "s3", "presign", uri, "--expires-in", str(ttl),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    except OSError as e:                    # aws CLI missing / not on the unit's PATH
+        raise MediaUnavailable(f"cannot run the aws CLI: {e}") from None
+    try:
+        out, err = await asyncio.wait_for(proc.communicate(), PRESIGN_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        await proc.wait()
+        raise MediaUnavailable(f"aws s3 presign did not answer within {PRESIGN_TIMEOUT_S}s") from None
+    url = out.decode(errors="replace").strip()
+    if proc.returncode != 0 or not re.fullmatch(r"https://\S+", url):
+        # stderr only: stdout is, or may hold part of, a signed URL
+        reason = err.decode(errors="replace").strip()[-300:] or "no https URL on stdout"
+        raise MediaUnavailable(f"aws s3 presign exited {proc.returncode}: {reason}")
+    return url
+
+
+async def media_redirect(row) -> RedirectResponse:
+    if row is None:
+        raise HTTPException(404, "artifact not found")
+    refusal = media_refusal(row["uri"])
+    if refusal:
+        raise HTTPException(403, refusal)
+    try:
+        url = await presign_media(row["uri"], MEDIA_TTL_S)
+    except MediaUnavailable as e:
+        print(f"media link for artifact {row['id']} not signed: {e}", file=sys.stderr)
+        raise HTTPException(502, "this host could not sign a link for that artifact; the reason "
+                                 "is in its log (journalctl -u lantern-mission-control)") from None
+    return RedirectResponse(url, status_code=302, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/media/{artifact_id}")
+async def media_by_id(artifact_id: int, request: Request):
+    """An artifact-bucket object (a QA video), as a redirect to a short-lived signed URL."""
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
+    row = None
+    if 0 < artifact_id < 2 ** 63:            # no bigserial id outside this (asyncpg would raise)
+        p = await get_pool()
+        row = await p.fetchrow("SELECT id, uri FROM artifacts WHERE id = $1", artifact_id)
+    return await media_redirect(row)
+
+
+@app.get("/media")
+async def media_by_uri(request: Request, uri: str = ""):
+    """The same for a media-manifest.json entry, which names the object and not its row.
+    Only a URI an artifacts row records is signed, so a manifest planted in the run folder
+    cannot widen what this host signs."""
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
+    refusal = media_refusal(uri)
+    if refusal:
+        raise HTTPException(403, refusal)
+    p = await get_pool()
+    row = await p.fetchrow("SELECT id, uri FROM artifacts WHERE uri = $1 ORDER BY id LIMIT 1", uri)
+    return await media_redirect(row)
 
 
 @app.post("/gate/{approval_id}/{decision}")
